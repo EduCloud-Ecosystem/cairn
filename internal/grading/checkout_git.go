@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/EduCloud-Ecosystem/cairn/pkg/adapter"
 )
@@ -78,6 +80,23 @@ func (g *GitCheckout) cloneRequest(repo adapter.RepoRef) (cloneURL, token string
 
 // Fetch shallow-clones repo into dir (which must be an existing empty directory).
 func (g *GitCheckout) Fetch(ctx context.Context, repo adapter.RepoRef, dir string) error {
+	return g.fetch(ctx, repo, dir, "")
+}
+
+var commitID = regexp.MustCompile(`^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$`)
+
+// ValidPolicyRevision accepts only a full object ID, never a moving branch/tag.
+func ValidPolicyRevision(revision string) bool { return commitID.MatchString(revision) }
+
+// FetchRevision checks out and verifies the instructor-selected immutable commit.
+func (g *GitCheckout) FetchRevision(ctx context.Context, repo adapter.RepoRef, revision, dir string) error {
+	if !ValidPolicyRevision(revision) {
+		return fmt.Errorf("grading policy requires a full template commit ID")
+	}
+	return g.fetch(ctx, repo, dir, strings.ToLower(revision))
+}
+
+func (g *GitCheckout) fetch(ctx context.Context, repo adapter.RepoRef, dir, revision string) error {
 	cloneURL, token, err := g.cloneRequest(repo)
 	if err != nil {
 		return err
@@ -114,6 +133,22 @@ func (g *GitCheckout) Fetch(ctx context.Context, repo adapter.RepoRef, dir strin
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git clone: %v: %s", err, truncate(string(out)))
+	}
+	if revision != "" {
+		for _, args := range [][]string{
+			{"-C", dir, "fetch", "--depth", "1", "origin", revision},
+			{"-C", dir, "checkout", "--detach", "FETCH_HEAD"},
+		} {
+			cmd := exec.CommandContext(ctx, g.bin(), args...)
+			cmd.Env = env
+			if out, err := cmd.CombinedOutput(); err != nil {
+				return fmt.Errorf("checkout policy revision: %v: %s", err, truncate(string(out)))
+			}
+		}
+		out, err := exec.CommandContext(ctx, g.bin(), "-C", dir, "rev-parse", "HEAD").Output()
+		if err != nil || strings.TrimSpace(string(out)) != revision {
+			return fmt.Errorf("checked-out policy revision differs from requested commit")
+		}
 	}
 	return nil
 }

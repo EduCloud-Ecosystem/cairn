@@ -162,6 +162,9 @@ export const api = {
   listSubmissions: (assignmentID: string) =>
     req<SubmissionView[]>("GET", `/assignments/${assignmentID}/submissions`),
 
+  setGradingPolicy: (assignmentID: string, template_commit: string, grading_spec: string) =>
+    req<Assignment>("PATCH", `/assignments/${assignmentID}/grading-policy`, { template_commit, grading_spec }),
+
   setDeadline: (assignmentID: string, deadline: string | null) =>
     req<Assignment>("PATCH", `/assignments/${assignmentID}/deadline`, { deadline }),
 

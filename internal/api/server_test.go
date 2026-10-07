@@ -227,7 +227,7 @@ func TestGradeEndpoint(t *testing.T) {
 	srv, st, q := newTestServer("alice")
 	ctx := context.Background()
 	_ = st.CreateClassroom(ctx, &store.Classroom{ID: "c1", Host: adapter.HostGitHub, HostNamespace: "org"})
-	_ = st.CreateAssignment(ctx, &store.Assignment{ID: "a1", ClassroomID: "c1", Slug: "hw1"})
+	_ = st.CreateAssignment(ctx, &store.Assignment{ID: "a1", ClassroomID: "c1", Slug: "hw1", TemplateRef: adapter.TemplateRef{Ref: strings.Repeat("a", 40)}})
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1", Repo: adapter.RepoRef{Host: adapter.HostGitHub, Namespace: "org", Name: "hw1-bob"}})
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s2", AssignmentID: "a1"}) // no repo
 
@@ -817,7 +817,7 @@ func TestGradeZeroProvisionedRepos(t *testing.T) {
 	srv, st, q := newTestServer("alice")
 	ctx := context.Background()
 	_ = st.CreateClassroom(ctx, &store.Classroom{ID: "c1", Host: adapter.HostGitHub, HostNamespace: "org"})
-	_ = st.CreateAssignment(ctx, &store.Assignment{ID: "a1", ClassroomID: "c1", Slug: "hw1"})
+	_ = st.CreateAssignment(ctx, &store.Assignment{ID: "a1", ClassroomID: "c1", Slug: "hw1", TemplateRef: adapter.TemplateRef{Ref: strings.Repeat("a", 40)}})
 	// Two submissions with no provisioned repo.
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1"})
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s2", AssignmentID: "a1", RosterEntryID: "r2"})

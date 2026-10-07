@@ -3,24 +3,23 @@
 // Package grading executes an assignment's grading spec against a student's
 // submission and records the score.
 //
-// SECURITY BOUNDARY: grading runs code that originates from the assignment's
-// grading spec and from the student's repository. That is untrusted input. The
-// Runner interface exists precisely so the execution backend is swappable: the
-// only runner shipped here, ExecRunner, runs commands directly on the host with
-// no isolation beyond a wall-clock timeout and is therefore UNSAFE for untrusted
-// student code. A production deployment must provide a Runner that enforces real
-// isolation (container/microVM with seccomp, dropped capabilities, no network,
-// and CPU/memory limits — the fields already present on gradingspec.Limits).
-// See DESIGN.md section 8.
+// SECURITY BOUNDARY: instructor policy comes from a pinned template commit;
+// learner code still executes as untrusted input. ContainerRunner provides a
+// read-only policy mount and resource bounds. ExecRunner is explicitly unsafe
+// and only suitable for trusted local development. See docs/grading-policy.md.
 package grading
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/EduCloud-Ecosystem/cairn/internal/id"
@@ -39,11 +38,20 @@ type TestResult struct {
 }
 
 // Result is the aggregate outcome of a grading run.
+// PolicyEvidence identifies the instructor policy used for this historical score.
+type PolicyEvidence struct {
+	Repository adapter.RepoRef `json:"repository"`
+	Revision   string          `json:"revision"`
+	Path       string          `json:"path"`
+	SHA256     string          `json:"sha256"`
+}
+
 type Result struct {
-	Score    float64      `json:"score"`
-	MaxScore float64      `json:"max_score"`
-	Tests    []TestResult `json:"tests"`
-	Log      string       `json:"log,omitempty"`
+	Policy   *PolicyEvidence `json:"policy,omitempty"`
+	Score    float64         `json:"score"`
+	MaxScore float64         `json:"max_score"`
+	Tests    []TestResult    `json:"tests"`
+	Log      string          `json:"log,omitempty"`
 }
 
 // Runner executes a grading spec against a checked-out repo at dir and returns
@@ -108,7 +116,7 @@ func (s *Service) Grade(ctx context.Context, submissionID string) error {
 		return fmt.Errorf("create grading run: %w", err)
 	}
 
-	res, gradeErr := s.execute(ctx, sub.Repo, asg.GradingSpec)
+	res, gradeErr := s.execute(ctx, sub.Repo, asg)
 	finished := s.now()
 	run.FinishedAt = &finished
 
@@ -141,27 +149,80 @@ func (s *Service) Grade(ctx context.Context, submissionID string) error {
 	return nil
 }
 
-func (s *Service) execute(ctx context.Context, repo adapter.RepoRef, specPath string) (Result, error) {
+// PolicyRunner exposes instructor files independently of the writable submission.
+// ContainerRunner mounts them read-only; local-exec remains explicitly unsafe.
+type PolicyRunner interface {
+	RunWithPolicy(context.Context, gradingspec.Spec, string, string) (Result, error)
+}
+
+type RevisionCheckout interface {
+	FetchRevision(context.Context, adapter.RepoRef, string, string) error
+}
+
+func (s *Service) execute(ctx context.Context, repo adapter.RepoRef, asg *store.Assignment) (Result, error) {
+	if !ValidPolicyRevision(asg.TemplateRef.Ref) || asg.TemplateRef.Namespace == "" || asg.TemplateRef.Name == "" {
+		return Result{}, errors.New("grading requires an instructor template pinned to a full commit ID; configure the assignment grading policy")
+	}
+	if !filepath.IsLocal(asg.GradingSpec) || strings.Split(filepath.ToSlash(asg.GradingSpec), "/")[0] == ".git" {
+		return Result{}, errors.New("grading spec must be a relative path inside the instructor template")
+	}
+	checkout, ok := s.Checkout.(RevisionCheckout)
+	if !ok {
+		return Result{}, errors.New("checkout does not support pinned grading policies")
+	}
+	runner, ok := s.Runner.(PolicyRunner)
+	if !ok {
+		return Result{}, errors.New("runner does not support separate instructor policy files")
+	}
+	policyDir, err := os.MkdirTemp("", "cairn-policy-*")
+	if err != nil {
+		return Result{}, err
+	}
+	defer os.RemoveAll(policyDir)
+	template := adapter.RepoRef{Host: asg.TemplateRef.Host, Namespace: asg.TemplateRef.Namespace, Name: asg.TemplateRef.Name}
+	if err := checkout.FetchRevision(ctx, template, asg.TemplateRef.Ref, policyDir); err != nil {
+		return Result{}, fmt.Errorf("instructor policy checkout: %w", err)
+	}
+	if err := os.RemoveAll(filepath.Join(policyDir, ".git")); err != nil {
+		return Result{}, err
+	}
+	root, err := os.OpenRoot(policyDir)
+	if err != nil {
+		return Result{}, err
+	}
+	defer root.Close()
+	file, err := root.Open(asg.GradingSpec)
+	if err != nil {
+		return Result{}, fmt.Errorf("open instructor grading spec: %w", err)
+	}
+	defer file.Close()
+	const maxSpecBytes = 1024 * 1024
+	data, err := io.ReadAll(io.LimitReader(file, maxSpecBytes+1))
+	if err != nil {
+		return Result{}, err
+	}
+	if len(data) > maxSpecBytes {
+		return Result{}, errors.New("grading spec exceeds 1 MiB")
+	}
+	spec, err := parseSpec(data)
+	if err != nil {
+		return Result{}, err
+	}
 	dir, err := os.MkdirTemp("", "cairn-grade-*")
 	if err != nil {
 		return Result{}, err
 	}
 	defer os.RemoveAll(dir)
-
 	if err := s.Checkout.Fetch(ctx, repo, dir); err != nil {
-		return Result{}, fmt.Errorf("checkout: %w", err)
+		return Result{}, fmt.Errorf("submission checkout: %w", err)
 	}
-	// Strip VCS metadata before mounting the directory into the grading container.
-	// Defense-in-depth: even if a token somehow landed in .git/config, the container
-	// cannot read it because the directory no longer exists.
 	if err := os.RemoveAll(filepath.Join(dir, ".git")); err != nil {
 		return Result{}, fmt.Errorf("strip .git: %w", err)
 	}
-	spec, err := loadSpec(filepath.Join(dir, specPath))
-	if err != nil {
-		return Result{}, err
-	}
-	return s.Runner.Run(ctx, spec, dir)
+	// Never read grading.json or policy files from the learner's checkout.
+	res, err := runner.RunWithPolicy(ctx, spec, dir, policyDir)
+	res.Policy = &PolicyEvidence{Repository: template, Revision: strings.ToLower(asg.TemplateRef.Ref), Path: asg.GradingSpec, SHA256: fmt.Sprintf("%x", sha256.Sum256(data))}
+	return res, err
 }
 
 // loadSpec reads and parses a JSON grading spec. (The on-disk convention is
@@ -172,6 +233,10 @@ func loadSpec(path string) (gradingspec.Spec, error) {
 	if err != nil {
 		return gradingspec.Spec{}, fmt.Errorf("read grading spec: %w", err)
 	}
+	return parseSpec(b)
+}
+
+func parseSpec(b []byte) (gradingspec.Spec, error) {
 	var spec gradingspec.Spec
 	if err := json.Unmarshal(b, &spec); err != nil {
 		return gradingspec.Spec{}, fmt.Errorf("parse grading spec: %w", err)
@@ -179,7 +244,16 @@ func loadSpec(path string) (gradingspec.Spec, error) {
 	if len(spec.Tests) == 0 {
 		return gradingspec.Spec{}, errors.New("grading spec defines no tests")
 	}
+	if spec.Version != "" && spec.Version != gradingspec.Version {
+		return spec, errors.New("unsupported grading spec version")
+	}
+	if !isFinite(spec.MaxScore()) {
+		return spec, errors.New("grading points total must be finite")
+	}
 	for i, t := range spec.Tests {
+		if !isFinite(t.Points) || t.Points < 0 {
+			return spec, fmt.Errorf("grading spec test[%d] points must be finite and non-negative", i)
+		}
 		if t.Run == "" {
 			return gradingspec.Spec{}, fmt.Errorf("grading spec test[%d] %q has empty run field", i, t.Name)
 		}
@@ -195,3 +269,5 @@ func truncate(s string) string {
 	}
 	return s[:max] + "…(truncated)"
 }
+
+func isFinite(value float64) bool { return !math.IsNaN(value) && !math.IsInf(value, 0) }

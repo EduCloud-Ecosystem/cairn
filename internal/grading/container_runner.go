@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -50,7 +51,11 @@ type ContainerRunner struct {
 	DefaultTimeout  time.Duration // per-step fallback; default 30s
 	DefaultMemoryMB int           // default 512
 	DefaultCPUs     float64       // default 1.0
-	DefaultPids     int           // default 256
+	MaxTimeout      time.Duration // operator ceiling per step; default 5 minutes
+	MaxMemoryMB     int           // operator ceiling; default 2048
+	MaxCPUs         float64       // operator ceiling; default 2
+
+	DefaultPids int // default 256
 
 	exec commandRunner // injected in tests; nil -> real exec
 }
@@ -108,6 +113,9 @@ func (t IsolationTier) resolve() (IsolationTier, error) {
 func (r *ContainerRunner) ValidateIsolation() error {
 	if _, err := r.Isolation.resolve(); err != nil {
 		return err
+	}
+	if r.MaxTimeout < 0 || r.MaxMemoryMB < 0 || r.MaxCPUs < 0 || !isFinite(r.MaxCPUs) {
+		return errors.New("operator grading ceilings must be non-negative and finite")
 	}
 	return r.validateExtraArgs()
 }
@@ -322,10 +330,10 @@ func (r *ContainerRunner) resolveLimits(spec gradingspec.Spec, test *gradingspec
 	if out.memoryMB <= 0 {
 		out.memoryMB = 512
 	}
-	if out.cpus <= 0 {
+	if out.cpus <= 0 || !isFinite(out.cpus) {
 		out.cpus = r.DefaultCPUs
 	}
-	if out.cpus <= 0 {
+	if out.cpus <= 0 || !isFinite(out.cpus) {
 		out.cpus = 1.0
 	}
 	if out.pids <= 0 {
@@ -333,6 +341,25 @@ func (r *ContainerRunner) resolveLimits(spec gradingspec.Spec, test *gradingspec
 	}
 	if out.network == "" {
 		out.network = gradingspec.NetworkNone
+	}
+	timeout, memory, cpus := r.MaxTimeout, r.MaxMemoryMB, r.MaxCPUs
+	if timeout <= 0 {
+		timeout = 5 * time.Minute
+	}
+	if memory <= 0 {
+		memory = 2048
+	}
+	if cpus <= 0 || !isFinite(cpus) {
+		cpus = 2
+	}
+	if out.timeout > timeout {
+		out.timeout = timeout
+	}
+	if out.memoryMB > memory {
+		out.memoryMB = memory
+	}
+	if out.cpus > cpus {
+		out.cpus = cpus
 	}
 	return out
 }
@@ -379,8 +406,22 @@ func (r *ContainerRunner) buildRunArgs(image, command string, lim resolvedLimits
 	return args
 }
 
+// RunWithPolicy mounts instructor tests outside the writable submission. Copy
+// the runner so concurrent jobs never share or mutate this per-run mount.
+func (r *ContainerRunner) RunWithPolicy(ctx context.Context, spec gradingspec.Spec, dir, policyDir string) (Result, error) {
+	if !filepath.IsAbs(policyDir) || strings.ContainsAny(policyDir, ",\n\r") {
+		return Result{}, errors.New("invalid instructor policy directory")
+	}
+	isolated := *r
+	isolated.ExtraArgs = append(append([]string(nil), r.ExtraArgs...), "--mount", "type=bind,source="+policyDir+",target=/cairn-policy,readonly", "--env", "CAIRN_POLICY_DIR=/cairn-policy")
+	return isolated.Run(ctx, spec, dir)
+}
+
 // Run executes the spec inside containers, one invocation per step.
 func (r *ContainerRunner) Run(ctx context.Context, spec gradingspec.Spec, dir string) (Result, error) {
+	if err := r.ValidateIsolation(); err != nil {
+		return Result{}, err
+	}
 	image := spec.Image
 	if image == "" {
 		image = r.DefaultImage

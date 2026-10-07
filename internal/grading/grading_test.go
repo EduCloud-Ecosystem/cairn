@@ -70,10 +70,16 @@ func (f fakeCheckout) Fetch(_ context.Context, _ adapter.RepoRef, dir string) er
 	return nil
 }
 
+func (f fakeCheckout) FetchRevision(ctx context.Context, repo adapter.RepoRef, revision, dir string) error {
+	return f.Fetch(ctx, repo, dir)
+}
+
+const testPolicyRevision = "1111111111111111111111111111111111111111"
+
 func seedSubmission(t *testing.T, st *memory.Store) {
 	t.Helper()
 	ctx := context.Background()
-	_ = st.CreateAssignment(ctx, &store.Assignment{ID: "a1", ClassroomID: "c1", Slug: "hw1", GradingSpec: "grading.json"})
+	_ = st.CreateAssignment(ctx, &store.Assignment{ID: "a1", ClassroomID: "c1", Slug: "hw1", GradingSpec: "grading.json", TemplateRef: adapter.TemplateRef{Host: adapter.HostGitHub, Namespace: "instructors", Name: "hw1-template", Ref: testPolicyRevision}})
 	_ = st.CreateSubmission(ctx, &store.Submission{
 		ID: "s1", AssignmentID: "a1", Status: "active",
 		Repo: adapter.RepoRef{Host: adapter.HostGitHub, Namespace: "org", Name: "hw1-bob"},

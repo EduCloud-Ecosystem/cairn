@@ -5,6 +5,7 @@ package grading
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ import (
 // │ provide a container/microVM Runner that enforces gradingspec.Limits.       │
 // └─────────────────────────────────────────────────────────────────────────┘
 type ExecRunner struct {
+	policyDir      string        // local-only, no filesystem isolation
 	Shell          string        // default "sh"
 	DefaultTimeout time.Duration // per-test fallback; default 30s
 }
@@ -55,6 +57,14 @@ func (r *ExecRunner) testTimeout(spec gradingspec.Spec, t gradingspec.Test) time
 		return t.Limits.Timeout
 	}
 	return r.specTimeout(spec)
+}
+
+// RunWithPolicy supplies the same path convention for explicitly unsafe local
+// development. It provides no read-only enforcement; production uses containers.
+func (r *ExecRunner) RunWithPolicy(ctx context.Context, spec gradingspec.Spec, dir, policyDir string) (Result, error) {
+	copy := *r
+	copy.policyDir = policyDir
+	return copy.Run(ctx, spec, dir)
 }
 
 // Run executes setup steps then each test, scoring by exit code or stdout match.
@@ -118,6 +128,9 @@ func (r *ExecRunner) runCmd(ctx context.Context, dir, command string, timeout ti
 	defer cancel()
 	cmd := exec.CommandContext(cctx, r.shell(), "-c", command)
 	cmd.Dir = dir
+	if r.policyDir != "" {
+		cmd.Env = append(os.Environ(), "CAIRN_POLICY_DIR="+r.policyDir)
+	}
 	var so, se bytes.Buffer
 	cmd.Stdout = &so
 	cmd.Stderr = &se

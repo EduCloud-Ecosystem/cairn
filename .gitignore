@@ -14,3 +14,6 @@ cairn.db
 ghc-snapshot-*/
 .DS_Store
 _git_locks_to_delete/
+
+.playwright-cli/
+output/
