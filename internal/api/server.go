@@ -28,6 +28,10 @@ import (
 
 // Options holds the Server's dependencies.
 type Options struct {
+	// WorkspaceURLs maps classroom IDs to operator-approved browser workspace origins.
+	// The destination authenticates independently; links carry no credentials.
+	WorkspaceURLs map[string]string
+
 	Store store.Store
 	Queue provisioning.Queue
 	// Resolvers maps each Git host to its OAuth resolver. Multiple hosts may be
@@ -67,6 +71,8 @@ type Options struct {
 
 // Server routes and serves the control-plane API.
 type Server struct {
+	workspaceURLs map[string]string
+
 	store     store.Store
 	queue     provisioning.Queue
 	resolvers map[adapter.Host]identity.Resolver
@@ -125,6 +131,7 @@ func New(opts Options) *Server {
 		provisionHosts[h] = true
 	}
 	s := &Server{
+		workspaceURLs:    validatedWorkspaceURLs(opts.WorkspaceURLs),
 		store:            opts.Store,
 		queue:            opts.Queue,
 		resolvers:        opts.Resolvers,

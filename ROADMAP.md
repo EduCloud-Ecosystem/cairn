@@ -189,3 +189,14 @@ supported Brightspace), so the manual fallback ships first and independently.
 - [ ] Multi-tenant hosted offering (scoped data processor)
 - [ ] LTI 1.3 Names-and-Roles (NRPS) roster sync
 - [ ] LTI Assignment-and-Grade Services (AGS) grade passback
+
+## Computing continuity (2026-10-06)
+
+- [x] Optional operator-configured per-class browser workspace origins in the
+  authenticated student work view. No credential or learner data in the link;
+  destination owns authentication and enrollment. See `docs/course-workspaces.md`.
+- [ ] Accept a real course against the Waypoint Python/R workspace pilot:
+  institutional OIDC, wildcard HTTPS, resource capacity, off-host restore, and
+  roster revocation. A local synthetic acceptance is not a production launch.
+- [ ] Close the audit's instructor-owned grading manifest and operator resource
+  ceiling findings before using learner submissions for authoritative grades.
