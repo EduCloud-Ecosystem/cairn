@@ -81,12 +81,15 @@ function renderTests(tests) {
   }
   return html + "</ul>";
 }
+function renderAssessments(items) {
+  return (items || []).map(a => '<section><h3>Instructor-reviewed feedback</h3><p>Submission commit: <code>' + escapeHtml(a.submission_revision) + '</code></p>' + a.criteria.map(c => '<h4>' + escapeHtml(c.criterion_id) + ' — ' + escapeHtml(String(c.points)) + ' points</h4><p>' + escapeHtml(c.feedback) + '</p><p>Uncertainty: ' + escapeHtml(c.uncertainty) + '</p><ul>' + (c.citations || []).map(e => '<li>' + escapeHtml(e.path) + ' · ' + escapeHtml(e.location) + '</li>').join('') + '</ul>').join('') + '<p>Instructor note: ' + escapeHtml(a.review_note) + '</p><p>For a correction or review, contact your instructor and include the submission commit above.</p></section>').join('');
+}
 function renderHistory(history) {
   if (!history || !history.length) return "";
-  let html = "<table><caption class='muted'>Attempt history</caption><thead><tr><th>When</th><th>Score</th><th>Submission commit</th></tr></thead><tbody>";
+  let html = "<table><caption class='muted'>Attempt history</caption><thead><tr><th>When</th><th>Score</th><th>Assessment type</th><th>Submission commit</th></tr></thead><tbody>";
   for (const h of history) {
     let when = h.graded_at; try { when = new Date(h.graded_at).toLocaleString(); } catch (e) {}
-    html += "<tr><td>" + escapeHtml(when) + "</td><td class='score'>" + h.score + " / " + h.max_score + "</td><td><code>" + escapeHtml(h.submission_revision || "Not recorded") + "</code></td></tr>";
+    html += "<tr><td>" + escapeHtml(when) + "</td><td class='score'>" + h.score + " / " + h.max_score + "</td><td>" + escapeHtml(h.source === "instructor-reviewed" ? "Instructor-reviewed" : "Deterministic tests") + "</td><td><code>" + escapeHtml(h.submission_revision || "Not recorded") + "</code></td></tr>";
   }
   return html + "</tbody></table>";
 }
@@ -101,7 +104,7 @@ async function loadDetail(id, container) {
     const res = await fetch("/me/work/" + encodeURIComponent(id), { credentials: "same-origin" });
     if (!res.ok) { container.textContent = "Could not load details."; return; }
     const d = await res.json();
-    container.innerHTML = renderTests(d.tests) + renderHistory(d.history);
+    container.innerHTML = renderAssessments(d.assessments) + renderTests(d.tests) + renderHistory(d.history);
   } catch (e) { container.textContent = "Could not load details."; }
 }
 

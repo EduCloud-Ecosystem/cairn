@@ -214,7 +214,11 @@ supported Brightspace), so the manual fallback ships first and independently.
 
 - [x] Pin automatic push grading to the delivered submission commit and expose
   commit provenance in student history; fail/retry configured webhook setup.
-- [ ] LLM-assisted rubric feedback **plus proposed scores** for instructor review;
+- [x] Local assessment review foundation: pinned source capture, fixture/imported
+  proposals, editable rubric scores/feedback, atomic instructor publication,
+  student feedback, freshness checks and assessment retention linkage (October 7).
+- [ ] LLM-assisted rubric feedback **plus proposed scores** with a bounded provider
+  adapter and instructor-scored evaluation;
   flexible format extraction, evidence citations, bounded model use and explicit
   publication. Design decision: `docs/llm-assessment.md`. No provider/review UI is
   implemented by the push-grading change.

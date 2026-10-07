@@ -739,3 +739,15 @@ a {
     grid-column: auto;
   }
 }
+
+/* Assessment review forms keep labels, source text and long digests readable. */
+.assessment-panel { margin-block: 1.5rem; }
+.assessment-panel label { display: block; margin-block: .8rem; }
+.assessment-panel input:not([type="file"]), .assessment-panel textarea, .assessment-panel select {
+ display: block; width: 100%; box-sizing: border-box; padding: .5rem; margin-top: .3rem;
+ font: inherit; color: inherit; background: transparent; border: 1px solid #b9b1a0; border-radius: 4px;
+}
+.assessment-panel fieldset { min-width: 0; margin-block: 1rem; padding: 1rem; }
+.assessment-panel article { margin-block: 1rem; }
+.assessment-panel code { overflow-wrap: anywhere; }
+.assessment-panel summary { cursor: pointer; margin-block: .6rem; }

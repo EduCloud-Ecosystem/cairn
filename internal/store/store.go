@@ -24,6 +24,7 @@ var ErrConflict = errors.New("store: conflict")
 // The privacy invariant lives in the data, not here: no method accepts or returns
 // a student's legal name, SIS ID, or plaintext email. See DESIGN.md sections 5–6.
 type Store interface {
+	AssessmentStore
 	// Users (platform operators).
 	CreateUser(ctx context.Context, u *User) error
 	GetUser(ctx context.Context, id string) (*User, error)

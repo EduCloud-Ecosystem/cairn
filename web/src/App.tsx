@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type Classroom, type Operator } from "./api";
 import { Sidebar } from "./components/Sidebar";
 import { ClassroomDetail } from "./components/ClassroomDetail";
@@ -16,10 +16,10 @@ export default function App() {
   const [showNew, setShowNew] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
 
-  const notify: Notify = (msg, kind = "ok") => {
+  const notify: Notify = useCallback((msg, kind = "ok") => {
     setToast({ msg, kind });
     window.setTimeout(() => setToast(null), 3600);
-  };
+  }, []);
 
   async function refresh(selectFirst = false) {
     try {

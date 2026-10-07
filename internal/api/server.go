@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/EduCloud-Ecosystem/cairn/internal/assessment"
 	"github.com/EduCloud-Ecosystem/cairn/internal/grading"
 	"github.com/EduCloud-Ecosystem/cairn/internal/id"
 	"github.com/EduCloud-Ecosystem/cairn/internal/identity"
@@ -29,6 +30,7 @@ import (
 
 // Options holds the Server's dependencies.
 type Options struct {
+	AssessmentCheckout grading.RevisionCheckout // nil disables assessment review routes
 	// WorkspaceURLs maps classroom IDs to operator-approved browser workspace origins.
 	// The destination authenticates independently; links carry no credentials.
 	WorkspaceURLs map[string]string
@@ -72,7 +74,9 @@ type Options struct {
 
 // Server routes and serves the control-plane API.
 type Server struct {
-	workspaceURLs map[string]string
+	assessment        *assessment.Service
+	assessmentCapture chan struct{}
+	workspaceURLs     map[string]string
 
 	store     store.Store
 	queue     provisioning.Queue
@@ -149,6 +153,10 @@ func New(opts Options) *Server {
 		states:           map[string]authFlow{},
 		sessions:         map[string]session{},
 	}
+	if opts.AssessmentCheckout != nil {
+		s.assessment = &assessment.Service{Store: opts.Store, Checkout: opts.AssessmentCheckout}
+		s.assessmentCapture = make(chan struct{}, 1)
+	}
 	s.routes()
 	return s
 }
@@ -189,6 +197,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /assignments/{id}/lock", protect(s.handleLock))
 	s.mux.HandleFunc("POST /assignments/{id}/unlock", protect(s.handleUnlock))
 	s.mux.HandleFunc("POST /assignments/{id}/grade", protect(s.handleGrade))
+
+	s.assessmentRoutes(protect)
 
 	// Serve the built dashboard last and only if configured. Because Go 1.22's
 	// ServeMux gives more specific patterns precedence, every API route above
