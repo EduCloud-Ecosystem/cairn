@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/EduCloud-Ecosystem/cairn/internal/grading"
 	"github.com/EduCloud-Ecosystem/cairn/internal/id"
 	"github.com/EduCloud-Ecosystem/cairn/internal/identity"
 	"github.com/EduCloud-Ecosystem/cairn/internal/provisioning"
@@ -184,6 +185,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /classrooms/{id}/grades/confirm-export", protect(s.handleConfirmExport))
 	s.mux.HandleFunc("GET /assignments/{id}/submissions", protect(s.handleListSubmissions))
 	s.mux.HandleFunc("PATCH /assignments/{id}/deadline", protect(s.handleSetDeadline))
+	s.mux.HandleFunc("PATCH /assignments/{id}/grading-policy", protect(s.handleSetGradingPolicy))
 	s.mux.HandleFunc("POST /assignments/{id}/lock", protect(s.handleLock))
 	s.mux.HandleFunc("POST /assignments/{id}/unlock", protect(s.handleUnlock))
 	s.mux.HandleFunc("POST /assignments/{id}/grade", protect(s.handleGrade))
@@ -840,6 +842,44 @@ func (s *Server) handleCreateAssignment(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusCreated, a)
 }
 
+// Pin or deliberately revise instructor grading policy. No learner-facing route
+// accepts these fields; the existing operator authorization protects this route.
+func (s *Server) handleSetGradingPolicy(w http.ResponseWriter, r *http.Request) {
+	asg, err := s.store.GetAssignment(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.notFoundOr500(w, err, "assignment")
+		return
+	}
+	var in struct {
+		Revision string `json:"template_commit"`
+		Path     string `json:"grading_spec"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	if !grading.ValidPolicyRevision(in.Revision) {
+		httpError(w, http.StatusBadRequest, "template_commit must be a full commit ID, not a branch or tag")
+		return
+	}
+	if in.Path == "" {
+		in.Path = asg.GradingSpec
+	}
+	if in.Path == "" {
+		in.Path = "grading.json"
+	}
+	if !filepath.IsLocal(in.Path) || strings.Split(filepath.ToSlash(in.Path), "/")[0] == ".git" {
+		httpError(w, http.StatusBadRequest, "grading_spec must be a relative path inside the instructor template")
+		return
+	}
+	asg.TemplateRef.Ref = strings.ToLower(in.Revision)
+	asg.GradingSpec = in.Path
+	if err := s.store.UpdateAssignment(r.Context(), asg); err != nil {
+		httpError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, asg)
+}
+
 func (s *Server) handleSetDeadline(w http.ResponseWriter, r *http.Request) {
 	asg, err := s.store.GetAssignment(r.Context(), r.PathValue("id"))
 	if err != nil {
@@ -877,6 +917,15 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGrade(w http.ResponseWriter, r *http.Request) {
 	if !s.graderConfigured {
 		httpError(w, http.StatusConflict, "no grader configured — set CAIRN_GRADER=container (or local-exec-unsafe) and restart")
+		return
+	}
+	asg, err := s.store.GetAssignment(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.notFoundOr500(w, err, "assignment")
+		return
+	}
+	if !grading.ValidPolicyRevision(asg.TemplateRef.Ref) {
+		httpError(w, http.StatusConflict, "select a pinned instructor grading version before grading")
 		return
 	}
 	s.enqueueAcrossSubmissions(w, r, provisioning.JobGrade, "grade", "grading")

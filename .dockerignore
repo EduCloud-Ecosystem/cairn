@@ -20,3 +20,12 @@ web/dist
 docs/
 LICENSE
 DCO
+
+# Operator credentials and local verification artifacts never enter build cache.
+.env.*
+*.pem
+*.key
+*.sql
+*.sql.gz
+output/
+.playwright-cli/

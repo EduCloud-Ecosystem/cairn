@@ -338,6 +338,19 @@ func graderFromEnv(st store.Store) provisioning.Grader {
 			RestrictedNetwork: os.Getenv("CAIRN_GRADER_RESTRICTED_NETWORK"),
 			User:              os.Getenv("CAIRN_GRADER_USER"),
 		}
+		var err error
+		cr.MaxTimeout, err = time.ParseDuration(getenvDefault("CAIRN_GRADER_MAX_TIMEOUT", "5m"))
+		if err != nil || cr.MaxTimeout <= 0 {
+			log.Fatal("CAIRN_GRADER_MAX_TIMEOUT must be a positive duration")
+		}
+		cr.MaxMemoryMB, err = strconv.Atoi(getenvDefault("CAIRN_GRADER_MAX_MEMORY_MB", "2048"))
+		if err != nil || cr.MaxMemoryMB <= 0 {
+			log.Fatal("CAIRN_GRADER_MAX_MEMORY_MB must be a positive integer")
+		}
+		cr.MaxCPUs, err = strconv.ParseFloat(getenvDefault("CAIRN_GRADER_MAX_CPUS", "2"), 64)
+		if err != nil || cr.MaxCPUs <= 0 {
+			log.Fatal("CAIRN_GRADER_MAX_CPUS must be positive and finite")
+		}
 		// Fail at startup rather than at the first grading run: a typo in the
 		// tier name must never resolve to "run with a weaker boundary".
 		if err := cr.ValidateIsolation(); err != nil {

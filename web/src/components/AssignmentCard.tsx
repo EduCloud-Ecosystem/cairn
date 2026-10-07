@@ -25,6 +25,10 @@ export function AssignmentCard({
   notify: Notify;
   joinPolicy?: string;
 }) {
+  const [revision, setRevision] = useState(assignment.template.ref ?? "");
+  const [policyPath, setPolicyPath] = useState(assignment.grading_spec || "grading.json");
+  const [savedRevision, setSavedRevision] = useState(assignment.template.ref ?? "");
+  const policyPinned = /^(?:[a-fA-F0-9]{40}|[a-fA-F0-9]{64})$/.test(savedRevision);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [deadline, setDeadline] = useState(toLocalInput(assignment.deadline));
@@ -68,6 +72,21 @@ export function AssignmentCard({
       notify("Invite link copied");
     } catch {
       notify(`Copy failed — the link is ${url}`, "err");
+    }
+  }
+
+  async function savePolicy() {
+    setBusy(true);
+    try {
+      const updated = await api.setGradingPolicy(assignment.id, revision.trim(), policyPath.trim());
+      setSavedRevision(updated.template.ref ?? "");
+      setRevision(updated.template.ref ?? "");
+      setPolicyPath(updated.grading_spec);
+      notify("Instructor grading version saved");
+    } catch (e) {
+      notify(errMsg(e), "err");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -123,7 +142,7 @@ export function AssignmentCard({
           >
             Copy invite link
           </Button>
-          <Button small disabled={busy} onClick={() => void run("Grade", () => api.grade(assignment.id))}>
+          <Button small disabled={busy || !policyPinned} title={policyPinned ? "Grade using the saved instructor version" : "Expand this assignment and save an instructor grading version first"} onClick={() => void run("Grade", () => api.grade(assignment.id))}>
             Grade
           </Button>
           <Button small disabled={busy} onClick={() => void run("Lock", () => api.lock(assignment.id))}>
@@ -135,6 +154,7 @@ export function AssignmentCard({
         </div>
       </div>
 
+      {!policyPinned && <p className="muted small">Expand this assignment to select an instructor grading version before grading.</p>}
       {open && (
         <div className="assignment-drawer">
           <p className="muted small">
@@ -145,6 +165,22 @@ export function AssignmentCard({
                 ? "— open to anyone with the link."
                 : null}
           </p>
+
+          <fieldset disabled={busy}>
+            <legend>Instructor grading version</legend>
+            <p id={`policy-help-${assignment.id}`} className="muted small">
+              Paste the full commit ID from the instructor template. Grading uses that version's rules and tests.
+              Learners' edits to grading.json do not change their scores. This also sets the template version for future submissions.
+            </p>
+            <label htmlFor={`policy-ref-${assignment.id}`}>Template commit</label>
+            <input id={`policy-ref-${assignment.id}`} className="input" value={revision}
+              aria-describedby={`policy-help-${assignment.id}`} onChange={(e) => setRevision(e.target.value)} />
+            <label htmlFor={`policy-path-${assignment.id}`}>Grading file</label>
+            <input id={`policy-path-${assignment.id}`} className="input" value={policyPath}
+              onChange={(e) => setPolicyPath(e.target.value)} />
+            <Button small disabled={busy} onClick={() => void savePolicy()}>Save grading version</Button>
+            {policyPinned && <p className="muted small">Saved commit: <code>{savedRevision}</code></p>}
+          </fieldset>
 
           <div className="deadline-row">
             <label htmlFor={`dl-${assignment.id}`}>Deadline</label>

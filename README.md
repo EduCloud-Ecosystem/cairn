@@ -450,3 +450,7 @@ Cairn can link each class to an institution-operated workspace without depending
 on a learner's individual Codespaces benefits. See
 [`docs/course-workspaces.md`](docs/course-workspaces.md) for configuration,
 separate Hub enrollment, saved-file recovery and remaining pilot acceptance.
+
+Grading now requires a pinned instructor template commit. See
+[Instructor-owned grading policy](docs/grading-policy.md) for migration,
+read-only test files, provenance and operator resource ceilings.

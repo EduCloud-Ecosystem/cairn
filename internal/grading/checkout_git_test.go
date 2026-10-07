@@ -3,6 +3,10 @@
 package grading
 
 import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -189,5 +193,57 @@ func TestCloneRequestSchemeDefaultsToHTTPS(t *testing.T) {
 	want := "https://x-access-token@github.com/cs101-org/hw1-alice.git"
 	if url != want {
 		t.Errorf("url = %q, want %q", url, want)
+	}
+}
+
+func TestFetchRevisionUsesPinnedHistoricalCommit(t *testing.T) {
+	repo := t.TempDir()
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git: %v %s", err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	git("-C", repo, "init")
+	git("-C", repo, "config", "user.name", "Synthetic Teacher")
+	git("-C", repo, "config", "user.email", "teacher@example.invalid")
+	if err := os.WriteFile(filepath.Join(repo, "grading.json"), []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	git("-C", repo, "add", ".")
+	git("-C", repo, "commit", "-m", "original")
+	pin := git("-C", repo, "rev-parse", "HEAD")
+	if err := os.WriteFile(filepath.Join(repo, "grading.json"), []byte("later"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	git("-C", repo, "commit", "-am", "later")
+	// Redirect only clone to a synthetic local repository. All fetch/checkout/
+	// revision verification commands are real git commands against its objects.
+	shim := filepath.Join(t.TempDir(), "git")
+	script := "#!/bin/sh\nif [ \"$1\" = clone ]; then\nfor arg do dest=$arg; done\nexec git clone --depth 1 \"file://$CAIRN_TEST_REPO\" \"$dest\"\nfi\nexec git \"$@\"\n"
+	if err := os.WriteFile(shim, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CAIRN_TEST_REPO", repo)
+	g := makeCheckout(adapter.HostGitHub, CloneCreds{Hostname: "github.com"})
+	g.GitBin = shim
+	dir := t.TempDir()
+	if err := g.FetchRevision(context.Background(), ghRepo, pin, dir); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "grading.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "original" {
+		t.Fatalf("moving HEAD used instead of pin: %q", data)
+	}
+	for _, invalid := range []string{"main", "HEAD", "--upload-pack=other", pin[:8]} {
+		if err := g.FetchRevision(context.Background(), ghRepo, invalid, t.TempDir()); err == nil {
+			t.Fatalf("accepted revision %q", invalid)
+		}
 	}
 }

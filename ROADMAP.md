@@ -200,3 +200,12 @@ supported Brightspace), so the manual fallback ships first and independently.
   roster revocation. A local synthetic acceptance is not a production launch.
 - [ ] Close the audit's instructor-owned grading manifest and operator resource
   ceiling findings before using learner submissions for authoritative grades.
+
+## Instructor grading authority (October 7, 2026)
+
+- [x] Read the grading manifest from a pinned instructor template commit.
+- [x] Provide a read-only instructor test tree, policy provenance, and operator
+  per-step resource ceilings; exercise forged-manifest and Docker regressions.
+- [x] Add operator-only policy selection and its dashboard controls.
+- [ ] Review course harnesses for learner-controlled imports/self-reporting,
+  aggregate budgets, filesystem/output bounds and kernel isolation before use.
