@@ -83,10 +83,10 @@ function renderTests(tests) {
 }
 function renderHistory(history) {
   if (!history || !history.length) return "";
-  let html = "<table><caption class='muted'>Attempt history</caption><thead><tr><th>When</th><th>Score</th></tr></thead><tbody>";
+  let html = "<table><caption class='muted'>Attempt history</caption><thead><tr><th>When</th><th>Score</th><th>Submission commit</th></tr></thead><tbody>";
   for (const h of history) {
     let when = h.graded_at; try { when = new Date(h.graded_at).toLocaleString(); } catch (e) {}
-    html += "<tr><td>" + escapeHtml(when) + "</td><td class='score'>" + h.score + " / " + h.max_score + "</td></tr>";
+    html += "<tr><td>" + escapeHtml(when) + "</td><td class='score'>" + h.score + " / " + h.max_score + "</td><td><code>" + escapeHtml(h.submission_revision || "Not recorded") + "</code></td></tr>";
   }
   return html + "</tbody></table>";
 }

@@ -99,3 +99,32 @@ and the appropriate kernel isolation tier.
 This closes the specific learner-manifest and per-step resource-ceiling findings.
 It does not establish full assessment integrity against every malicious submission,
 validate institutional TLS/OIDC, or retroactively certify existing scores.
+
+## Automatic push grading
+
+Signed default-branch pushes enqueue `grade_revision` jobs containing the full
+submission commit ID. The runner fetches and verifies that exact commit and
+records `submission_revision` alongside the pinned instructor policy. Another
+push arriving while a job waits cannot change its input. Student attempt history
+shows the evaluated commit; historical/manual grades without recorded commit
+provenance are marked "Not recorded" rather than assigned a guessed revision.
+The most recently completed grade is not necessarily the newest Git head if
+webhooks arrive out of order; inspect the recorded commit before treating a
+score as current.
+
+Tags, non-default branches, malformed commit IDs, unsigned deliveries and
+inactive submissions do not schedule automatic assessment. Repeated deliveries
+share a durable per-submission/commit idempotency key, including after a normal
+restart. This does not claim atomic exactly-once grading across a crash between
+grade persistence and job completion; interrupted-worker recovery remains an
+operational gate.
+
+When a webhook base URL is configured, provisioning requires the host secret
+and successful hook registration. Failures retry through the existing queue and
+cannot silently mark the submission active. Forgejo hook reconciliation reapplies
+active state, push events and the current secret. Existing repositories need an
+operator provisioning retry to reconcile changed hook configuration.
+
+See [LLM-assisted assessment](llm-assessment.md) for the agreed feedback and
+proposed-score path. It is a planned separate review workflow, not a switch that
+turns model output into recorded grades.

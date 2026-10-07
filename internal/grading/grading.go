@@ -47,11 +47,12 @@ type PolicyEvidence struct {
 }
 
 type Result struct {
-	Policy   *PolicyEvidence `json:"policy,omitempty"`
-	Score    float64         `json:"score"`
-	MaxScore float64         `json:"max_score"`
-	Tests    []TestResult    `json:"tests"`
-	Log      string          `json:"log,omitempty"`
+	SubmissionRevision string          `json:"submission_revision,omitempty"`
+	Policy             *PolicyEvidence `json:"policy,omitempty"`
+	Score              float64         `json:"score"`
+	MaxScore           float64         `json:"max_score"`
+	Tests              []TestResult    `json:"tests"`
+	Log                string          `json:"log,omitempty"`
 }
 
 // Runner executes a grading spec against a checked-out repo at dir and returns
@@ -92,6 +93,18 @@ func (s *Service) now() time.Time {
 // Grade runs grading for one submission. It is the method the provisioning
 // worker invokes for a JobGrade. TargetRef is the submission ID.
 func (s *Service) Grade(ctx context.Context, submissionID string) error {
+	return s.grade(ctx, submissionID, "")
+}
+
+// GradeRevision evaluates the immutable push revision, never a later moving head.
+func (s *Service) GradeRevision(ctx context.Context, submissionID, revision string) error {
+	if !ValidPolicyRevision(revision) {
+		return errors.New("grading requires a full submission commit ID")
+	}
+	return s.grade(ctx, submissionID, strings.ToLower(revision))
+}
+
+func (s *Service) grade(ctx context.Context, submissionID, revision string) error {
 	sub, err := s.Store.GetSubmission(ctx, submissionID)
 	if err != nil {
 		return fmt.Errorf("get submission: %w", err)
@@ -116,7 +129,7 @@ func (s *Service) Grade(ctx context.Context, submissionID string) error {
 		return fmt.Errorf("create grading run: %w", err)
 	}
 
-	res, gradeErr := s.execute(ctx, sub.Repo, asg)
+	res, gradeErr := s.execute(ctx, sub.Repo, asg, revision)
 	finished := s.now()
 	run.FinishedAt = &finished
 
@@ -159,7 +172,7 @@ type RevisionCheckout interface {
 	FetchRevision(context.Context, adapter.RepoRef, string, string) error
 }
 
-func (s *Service) execute(ctx context.Context, repo adapter.RepoRef, asg *store.Assignment) (Result, error) {
+func (s *Service) execute(ctx context.Context, repo adapter.RepoRef, asg *store.Assignment, revision string) (Result, error) {
 	if !ValidPolicyRevision(asg.TemplateRef.Ref) || asg.TemplateRef.Namespace == "" || asg.TemplateRef.Name == "" {
 		return Result{}, errors.New("grading requires an instructor template pinned to a full commit ID; configure the assignment grading policy")
 	}
@@ -213,7 +226,13 @@ func (s *Service) execute(ctx context.Context, repo adapter.RepoRef, asg *store.
 		return Result{}, err
 	}
 	defer os.RemoveAll(dir)
-	if err := s.Checkout.Fetch(ctx, repo, dir); err != nil {
+	var fetchErr error
+	if revision != "" {
+		fetchErr = checkout.FetchRevision(ctx, repo, revision, dir)
+	} else {
+		fetchErr = s.Checkout.Fetch(ctx, repo, dir)
+	}
+	if err := fetchErr; err != nil {
 		return Result{}, fmt.Errorf("submission checkout: %w", err)
 	}
 	if err := os.RemoveAll(filepath.Join(dir, ".git")); err != nil {
@@ -221,6 +240,7 @@ func (s *Service) execute(ctx context.Context, repo adapter.RepoRef, asg *store.
 	}
 	// Never read grading.json or policy files from the learner's checkout.
 	res, err := runner.RunWithPolicy(ctx, spec, dir, policyDir)
+	res.SubmissionRevision = revision
 	res.Policy = &PolicyEvidence{Repository: template, Revision: strings.ToLower(asg.TemplateRef.Ref), Path: asg.GradingSpec, SHA256: fmt.Sprintf("%x", sha256.Sum256(data))}
 	return res, err
 }

@@ -157,3 +157,38 @@ func TestContainerPolicyIntegration(t *testing.T) {
 		t.Fatalf("correct answer or read-only policy failed: %v/%v", g.Score, g.MaxScore)
 	}
 }
+
+// Distinguish the queued commit from a later repository head.
+type pushCheckout struct {
+	policyCheckout
+	requested string
+}
+
+func (f *pushCheckout) FetchRevision(ctx context.Context, repo adapter.RepoRef, revision, dir string) error {
+	if repo.Name == "hw1-template" {
+		return f.policyCheckout.FetchRevision(ctx, repo, revision, dir)
+	}
+	f.requested = revision
+	return (fakeCheckout{files: map[string]string{"answer.txt": "correct"}}).Fetch(ctx, repo, dir)
+}
+func TestPushGradesPinnedSubmissionRatherThanMovingHead(t *testing.T) {
+	st := memory.New()
+	seedSubmission(t, st)
+	f := &pushCheckout{policyCheckout: *policyFixture()}
+	revision := "2222222222222222222222222222222222222222"
+	if err := NewService(st, NewExecRunner(), f).GradeRevision(context.Background(), "s1", revision); err != nil {
+		t.Fatal(err)
+	}
+	g, err := st.LatestGradeForSubmission(context.Background(), "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result Result
+	_ = json.Unmarshal(g.Breakdown, &result)
+	if g.Score != 10 || f.requested != revision || result.SubmissionRevision != revision || result.Policy.Revision != testPolicyRevision {
+		t.Fatalf("incorrect pinned result: %+v", result)
+	}
+	if err := NewService(st, NewExecRunner(), f).GradeRevision(context.Background(), "s1", "main"); err == nil {
+		t.Fatal("moving branch accepted")
+	}
+}

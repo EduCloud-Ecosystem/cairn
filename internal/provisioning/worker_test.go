@@ -4,6 +4,8 @@ package provisioning
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/EduCloud-Ecosystem/cairn/internal/store"
@@ -19,6 +21,7 @@ type fakeAdapter struct {
 	collaborator string
 	role         adapter.Role
 	webhookURL   string
+	webhookErr   error
 	lockedRepo   string
 	unlockedRepo string
 }
@@ -65,7 +68,7 @@ func (f *fakeAdapter) UnlockRepo(_ context.Context, repo adapter.RepoRef) error 
 
 func (f *fakeAdapter) EnsureWebhook(_ context.Context, _ adapter.RepoRef, spec adapter.WebhookSpec) error {
 	f.webhookURL = spec.URL
-	return nil
+	return f.webhookErr
 }
 
 func (f *fakeAdapter) DispatchGrading(context.Context, adapter.GradingDispatch) error { return nil }
@@ -96,6 +99,7 @@ func TestWorkerCreateRepo(t *testing.T) {
 		Store:          st,
 		Adapters:       map[adapter.Host]adapter.Adapter{adapter.HostGitHub: fa},
 		WebhookBaseURL: "https://cairn.example",
+		WebhookSecrets: map[adapter.Host]string{adapter.HostGitHub: "fixture-secret"},
 	}
 	did, err := w.RunOnce(ctx)
 	if err != nil {
@@ -154,7 +158,7 @@ func TestWorkerWebhookURLPerHost(t *testing.T) {
 
 			fa := &fakeAdapter{}
 			// Trailing slash on the base also exercises the TrimRight.
-			w := &Worker{Store: st, Adapters: map[adapter.Host]adapter.Adapter{tc.host: fa}, WebhookBaseURL: "https://cairn.example/"}
+			w := &Worker{Store: st, Adapters: map[adapter.Host]adapter.Adapter{tc.host: fa}, WebhookBaseURL: "https://cairn.example/", WebhookSecrets: map[adapter.Host]string{tc.host: "fixture-secret"}}
 			if _, err := w.RunOnce(ctx); err != nil {
 				t.Fatalf("RunOnce: %v", err)
 			}
@@ -326,5 +330,50 @@ func TestWorkerEnsureNamespaceCalledFirst(t *testing.T) {
 	}
 	if sub.Repo.Name != "hw1-alice" {
 		t.Errorf("repo.Name = %q, want hw1-alice", sub.Repo.Name)
+	}
+}
+
+func (g *fakeGrader) GradeRevision(_ context.Context, submissionID, revision string) error {
+	g.graded = append(g.graded, submissionID+"@"+revision)
+	return nil
+}
+func TestWorkerPreservesQueuedRevision(t *testing.T) {
+	st := memory.New()
+	q := NewService(st)
+	ctx := context.Background()
+	target, _ := json.Marshal(GradeTarget{SubmissionID: "s1", Revision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+	_ = q.Enqueue(ctx, JobGradeRevision, string(target), "push:s1")
+	g := &fakeGrader{}
+	w := &Worker{Store: st, Grader: g}
+	if _, err := w.RunOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(g.graded) != 1 || g.graded[0] != "s1@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Fatal(g.graded)
+	}
+}
+func TestWebhookFailureDoesNotActivateSubmission(t *testing.T) {
+	ctx := context.Background()
+	st := memory.New()
+	_ = st.CreateClassroom(ctx, &store.Classroom{ID: "c", Host: adapter.HostForgejo, HostNamespace: "course"})
+	_ = st.CreateAssignment(ctx, &store.Assignment{ID: "a", ClassroomID: "c", Slug: "work"})
+	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r", ClassroomID: "c", HostUsername: "alice"})
+	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s", AssignmentID: "a", RosterEntryID: "r", Status: "provisioning"})
+	fa := &fakeAdapter{webhookErr: errors.New("fixture outage")}
+	w := &Worker{Store: st, Adapters: map[adapter.Host]adapter.Adapter{adapter.HostForgejo: fa}, WebhookBaseURL: "https://course.example", WebhookSecrets: map[adapter.Host]string{adapter.HostForgejo: "fixture"}}
+	if err := w.createRepo(ctx, "s"); err == nil {
+		t.Fatal("hook failure ignored")
+	}
+	sub, _ := st.GetSubmission(ctx, "s")
+	if sub.Status == "active" {
+		t.Fatal("submission falsely active")
+	}
+	fa.webhookErr = nil
+	if err := w.createRepo(ctx, "s"); err != nil {
+		t.Fatal(err)
+	}
+	sub, _ = st.GetSubmission(ctx, "s")
+	if sub.Status != "active" {
+		t.Fatal("retry did not activate")
 	}
 }

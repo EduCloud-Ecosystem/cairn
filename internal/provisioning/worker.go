@@ -4,6 +4,7 @@ package provisioning
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -20,6 +21,15 @@ type Grader interface {
 	Grade(ctx context.Context, submissionID string) error
 }
 
+// GradeTarget preserves immutable submission provenance in the durable queue.
+type GradeTarget struct {
+	SubmissionID string `json:"submission_id"`
+	Revision     string `json:"revision"`
+}
+type RevisionGrader interface {
+	GradeRevision(context.Context, string, string) error
+}
+
 // Worker drains the job queue, executing each job against the Git-host adapter
 // for the job's classroom. It is the rate-limited choke point in front of every
 // host write; jobs are retried with backoff and marked failed after MaxAttempts.
@@ -34,7 +44,7 @@ type Worker struct {
 	WebhookBaseURL string
 	// WebhookSecrets is the per-host secret the host uses to sign/identify push
 	// deliveries, matched by the receiver to verify them. Keyed by adapter.Host; a
-	// missing key means the webhook is registered without a secret (unverifiable).
+	// missing key makes automatic webhook provisioning fail visibly.
 	WebhookSecrets map[adapter.Host]string
 
 	MaxAttempts int                             // default 5
@@ -132,6 +142,16 @@ func (w *Worker) execute(ctx context.Context, job *store.ProvisioningJob) error 
 		return w.setLock(ctx, job.TargetRef, true)
 	case JobUnlockRepo:
 		return w.setLock(ctx, job.TargetRef, false)
+	case JobGradeRevision:
+		var target GradeTarget
+		if err := json.Unmarshal([]byte(job.TargetRef), &target); err != nil || target.SubmissionID == "" || target.Revision == "" {
+			return errors.New("invalid revision grade target")
+		}
+		grader, ok := w.Grader.(RevisionGrader)
+		if !ok {
+			return errors.New("grader does not support immutable submission revisions")
+		}
+		return grader.GradeRevision(ctx, target.SubmissionID, target.Revision)
 	case JobGrade:
 		if w.Grader == nil {
 			return fmt.Errorf("grade job %s: no grader configured", job.ID)
@@ -181,15 +201,19 @@ func (w *Worker) createRepo(ctx context.Context, submissionID string) error {
 		return fmt.Errorf("add collaborator: %w", err)
 	}
 	if w.WebhookBaseURL != "" {
-		// Best-effort: a missing webhook should not fail provisioning. The URL is
-		// per-host (<base>/webhooks/<host>) so deliveries reach the right verifier;
-		// the per-host secret lets the receiver authenticate them.
+		// When automatic grading is configured, a missing hook is a failed
+		// provisioning step and must be retried visibly.
 		hookURL := strings.TrimRight(w.WebhookBaseURL, "/") + "/webhooks/" + string(cls.Host)
-		_ = ad.EnsureWebhook(ctx, repo, adapter.WebhookSpec{
+		if w.WebhookSecrets[cls.Host] == "" {
+			return errors.New("webhook signing secret is required")
+		}
+		if err := ad.EnsureWebhook(ctx, repo, adapter.WebhookSpec{
 			URL:    hookURL,
 			Secret: w.WebhookSecrets[cls.Host],
 			Events: []string{"push"},
-		})
+		}); err != nil {
+			return fmt.Errorf("ensure webhook: %w", err)
+		}
 	}
 
 	sub.Repo = repo

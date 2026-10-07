@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -338,7 +339,7 @@ func (a *Adapter) UnlockRepo(ctx context.Context, repo adapter.RepoRef) error {
 }
 
 // EnsureWebhook makes sure a webhook matching spec.URL exists on repo. If the
-// webhook is already registered the call is a no-op.
+// webhook exists, reapply its active state, events and secret (including rotation).
 func (a *Adapter) EnsureWebhook(ctx context.Context, repo adapter.RepoRef, spec adapter.WebhookSpec) error {
 	base := "/repos/" + repo.Namespace + "/" + repo.Name + "/hooks"
 	var hooks []struct {
@@ -349,11 +350,6 @@ func (a *Adapter) EnsureWebhook(ctx context.Context, repo adapter.RepoRef, spec 
 	}
 	if err := a.do(ctx, http.MethodGet, base, nil, &hooks, http.StatusOK); err != nil {
 		return err
-	}
-	for _, h := range hooks {
-		if h.Config.URL == spec.URL {
-			return nil // already present; idempotent
-		}
 	}
 	events := spec.Events
 	if len(events) == 0 {
@@ -368,6 +364,12 @@ func (a *Adapter) EnsureWebhook(ctx context.Context, repo adapter.RepoRef, spec 
 			"content_type": "json",
 			"secret":       spec.Secret,
 		},
+	}
+	for _, h := range hooks {
+		if h.Config.URL == spec.URL {
+			delete(in, "type")
+			return a.do(ctx, http.MethodPatch, base+"/"+strconv.FormatInt(h.ID, 10), in, nil, http.StatusOK)
+		}
 	}
 	return a.do(ctx, http.MethodPost, base, in, nil, http.StatusCreated)
 }

@@ -647,29 +647,38 @@ func TestEnsureWebhookCreate(t *testing.T) {
 	}
 }
 
-func TestEnsureWebhookIdempotent(t *testing.T) {
+func TestEnsureWebhookRepairsExistingConfiguration(t *testing.T) {
 	calls := 0
-	existing := []map[string]any{
-		{"id": 1, "config": map[string]any{"url": "https://cairn.example/hook"}},
-	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
-		if r.Method != http.MethodGet {
-			t.Errorf("idempotent webhook: unexpected %s", r.Method)
+		if calls == 1 {
+			if r.Method != http.MethodGet {
+				t.Fatal("expected list")
+			}
+			w.Write([]byte(`[{"id":1,"active":false,"config":{"url":"https://cairn.example/hook"}}]`))
+			return
 		}
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(existing)
+		if r.Method != http.MethodPatch || r.URL.Path != "/api/v1/repos/org/repo/hooks/1" {
+			t.Errorf("unexpected repair: %s %s", r.Method, r.URL.Path)
+		}
+		var body struct {
+			Active bool              `json:"active"`
+			Events []string          `json:"events"`
+			Config map[string]string `json:"config"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if !body.Active || len(body.Events) != 1 || body.Events[0] != "push" || body.Config["secret"] != "rotated" {
+			t.Error("hook not repaired")
+		}
+		w.Write([]byte(`{}`))
 	}))
 	defer srv.Close()
-	a := newTestAdapter(t, srv)
-	if err := a.EnsureWebhook(bg,
-		adapter.RepoRef{Host: adapter.HostForgejo, Namespace: "org", Name: "repo"},
-		adapter.WebhookSpec{URL: "https://cairn.example/hook"},
-	); err != nil {
+	err := newTestAdapter(t, srv).EnsureWebhook(bg, adapter.RepoRef{Namespace: "org", Name: "repo"}, adapter.WebhookSpec{URL: "https://cairn.example/hook", Secret: "rotated"})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if calls != 1 {
-		t.Fatalf("idempotent: want 1 GET, got %d", calls)
+	if calls != 2 {
+		t.Fatalf("got %d calls", calls)
 	}
 }
 
