@@ -443,3 +443,10 @@ A deliberate split (see [`DESIGN.md`](DESIGN.md) §11):
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) and our [code of conduct](CODE_OF_CONDUCT.md).
 Good first targets: implementing the GitHub adapter methods (`pkg/adapter/github`)
 and the MVP vertical-slice endpoints (`internal/api`).
+
+## Browser Python/R computing
+
+Cairn can link each class to an institution-operated workspace without depending
+on a learner's individual Codespaces benefits. See
+[`docs/course-workspaces.md`](docs/course-workspaces.md) for configuration,
+separate Hub enrollment, saved-file recovery and remaining pilot acceptance.

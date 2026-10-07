@@ -118,6 +118,18 @@ function card(item) {
     escapeHtml(fmtDeadline(item.deadline)) + " · status: " + escapeHtml(item.status || "") + "</div>" +
     '<div class="row">Score: <span class="score">' + escapeHtml(fmtScore(item.latest_grade)) + "</span></div>";
 
+  if (item.workspace_url) {
+    const row = document.createElement("p");
+    const link = document.createElement("a");
+    link.href = item.workspace_url;
+    link.textContent = "Open Python/R workspace";
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    row.appendChild(link);
+    row.appendChild(document.createTextNode(" · Sign in there to resume your saved work."));
+    el.appendChild(row);
+  }
+
   const det = document.createElement("details");
   const sum = document.createElement("summary");
   sum.textContent = "Per-test results & history";

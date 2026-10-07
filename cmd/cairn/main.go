@@ -224,7 +224,12 @@ func serve() {
 		log.Printf("WARNING: operator auth is enabled but no OAuth resolver is configured — operator login will not work until CAIRN_GITHUB_CLIENT_ID or CAIRN_FORGEJO_OAUTH_CLIENT_ID is set")
 	}
 
+	workspaceURLs, err := api.ParseWorkspaceURLs(os.Getenv("CAIRN_WORKSPACE_URLS"))
+	if err != nil {
+		log.Fatalf("workspace configuration: %v", err)
+	}
 	srv := api.New(api.Options{
+		WorkspaceURLs:    workspaceURLs,
 		Store:            st,
 		Queue:            queue,
 		Resolvers:        resolvers,

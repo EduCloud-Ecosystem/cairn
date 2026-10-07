@@ -36,6 +36,7 @@ type workItem struct {
 	AssignmentTitle string     `json:"assignment_title"`
 	AssignmentSlug  string     `json:"assignment_slug"`
 	ClassroomName   string     `json:"classroom_name"`
+	WorkspaceURL    string     `json:"workspace_url,omitempty"`
 	RepoWebURL      string     `json:"repo_web_url,omitempty"`
 	Deadline        *time.Time `json:"deadline,omitempty"`
 	Status          string     `json:"status"`                   // submission lifecycle
@@ -159,6 +160,9 @@ func (e *enricher) item(ctx context.Context, sub *store.Submission) workItem {
 	it := workItem{SubmissionID: sub.ID, Status: sub.Status}
 
 	if a := e.assignment(ctx, sub.AssignmentID); a != nil {
+		if roster, err := e.s.store.GetRosterEntry(ctx, sub.RosterEntryID); err == nil && roster.Status == store.RosterActive {
+			it.WorkspaceURL = e.s.workspaceURLs[a.ClassroomID]
+		}
 		it.AssignmentTitle = a.Title
 		it.AssignmentSlug = a.Slug
 		it.Deadline = a.Deadline
