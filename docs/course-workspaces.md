@@ -44,6 +44,7 @@ requires a separately reviewed egress and credential design. Saving a notebook
 is not submitting it to Cairn: students still upload/commit their deliverables
 to the assigned repository. Automatic synchronization is not implemented.
 
-This integration does not resolve the separate instructor-owned grading-manifest
-and resource-ceiling findings recorded in the September 2026 audit. Those remain
-required before trusting grades from learner-editable submissions.
+Cairn PR #2 implements pinned instructor grading policy and per-step resource
+ceilings. A complete course rehearsal must still verify the selected policy,
+actual submissions and learner-visible results; a workspace link alone is not
+grading acceptance.

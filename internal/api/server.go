@@ -253,7 +253,10 @@ func (s *Server) requireOperator(next http.HandlerFunc) http.HandlerFunc {
 		if !ok {
 			// If a session cookie was present but invalid/expired, clear it so the
 			// browser stops resending a dead token on every request.
-			if _, err := r.Cookie(sessionCookie); err == nil {
+			// A valid student session is unauthorized here, not expired. Keep it
+			// so an accidental operator request does not sign the student out.
+			_, live := s.sessionFromCookie(r)
+			if _, err := r.Cookie(sessionCookie); err == nil && !live {
 				http.SetCookie(w, &http.Cookie{
 					Name: sessionCookie, Value: "", Path: "/", HttpOnly: true,
 					MaxAge: -1, SameSite: http.SameSiteLaxMode, Secure: s.cookieSecure,

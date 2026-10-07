@@ -197,16 +197,21 @@ func TestStudentSessionCannotAccessOperatorRoutes(t *testing.T) {
 	// A student session for "alice" — same username as the admin, but NOT an
 	// operator session — must still be rejected on operator routes.
 	req := httptest.NewRequest(http.MethodGet, "/classrooms", nil)
-	req.AddCookie(studentCookie(srv, adapter.HostGitHub, "alice"))
+	cookie := studentCookie(srv, adapter.HostGitHub, "alice")
+	req.AddCookie(cookie)
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("student session on operator route = %d, want 401", rec.Code)
 	}
 
-	// But the same student session works on the student route.
+	if len(rec.Result().Cookies()) != 0 {
+		t.Fatal("operator denial must not clear a valid student cookie")
+	}
+
+	// The exact same cookie remains usable, including in a browser cookie jar.
 	req2 := httptest.NewRequest(http.MethodGet, "/me/work", nil)
-	req2.AddCookie(studentCookie(srv, adapter.HostGitHub, "alice"))
+	req2.AddCookie(cookie)
 	rec2 := httptest.NewRecorder()
 	srv.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusOK {
