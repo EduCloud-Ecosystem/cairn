@@ -20,6 +20,7 @@ const (
 	JobUnlockRepo      JobType = "unlock_repo"
 	JobEnsureWebhook   JobType = "ensure_webhook"
 	JobGrade           JobType = "grade"
+	JobGradeRevision   JobType = "grade_revision"
 )
 
 // Queue accepts provisioning jobs for asynchronous, rate-limited execution.

@@ -209,3 +209,12 @@ supported Brightspace), so the manual fallback ships first and independently.
 - [x] Add operator-only policy selection and its dashboard controls.
 - [ ] Review course harnesses for learner-controlled imports/self-reporting,
   aggregate budgets, filesystem/output bounds and kernel isolation before use.
+
+### October 7 follow-up
+
+- [x] Pin automatic push grading to the delivered submission commit and expose
+  commit provenance in student history; fail/retry configured webhook setup.
+- [ ] LLM-assisted rubric feedback **plus proposed scores** for instructor review;
+  flexible format extraction, evidence citations, bounded model use and explicit
+  publication. Design decision: `docs/llm-assessment.md`. No provider/review UI is
+  implemented by the push-grading change.

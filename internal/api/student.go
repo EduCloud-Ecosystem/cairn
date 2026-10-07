@@ -15,9 +15,19 @@ import (
 
 // gradeView is a student-facing grade summary. No PII — scores and a timestamp.
 type gradeView struct {
-	Score    float64   `json:"score"`
-	MaxScore float64   `json:"max_score"`
-	GradedAt time.Time `json:"graded_at"`
+	SubmissionRevision string    `json:"submission_revision,omitempty"`
+	Score              float64   `json:"score"`
+	MaxScore           float64   `json:"max_score"`
+	GradedAt           time.Time `json:"graded_at"`
+}
+
+func summarizeGrade(g *store.Grade) gradeView {
+	view := gradeView{Score: g.Score, MaxScore: g.MaxScore, GradedAt: g.GradedAt}
+	var result grading.Result
+	if json.Unmarshal(g.Breakdown, &result) == nil {
+		view.SubmissionRevision = result.SubmissionRevision
+	}
+	return view
 }
 
 // testView is one per-test result from a grading breakdown.
@@ -113,7 +123,7 @@ func (s *Server) handleMyWorkDetail(w http.ResponseWriter, r *http.Request) {
 	// Attempt history (most recent first).
 	if grades, err := s.store.ListGradesBySubmission(r.Context(), subID); err == nil {
 		for _, g := range grades {
-			detail.History = append(detail.History, gradeView{Score: g.Score, MaxScore: g.MaxScore, GradedAt: g.GradedAt})
+			detail.History = append(detail.History, summarizeGrade(g))
 		}
 	}
 
@@ -179,7 +189,8 @@ func (e *enricher) item(ctx context.Context, sub *store.Submission) workItem {
 	}
 
 	if g, err := e.s.store.LatestGradeForSubmission(ctx, sub.ID); err == nil {
-		it.LatestGrade = &gradeView{Score: g.Score, MaxScore: g.MaxScore, GradedAt: g.GradedAt}
+		view := summarizeGrade(g)
+		it.LatestGrade = &view
 	} else if !errors.Is(err, store.ErrNotFound) {
 		// A real error is non-fatal for the list view; leave the grade unset.
 		_ = err

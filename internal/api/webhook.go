@@ -7,13 +7,16 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/EduCloud-Ecosystem/cairn/internal/grading"
 	"github.com/EduCloud-Ecosystem/cairn/internal/provisioning"
+	"github.com/EduCloud-Ecosystem/cairn/internal/store"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/adapter"
 )
 
@@ -22,18 +25,21 @@ import (
 // GitLab uses project.{name, path_with_namespace} + checkout_sha and marks the
 // event type in object_kind.
 type pushPayload struct {
+	Ref         string `json:"ref"`
 	ObjectKind  string `json:"object_kind"`  // GitLab: "push" / "tag_push" / …
 	After       string `json:"after"`        // GitHub/Gitea/Forgejo head sha
 	CheckoutSHA string `json:"checkout_sha"` // GitLab head sha
 	Repository  struct {
-		Name  string `json:"name"`
-		Owner struct {
+		Name          string `json:"name"`
+		DefaultBranch string `json:"default_branch"`
+		Owner         struct {
 			Login    string `json:"login"`
 			Username string `json:"username"`
 		} `json:"owner"`
 	} `json:"repository"`
 	Project struct {
 		Name              string `json:"name"`
+		DefaultBranch     string `json:"default_branch"`
 		PathWithNamespace string `json:"path_with_namespace"`
 		Namespace         string `json:"namespace"`
 	} `json:"project"`
@@ -113,6 +119,24 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Only push deliveries on the repository's default branch are coursework.
+	event := r.Header.Get("X-GitHub-Event")
+	if host == adapter.HostGitea || host == adapter.HostForgejo {
+		event = r.Header.Get("X-Forgejo-Event")
+		if event == "" {
+			event = r.Header.Get("X-Gitea-Event")
+		}
+	}
+	branch := payload.Repository.DefaultBranch
+	if host == adapter.HostGitLab {
+		branch = payload.Project.DefaultBranch
+		event = payload.ObjectKind
+	}
+	if event != "push" || branch == "" || payload.Ref != "refs/heads/"+branch {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	// Non-push deliveries (e.g. ping) and branch deletions carry no actionable head
 	// commit. Acknowledge them without doing anything.
 	ns, name, sha := payload.repo(host)
@@ -121,9 +145,23 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !grading.ValidPolicyRevision(sha) {
+		httpError(w, http.StatusBadRequest, "push requires a full commit ID")
+		return
+	}
+	sha = strings.ToLower(sha)
 	sub, err := s.store.FindSubmissionByRepo(r.Context(), host, ns, name)
-	if err != nil {
+	if errors.Is(err, store.ErrNotFound) {
 		// A delivery for a repo we don't track is not an error.
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, "could not find submission")
+		return
+	}
+	if sub.Status != "active" {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -147,7 +185,8 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	// Idempotency key includes the sha so the same push grades once but a new
 	// commit triggers a fresh regrade.
 	idem := "grade:webhook:" + sub.ID + ":" + sha
-	if err := s.queue.Enqueue(r.Context(), provisioning.JobGrade, sub.ID, idem); err != nil {
+	target, _ := json.Marshal(provisioning.GradeTarget{SubmissionID: sub.ID, Revision: sha})
+	if err := s.queue.Enqueue(r.Context(), provisioning.JobGradeRevision, string(target), idem); err != nil {
 		httpError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
