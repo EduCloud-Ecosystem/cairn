@@ -95,3 +95,33 @@ func TestSQLiteUniqueViolationMapsToErrConflict(t *testing.T) {
 		t.Fatalf("duplicate CreateSubmission: got %v, want ErrConflict", err)
 	}
 }
+
+func TestAssessmentSurvivesReopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "assessment.db")
+	ctx := context.Background()
+	s, err := sqlite.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, err := range []error{s.CreateClassroom(ctx, &store.Classroom{ID: "c"}), s.CreateAssignment(ctx, &store.Assignment{ID: "a", ClassroomID: "c"}), s.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r", ClassroomID: "c"}), s.CreateSubmission(ctx, &store.Submission{ID: "s", AssignmentID: "a", RosterEntryID: "r"}), s.PutAssessmentRubric(ctx, &store.AssessmentRubric{AssignmentID: "a", Digest: "d", Document: []byte(`{"title":"Saved rubric"}`)}), s.CreateAssessment(ctx, &store.AssessmentRecord{ID: "p", SubmissionID: "s", Revision: "commit", RubricDigest: "d", Status: "collected", Document: []byte(`{"artifact":"captured source"}`)})} {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = sqlite.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	got, err := s.GetAssessment(ctx, "p")
+	if err != nil || string(got.Document) != `{"artifact":"captured source"}` {
+		t.Fatalf("reopened assessment %+v %v", got, err)
+	}
+	rubric, err := s.GetAssessmentRubric(ctx, "a")
+	if err != nil || rubric.Digest != "d" {
+		t.Fatalf("reopened rubric %+v %v", rubric, err)
+	}
+}

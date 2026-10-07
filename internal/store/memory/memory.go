@@ -16,30 +16,34 @@ import (
 
 // Store is a goroutine-safe in-memory store.Store.
 type Store struct {
-	mu          sync.RWMutex
-	users       map[string]store.User
-	classrooms  map[string]store.Classroom
-	assignments map[string]store.Assignment
-	roster      map[string]store.RosterEntry
-	submissions map[string]store.Submission
-	grades      map[string]store.Grade
-	gradingRuns map[string]store.GradingRun
-	jobs        map[string]store.ProvisioningJob
-	jobIdem     map[string]bool
+	mu                sync.RWMutex
+	assessmentRubrics map[string]store.AssessmentRubric
+	assessments       map[string]store.AssessmentRecord
+	users             map[string]store.User
+	classrooms        map[string]store.Classroom
+	assignments       map[string]store.Assignment
+	roster            map[string]store.RosterEntry
+	submissions       map[string]store.Submission
+	grades            map[string]store.Grade
+	gradingRuns       map[string]store.GradingRun
+	jobs              map[string]store.ProvisioningJob
+	jobIdem           map[string]bool
 }
 
 // New returns an empty in-memory store.
 func New() *Store {
 	return &Store{
-		users:       map[string]store.User{},
-		classrooms:  map[string]store.Classroom{},
-		assignments: map[string]store.Assignment{},
-		roster:      map[string]store.RosterEntry{},
-		submissions: map[string]store.Submission{},
-		grades:      map[string]store.Grade{},
-		gradingRuns: map[string]store.GradingRun{},
-		jobs:        map[string]store.ProvisioningJob{},
-		jobIdem:     map[string]bool{},
+		users:             map[string]store.User{},
+		assessmentRubrics: map[string]store.AssessmentRubric{},
+		assessments:       map[string]store.AssessmentRecord{},
+		classrooms:        map[string]store.Classroom{},
+		assignments:       map[string]store.Assignment{},
+		roster:            map[string]store.RosterEntry{},
+		submissions:       map[string]store.Submission{},
+		grades:            map[string]store.Grade{},
+		gradingRuns:       map[string]store.GradingRun{},
+		jobs:              map[string]store.ProvisioningJob{},
+		jobIdem:           map[string]bool{},
 	}
 }
 
@@ -249,6 +253,11 @@ func (m *Store) DeleteRosterEntry(_ context.Context, id string) error {
 		for rID, run := range m.gradingRuns {
 			if run.SubmissionID == subID {
 				delete(m.gradingRuns, rID)
+			}
+		}
+		for aid, a := range m.assessments {
+			if a.SubmissionID == subID {
+				delete(m.assessments, aid)
 			}
 		}
 		delete(m.submissions, subID)
@@ -483,6 +492,11 @@ func (m *Store) PurgeExportedGrades(_ context.Context, cutoff time.Time) (int, i
 			continue
 		}
 		delete(m.grades, id)
+		for aid, a := range m.assessments {
+			if a.GradeID == id {
+				delete(m.assessments, aid)
+			}
+		}
 		gradesPurged++
 		if g.RunID != "" {
 			runIDs = append(runIDs, g.RunID)

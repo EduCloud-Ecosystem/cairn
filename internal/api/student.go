@@ -9,12 +9,14 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/EduCloud-Ecosystem/cairn/internal/assessment"
 	"github.com/EduCloud-Ecosystem/cairn/internal/grading"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store"
 )
 
 // gradeView is a student-facing grade summary. No PII — scores and a timestamp.
 type gradeView struct {
+	Source             string    `json:"source,omitempty"`
 	SubmissionRevision string    `json:"submission_revision,omitempty"`
 	Score              float64   `json:"score"`
 	MaxScore           float64   `json:"max_score"`
@@ -23,6 +25,11 @@ type gradeView struct {
 
 func summarizeGrade(g *store.Grade) gradeView {
 	view := gradeView{Score: g.Score, MaxScore: g.MaxScore, GradedAt: g.GradedAt}
+	var source struct {
+		Source string `json:"source"`
+	}
+	_ = json.Unmarshal(g.Breakdown, &source)
+	view.Source = source.Source
 	var result grading.Result
 	if json.Unmarshal(g.Breakdown, &result) == nil {
 		view.SubmissionRevision = result.SubmissionRevision
@@ -55,7 +62,14 @@ type workItem struct {
 }
 
 // workDetail adds the per-test breakdown and attempt history to a workItem.
+type publishedAssessment struct {
+	SubmissionRevision string                `json:"submission_revision"`
+	Criteria           []assessment.Judgment `json:"criteria"`
+	ReviewNote         string                `json:"review_note"`
+}
+
 type workDetail struct {
+	Assessments []publishedAssessment `json:"assessments,omitempty"`
 	workItem
 	Tests   []testView  `json:"tests"`
 	History []gradeView `json:"history"`
@@ -124,6 +138,16 @@ func (s *Server) handleMyWorkDetail(w http.ResponseWriter, r *http.Request) {
 	if grades, err := s.store.ListGradesBySubmission(r.Context(), subID); err == nil {
 		for _, g := range grades {
 			detail.History = append(detail.History, summarizeGrade(g))
+			var source struct {
+				Source string `json:"source"`
+			}
+			_ = json.Unmarshal(g.Breakdown, &source)
+			if source.Source == "instructor-reviewed" {
+				var a publishedAssessment
+				if json.Unmarshal(g.Breakdown, &a) == nil {
+					detail.Assessments = append(detail.Assessments, a)
+				}
+			}
 		}
 	}
 

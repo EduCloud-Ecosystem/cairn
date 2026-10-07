@@ -119,7 +119,8 @@ func TestPostgresRoundTrip(t *testing.T) {
 		t.Fatalf("ListClassrooms = %v, %v", cs, err)
 	}
 
-	due := time.Now().Add(-time.Hour).UTC()
+	// PostgreSQL timestamps preserve microseconds, not Go nanoseconds.
+	due := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
 	if err := s.CreateAssignment(ctx, &store.Assignment{
 		ID: "a1", ClassroomID: "c1", Title: "HW1", Slug: "hw1",
 		TemplateRef: adapter.TemplateRef{Host: adapter.HostGitHub, Namespace: "cs101", Name: "hw1-template"},

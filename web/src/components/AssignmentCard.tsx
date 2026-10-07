@@ -1,3 +1,4 @@
+import { AssessmentPanel } from "./AssessmentPanel";
 import { useState } from "react";
 import { api, type Assignment, type SubmissionView } from "../api";
 import { Button, StatusChip, Empty, type Notify } from "./ui";
@@ -181,6 +182,8 @@ export function AssignmentCard({
             <Button small disabled={busy} onClick={() => void savePolicy()}>Save grading version</Button>
             {policyPinned && <p className="muted small">Saved commit: <code>{savedRevision}</code></p>}
           </fieldset>
+
+          <AssessmentPanel assignmentID={assignment.id} submissions={subs || []} notify={notify} refreshSubmissions={loadSubs} />
 
           <div className="deadline-row">
             <label htmlFor={`dl-${assignment.id}`}>Deadline</label>

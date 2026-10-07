@@ -95,11 +95,16 @@ export interface Operator {
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
-async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function req<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<T> {
   const res = await fetch(BASE + path, {
     method,
     credentials: "same-origin",
-    headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+    headers:
+      body !== undefined ? { "Content-Type": "application/json" } : undefined,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
@@ -113,10 +118,86 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
     }
     throw new Error(message);
   }
-  return (text ? (JSON.parse(text) as T) : (undefined as T));
+  return text ? (JSON.parse(text) as T) : (undefined as T);
 }
 
+export interface RubricCriterion {
+  id: string;
+  description: string;
+  max_points: number;
+}
+export interface AssessmentRubric {
+  title: string;
+  paths: string[];
+  criteria: RubricCriterion[];
+}
+export interface Evidence {
+  path: string;
+  sha256: string;
+  location: string;
+}
+export interface Judgment {
+  criterion_id: string;
+  points: number | null;
+  feedback: string;
+  uncertainty: string;
+  citations: Evidence[];
+}
+export interface AssessmentRecord {
+  id: string;
+  submission_id: string;
+  revision: string;
+  status: string;
+  document: {
+    rubric: AssessmentRubric;
+    input_digest: string;
+    artifacts: {
+      path: string;
+      sha256: string;
+      issue?: string;
+      segments: { location: string; text: string }[];
+    }[];
+    proposal?: {
+      source: string;
+      model: string;
+      prompt_version: string;
+      criteria: Judgment[];
+    };
+    review?: {
+      reviewer: string;
+      reviewed_at: string;
+      note: string;
+      criteria?: Judgment[];
+    };
+  };
+}
 export const api = {
+  assessmentCapabilities: () =>
+    req<{ review: boolean }>("GET", "/assessment-capabilities"),
+  assessmentRubric: (id: string) =>
+    req<{ document: AssessmentRubric }>(
+      "GET",
+      `/assignments/${id}/assessment-rubric`,
+    ),
+  saveAssessmentRubric: (id: string, r: AssessmentRubric) =>
+    req<unknown>("PUT", `/assignments/${id}/assessment-rubric`, r),
+  assessments: (id: string) =>
+    req<AssessmentRecord[]>("GET", `/submissions/${id}/assessments`),
+  captureAssessment: (id: string) =>
+    req<AssessmentRecord>("POST", `/submissions/${id}/assessments`, {}),
+  importAssessment: (id: string, p: unknown) =>
+    req<AssessmentRecord>("POST", `/assessments/${id}/proposal`, p),
+  reviewAssessment: (
+    id: string,
+    action: string,
+    note: string,
+    criteria: Judgment[],
+  ) =>
+    req<AssessmentRecord>("POST", `/assessments/${id}/review`, {
+      action,
+      note,
+      criteria,
+    }),
   health: () => req<{ status: string }>("GET", "/healthz"),
 
   me: () => req<Operator>("GET", "/auth/me"),
@@ -124,8 +205,11 @@ export const api = {
   loginUrl: () => `${BASE}/auth/login`,
 
   listClassrooms: () => req<Classroom[]>("GET", "/classrooms"),
-  createClassroom: (b: { name: string; host: string; host_namespace: string }) =>
-    req<Classroom>("POST", "/classrooms", b),
+  createClassroom: (b: {
+    name: string;
+    host: string;
+    host_namespace: string;
+  }) => req<Classroom>("POST", "/classrooms", b),
 
   listAssignments: (classroomID: string) =>
     req<Assignment[]>("GET", `/classrooms/${classroomID}/assignments`),
@@ -143,10 +227,14 @@ export const api = {
 
   listRoster: (classroomID: string) =>
     req<RosterEntry[]>("GET", `/classrooms/${classroomID}/roster`),
-  addRoster: (classroomID: string, b: { username: string; email_hash?: string }) =>
-    req<RosterEntry>("POST", `/classrooms/${classroomID}/roster`, b),
+  addRoster: (
+    classroomID: string,
+    b: { username: string; email_hash?: string },
+  ) => req<RosterEntry>("POST", `/classrooms/${classroomID}/roster`, b),
   addRosterBulk: (classroomID: string, entries: BulkRosterEntry[]) =>
-    req<BulkRosterResponse>("POST", `/classrooms/${classroomID}/roster/bulk`, { entries }),
+    req<BulkRosterResponse>("POST", `/classrooms/${classroomID}/roster/bulk`, {
+      entries,
+    }),
   // Irreversible: deletes the roster row and every dependent submission,
   // grade, and grading run. Not the same thing as dropping a student from the
   // active roster — see RosterPanel's confirm copy.
@@ -157,22 +245,38 @@ export const api = {
   // separate from gradesCsvUrl's download so a page reload can't silently
   // start it.
   confirmExport: (classroomID: string) =>
-    req<{ confirmed: number }>("POST", `/classrooms/${classroomID}/grades/confirm-export`),
+    req<{ confirmed: number }>(
+      "POST",
+      `/classrooms/${classroomID}/grades/confirm-export`,
+    ),
 
   listSubmissions: (assignmentID: string) =>
     req<SubmissionView[]>("GET", `/assignments/${assignmentID}/submissions`),
 
-  setGradingPolicy: (assignmentID: string, template_commit: string, grading_spec: string) =>
-    req<Assignment>("PATCH", `/assignments/${assignmentID}/grading-policy`, { template_commit, grading_spec }),
+  setGradingPolicy: (
+    assignmentID: string,
+    template_commit: string,
+    grading_spec: string,
+  ) =>
+    req<Assignment>("PATCH", `/assignments/${assignmentID}/grading-policy`, {
+      template_commit,
+      grading_spec,
+    }),
 
   setDeadline: (assignmentID: string, deadline: string | null) =>
-    req<Assignment>("PATCH", `/assignments/${assignmentID}/deadline`, { deadline }),
+    req<Assignment>("PATCH", `/assignments/${assignmentID}/deadline`, {
+      deadline,
+    }),
 
-  lock: (assignmentID: string) => req<EnqueueResult>("POST", `/assignments/${assignmentID}/lock`),
-  unlock: (assignmentID: string) => req<EnqueueResult>("POST", `/assignments/${assignmentID}/unlock`),
-  grade: (assignmentID: string) => req<EnqueueResult>("POST", `/assignments/${assignmentID}/grade`),
+  lock: (assignmentID: string) =>
+    req<EnqueueResult>("POST", `/assignments/${assignmentID}/lock`),
+  unlock: (assignmentID: string) =>
+    req<EnqueueResult>("POST", `/assignments/${assignmentID}/unlock`),
+  grade: (assignmentID: string) =>
+    req<EnqueueResult>("POST", `/assignments/${assignmentID}/grade`),
 
-  gradesCsvUrl: (classroomID: string) => `${BASE}/classrooms/${classroomID}/grades.csv`,
+  gradesCsvUrl: (classroomID: string) =>
+    `${BASE}/classrooms/${classroomID}/grades.csv`,
 
   // The student-facing join URL for an assignment. Unlike gradesCsvUrl this is
   // absolute: it is copied and pasted into an LMS or email, so a same-origin

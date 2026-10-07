@@ -228,19 +228,24 @@ func serve() {
 	if err != nil {
 		log.Fatalf("workspace configuration: %v", err)
 	}
+	var assessmentCheckout grading.RevisionCheckout
+	if os.Getenv("CAIRN_ASSESSMENT_REVIEW") == "1" {
+		assessmentCheckout = checkoutFromEnv()
+	}
 	srv := api.New(api.Options{
-		WorkspaceURLs:    workspaceURLs,
-		Store:            st,
-		Queue:            queue,
-		Resolvers:        resolvers,
-		Adapters:         adapters,
-		WebhookSecrets:   webhookSecrets,
-		LoginHost:        loginHost,
-		WebDir:           webDir,
-		AuthEnabled:      authEnabled,
-		AdminUsers:       admins,
-		CookieSecure:     os.Getenv("CAIRN_COOKIE_SECURE") == "1",
-		GraderConfigured: grader != nil,
+		AssessmentCheckout: assessmentCheckout,
+		WorkspaceURLs:      workspaceURLs,
+		Store:              st,
+		Queue:              queue,
+		Resolvers:          resolvers,
+		Adapters:           adapters,
+		WebhookSecrets:     webhookSecrets,
+		LoginHost:          loginHost,
+		WebDir:             webDir,
+		AuthEnabled:        authEnabled,
+		AdminUsers:         admins,
+		CookieSecure:       os.Getenv("CAIRN_COOKIE_SECURE") == "1",
+		GraderConfigured:   grader != nil,
 	})
 	log.Printf("cairn control plane listening on %s", cfg.ListenAddr)
 	if err := http.ListenAndServe(cfg.ListenAddr, srv); err != nil {
@@ -282,7 +287,7 @@ func schemeHostFromURL(raw string) (scheme, host string) {
 	return u.Scheme, u.Host
 }
 
-func graderFromEnv(st store.Store) provisioning.Grader {
+func checkoutFromEnv() *grading.GitCheckout {
 	// Build a per-host credential map so the checkout knows which scheme, hostname,
 	// and token to use for each adapter.Host. The token is never embedded in the
 	// clone URL — it is delivered via GIT_ASKPASS (H1 credential hygiene).
@@ -326,8 +331,11 @@ func graderFromEnv(st store.Store) provisioning.Grader {
 			}
 		}
 	}
-	checkout := grading.NewGitCheckout(hosts)
+	return grading.NewGitCheckout(hosts)
+}
 
+func graderFromEnv(st store.Store) provisioning.Grader {
+	checkout := checkoutFromEnv()
 	switch os.Getenv("CAIRN_GRADER") {
 	case "container":
 		runtime := getenvDefault("CAIRN_GRADER_RUNTIME", "docker")
