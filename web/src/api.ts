@@ -163,6 +163,7 @@ export interface AssessmentRecord {
   revision: string;
   status: string;
   document: {
+    policy_version?: string;
     rubric: AssessmentRubric;
     input_digest: string;
     artifacts: {
@@ -172,6 +173,7 @@ export interface AssessmentRecord {
       segments: { location: string; text: string }[];
     }[];
     proposal?: {
+      submission_status?: "relevant_work" | "no_relevant_work";
       source: string;
       model: string;
       prompt_version: string;

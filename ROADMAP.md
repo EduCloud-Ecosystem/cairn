@@ -231,6 +231,14 @@ supported Brightspace), so the manual fallback ships first and independently.
 - [x] User-selected no-relevant-work policy: unassessable until instructor review.
   V2 calibration rubrics encode the policy; V1 reports and references remain
   readable. This does not modify any production course rubric.
+- [x] Course capture now binds the unassessable policy; new proposals declare
+  submission relevance and provider uncertainty uses a fixed level plus evidence
+  reason. Legacy reports remain reviewable (October 8).
+- [x] Frozen transfer suite across new tasks and Python/R formats: 17/18 valid
+  proposals, 34/34 provisional matches, one rejected citation-location failure.
+  Human ratings remain 0/34; see `docs/evaluations/2026-10-08-transfer-v1.json`.
+- [ ] Investigate the rejected multi-file citation before course acceptance;
+  the successful second trial does not resolve the first failure.
 - [ ] Instructor-scored evaluation and course destination/retention acceptance;
   broader format extraction, production queuing and billing-aware budgets remain
   follow-ups. See `docs/llm-assessment.md`; production provider activation is off.

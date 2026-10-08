@@ -23,12 +23,12 @@ func mockResponse(code int, body string) *http.Response {
 }
 func responseJSON(t *testing.T, criteria any) string {
 	t.Helper()
-	text, _ := json.Marshal(map[string]any{"criteria": criteria})
+	text, _ := json.Marshal(map[string]any{"submission_status": "relevant_work", "criteria": criteria})
 	raw, _ := json.Marshal(map[string]any{"id": "resp_fixture", "model": DefaultOpenAIModel, "status": "completed", "usage": map[string]int{"input_tokens": 100, "output_tokens": 200}, "output": []any{map[string]any{"type": "message", "content": []any{map[string]string{"type": "output_text", "text": string(text)}}}}})
 	return string(raw)
 }
 func providerCriteria(points float64) []providerJudgment {
-	return []providerJudgment{{CriterionID: "reason", Points: ptr(points), Feedback: "Use the evidence to support the conclusion.", Uncertainty: "Check interpretation with your instructor.", Citations: []providerCitation{{ArtifactID: "artifact_1", Location: "line:1"}}}}
+	return []providerJudgment{{CriterionID: "reason", Points: ptr(points), Feedback: "Use the evidence to support the conclusion.", UncertaintyLevel: "medium", UncertaintyReason: "Check interpretation with your instructor.", Citations: []providerCitation{{ArtifactID: "artifact_1", Location: "line:1"}}}}
 }
 func TestOpenAIGenerateValidatesAndRequiresReview(t *testing.T) {
 	svc, r, _ := fixture(t)

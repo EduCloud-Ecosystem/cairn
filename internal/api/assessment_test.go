@@ -63,7 +63,7 @@ func TestAssessmentOperatorReviewAndStudentPrivacy(t *testing.T) {
 	var d assessment.Document
 	json.Unmarshal(r.Document, &d)
 	points := 6.0
-	p := assessment.Proposal{Source: "fixture", Model: "synthetic", PromptVersion: "v1", InputDigest: d.InputDigest, Criteria: []assessment.Judgment{{CriterionID: "reason", Points: &points, Feedback: "Improve the explanation.", Uncertainty: "Synthetic example", Citations: []assessment.Citation{{Path: "response.md", SHA256: d.Artifacts[0].SHA256, Location: "line:1"}}}}}
+	p := assessment.Proposal{SubmissionStatus: "relevant_work", Source: "fixture", Model: "synthetic", PromptVersion: "v1", InputDigest: d.InputDigest, Criteria: []assessment.Judgment{{CriterionID: "reason", Points: &points, Feedback: "Improve the explanation.", Uncertainty: "Synthetic example", Citations: []assessment.Citation{{Path: "response.md", SHA256: d.Artifacts[0].SHA256, Location: "line:1"}}}}}
 	b, _ := json.Marshal(p)
 	if rec = request("POST", "/assessments/"+r.ID+"/proposal", string(b), operator); rec.Code != 200 {
 		t.Fatal(rec.Body.String())

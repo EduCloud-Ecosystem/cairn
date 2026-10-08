@@ -24,7 +24,7 @@ func TestProviderRecordsSafeValidationReasons(t *testing.T) {
 			case "points_range":
 				js[0].Points = ptr(999)
 			case "feedback_bounds":
-				js[0].Uncertainty = ""
+				js[0].Feedback = ""
 			case "citation_missing":
 				js[0].Citations = nil
 			case "citation_location":

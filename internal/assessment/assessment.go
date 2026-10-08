@@ -57,12 +57,13 @@ type Judgment struct {
 	Citations   []Citation `json:"citations"`
 }
 type Proposal struct {
-	Usage         *ProviderUsage `json:"usage,omitempty"`
-	Source        string         `json:"source"`
-	Model         string         `json:"model"`
-	PromptVersion string         `json:"prompt_version"`
-	InputDigest   string         `json:"input_digest"`
-	Criteria      []Judgment     `json:"criteria"`
+	SubmissionStatus string         `json:"submission_status,omitempty"`
+	Usage            *ProviderUsage `json:"usage,omitempty"`
+	Source           string         `json:"source"`
+	Model            string         `json:"model"`
+	PromptVersion    string         `json:"prompt_version"`
+	InputDigest      string         `json:"input_digest"`
+	Criteria         []Judgment     `json:"criteria"`
 }
 type Review struct {
 	Reviewer   string     `json:"reviewer"`
@@ -72,14 +73,15 @@ type Review struct {
 	GradeID    string     `json:"grade_id,omitempty"`
 }
 type Document struct {
-	CreatedAt   time.Time  `json:"created_at"`
-	CapturedBy  string     `json:"captured_by"`
-	Revision    string     `json:"revision"`
-	Rubric      Rubric     `json:"rubric"`
-	Artifacts   []Artifact `json:"artifacts"`
-	InputDigest string     `json:"input_digest"`
-	Proposal    *Proposal  `json:"proposal,omitempty"`
-	Review      *Review    `json:"review,omitempty"`
+	PolicyVersion string     `json:"policy_version,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	CapturedBy    string     `json:"captured_by"`
+	Revision      string     `json:"revision"`
+	Rubric        Rubric     `json:"rubric"`
+	Artifacts     []Artifact `json:"artifacts"`
+	InputDigest   string     `json:"input_digest"`
+	Proposal      *Proposal  `json:"proposal,omitempty"`
+	Review        *Review    `json:"review,omitempty"`
 }
 
 func DigestBytes(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
@@ -186,6 +188,5 @@ func ValidateProposal(d Document, p Proposal) error {
 	if p.InputDigest != d.InputDigest || strings.TrimSpace(p.Model) == "" || len(p.Model) > 200 || strings.TrimSpace(p.PromptVersion) == "" || len(p.PromptVersion) > 200 {
 		return fmt.Errorf("proposal provenance does not match captured input")
 	}
-	_, _, err := ValidateJudgments(d, p.Criteria, false)
-	return err
+	return ValidateProposalJudgments(d, p)
 }

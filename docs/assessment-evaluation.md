@@ -17,7 +17,7 @@ that situation. Incorrect or partial substantive attempts still follow the
 point rules for answered and omitted parts. Missing/unreadable/unsupported files
 continue to block extraction; they are never silently scored zero.
 
-This policy is implemented in `synthetic-eval-v2`'s instructor rubric, which is
+The October 7 policy was implemented in `synthetic-eval-v2`'s instructor rubric, which is
 captured, hashed and sent through the existing provider path. It does not silently
 change any stored course rubric, global provider prompt or published grade.
 Normal publication still requires an instructor to resolve null criteria with
@@ -217,3 +217,69 @@ citation accuracy or feedback usefulness. The old failure remains part of the
 V1 record; this run does not identify its cause. The selected policy is recorded
 in a private report-bound `policy-decision.json`; all **36 criterion ratings remain
 blank**. Policy-review completion and human score-review completion remain separate.
+
+
+## Transfer evaluation and course policy — October 8, 2026
+
+The current capture workflow now binds the missing-work policy for course
+assessments, including imported proposals. See `llm-assessment.md` for its scope,
+legacy handling and the distinction between structural checks and human judgment.
+V1/V2 corpora and old reports remain frozen; their results used the earlier prompt.
+
+A separate `synthetic-transfer-v1` suite adds nine previously unrun synthetic
+cases: blank, off-topic, instruction-only, mixed partial work, correct results
+with wrong reasoning, conflicting code/comments, Python evidence across files,
+R missing observations, and a multi-cell notebook with misleading saved output.
+It changes the numeric task and adds programming rubrics. These agent-authored
+cases are transfer checks, not an independent instructor-authored holdout set.
+Freeze cases and prompt before the first live run; retain failures without
+adjusting references to match the output. Future tuning makes these regression
+cases and requires a fresh held-out set for an independent assessment.
+
+```sh
+go run ./cmd/cairn assessment-eval run --suite transfer --out output/transfer-offline
+# Opt-in synthetic provider check, at most 18 calls in its own evaluation store:
+go run ./cmd/cairn assessment-eval run --suite transfer --live --trials 2 \
+  --key-file /private/path/cairn-openai.env --out output/transfer-live
+```
+
+Both suites retain the same request/usage ceilings. No evaluation publishes
+grades. Each live run creates `review.html` with source and rubric, initially
+collapsed proposals, and a blank digest-bound `human-review.json` worksheet.
+
+Instructor review procedure:
+
+1. Read each source and rubric before expanding the proposed score. Record your
+   own assessability and points, then assess evidence support, usefulness and
+   uncertainty. Explain disagreements; do not treat reference agreement as truth.
+2. Keep missing-work policy confirmation separate from criterion ratings.
+3. Export the worksheet and run `assessment-eval review` against the exact report.
+   All criterion ratings remain pending until a human supplies them.
+4. Before course activation, add instructor-authored representative assignments,
+   accessibility/format variations and agreed acceptance thresholds. Review every
+   score/assessability disagreement and unsupported citation. Confirm actual
+   review/publication and student isolation in a course rehearsal.
+
+Completing the implementation or automated transfer run does not complete these
+human calibration and course-acceptance steps.
+
+
+### Frozen first transfer run
+
+The October 8 run used `cairn-rubric-v2` with two trials of each new case:
+**17/18 valid proposals**, **34/34 provisional criterion matches**, zero
+assessability mismatches, and 8/8 stable completed pairs. All 34 accepted
+uncertainty fields used the canonical low-uncertainty label with an evidence
+reason. This does not establish calibrated uncertainty across harder tasks.
+
+The first multi-file Python trial failed with
+`invalid_proposal_citation_location`. It was rejected, its token usage retained,
+and no retry performed. The exact invalid location was not retained in safe
+failure diagnostics, so its cause remains unresolved. The second trial succeeded;
+that does not erase the first failure. Investigate citation reliability before
+course acceptance. Raw failed provider output was not logged.
+
+Provider-reported usage was 13,306 input and 5,081 output tokens. The isolated
+ledger contains 18 attempts (17 succeeded, one failed), and zero grades. The
+[frozen summary](evaluations/2026-10-08-transfer-v1.json) records report/corpus
+hashes and every outcome. All **34 human criterion ratings remain blank**.

@@ -352,6 +352,14 @@ function ReviewCard({
       <p>
         Submission commit: <code>{r.revision}</code>
       </p>
+      <p>
+        {r.document.policy_version
+          ? "Missing-work policy: work with no relevant answer remains unassessable until instructor review. Incorrect or partial attempts use the rubric."
+          : "Legacy capture: capture current work again before generating a new model proposal."}
+      </p>
+      {r.document.proposal?.submission_status === "no_relevant_work" && (
+        <p role="status">The proposal found no relevant answer. Verify the captured evidence; resolve every unassessable criterion before publishing a grade.</p>
+      )}
       <details>
         <summary>Captured evidence</summary>
         {r.document.artifacts.map((a) => (
@@ -393,7 +401,7 @@ function ReviewCard({
           uncertain request is not automatically retried.
         </p>
       )}
-      {r.status === "collected" && canGenerate && !r.generation && (
+      {r.status === "collected" && r.document.policy_version && canGenerate && !r.generation && (
         <div>
           <p>
             This sends the saved rubric and extracted source to OpenAI. Review
