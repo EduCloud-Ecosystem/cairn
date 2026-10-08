@@ -66,7 +66,8 @@ func NewWorksheet(r Report, digest string) Worksheet {
 	return w
 }
 func ValidateReport(r Report) error {
-	if r.Version != Version || r.Trials < 1 || r.Trials > 2 || r.CorpusDigest != assessment.Digest(Corpus()) || assessment.Digest(r.Cases) != r.CorpusDigest {
+	corpus, versionErr := CorpusForVersion(r.Version)
+	if versionErr != nil || r.Trials < 1 || r.Trials > 2 || r.CorpusDigest != assessment.Digest(corpus) || assessment.Digest(r.Cases) != r.CorpusDigest {
 		return errors.New("unknown evaluation version or changed corpus")
 	}
 	cases := map[string]Case{}

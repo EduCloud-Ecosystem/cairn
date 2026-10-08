@@ -313,5 +313,8 @@ runs skip both opt-in live paths and require no key.
 A repeatable synthetic evaluation and offline human-review packet are now
 implemented: see [assessment evaluation](assessment-evaluation.md). The 18-call
 baseline recorded one rejected proposal and score/assessability instability; it
-is not course acceptance. Next: instructor review, a held-out permissioned
-benchmark, and the retention/course-destination gates before real course use.
+is not course acceptance. The user selected unassessable-until-review for
+readable submissions with no relevant answer. V2 calibration rubrics encode that
+choice and passed an 18-call development recheck; no stored course rubric changed.
+Next: instructor score/feedback ratings, a held-out permissioned benchmark, and
+the retention/course-destination gates before real course use.

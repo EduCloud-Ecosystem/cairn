@@ -16,7 +16,8 @@ import (
 	"github.com/EduCloud-Ecosystem/cairn/pkg/adapter"
 )
 
-const Version = "synthetic-eval-v1"
+const LegacyVersion = "synthetic-eval-v1"
+const Version = "synthetic-eval-v2"
 
 type Result struct {
 	CaseID     string              `json:"case_id"`
