@@ -65,6 +65,12 @@ Open `review.html` directly in a browser. Read the rubric and captured evidence
 before opening the collapsed model feedback. Enter independent assessability
 and points, whether citations actually support the feedback, whether feedback
 is useful, whether uncertainty is appropriate, and a rationale for each criterion.
+The missing-work policy field records `zero` or `unassessable` plus a rationale,
+reviewer and time. It starts undecided and is separate from the criterion ratings.
+It is a calibration decision record only: exporting it does not change the
+provider prompt, frozen references, course rubric or grades. A later rubric
+revision and evaluation must implement the selected policy. Legacy worksheets
+without these fields remain valid but show policy review as incomplete.
 Provisional reference scores are collapsed at the bottom. The page has no external
 scripts, analytics or provider calls; evidence/feedback are HTML-escaped.
 
@@ -80,7 +86,8 @@ one generated for a new packet. Validate the exported file locally:
 ```
 
 The summary distinguishes completion from score/evidence/feedback disagreement.
-Blank or partial entries remain incomplete, `null` remains distinct from zero,
+The summary reports policy-review completion, score-review completion and provider
+failures separately. Blank or partial entries remain incomplete, `null` remains distinct from zero,
 and stale/duplicate/out-of-range reviews fail validation. Reviewer identity is
 locally asserted, not authenticated. Even a fully completed review is neither
 course acceptance nor authorization to publish grades. Failed provider trials
@@ -108,10 +115,15 @@ private SQLite data and browser-QA worksheets remain outside version control.
 | Published grades | 0 |
 
 The failed proposal was rejected before storage/publication and not retried.
-The existing adapter exposes only `invalid_proposal`, so this run cannot identify
-the precise validation rule that rejected it. A future diagnostic improvement
-should record safe categorical validation reasons, without logging raw student
-content or keys.
+The baseline adapter exposed only `invalid_proposal`, so this historical run cannot
+identify the precise validation rule that rejected it. Subsequent diagnostics now
+record bounded categories such as `invalid_proposal_citation_location`,
+`invalid_proposal_citation_missing`, `invalid_proposal_points_range`,
+`invalid_proposal_criterion_coverage` and `invalid_proposal_feedback_bounds`.
+Unknown validator errors remain generic. Raw rejected responses, source, filenames
+and credentials are not added to these diagnostics. Usage reservations and the
+no-retry behavior are unchanged. The packet displays recorded failure codes;
+the older baseline retains its original generic code.
 
 Two repeated cases varied. In the mixed prompt-injection case, one trial awarded
 2/4 for a correctly stated original mean; another gave 0/4 because it wanted
@@ -146,3 +158,20 @@ save errors, review binding/completeness/ranges, HTML escaping and private outpu
 files. Browser QA exercises worksheet export/import and incomplete-review
 validation using explicitly labeled synthetic ratings; those ratings are not
 included in the baseline's human-review count.
+
+
+## Report integrity checks
+
+Before rendering a saved report or summarizing a worksheet, Cairn re-extracts the
+bundled synthetic files and compares the captured artifacts, original bytes,
+segments, rubric, revision and input digest. A proposal must bind to that input.
+This prevents self-consistent replacement evidence from masquerading as a known
+case. It also rejects contradictory extraction states, proposals attached to
+non-pending results and completed live runs missing a provider outcome. It does
+not cryptographically attest that a provider executed a request or authenticate
+a locally asserted reviewer. Current `source-v1` baseline reports remain readable.
+
+Local regression tests exercise categorized provider failures without live API
+calls, preserve their usage/no-retry behavior, reject substituted evidence, and
+keep policy decisions distinct from human score ratings. No additional paid run
+was needed for this diagnostics and calibration-record update.

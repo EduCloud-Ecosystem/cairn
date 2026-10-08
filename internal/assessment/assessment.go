@@ -126,7 +126,7 @@ func ValidateRubric(r Rubric) error {
 func finite(n float64) bool { return !math.IsNaN(n) && !math.IsInf(n, 0) }
 func ValidateJudgments(d Document, js []Judgment, approval bool) (score, max float64, err error) {
 	if len(js) != len(d.Rubric.Criteria) {
-		return 0, 0, fmt.Errorf("every rubric criterion must appear exactly once")
+		return 0, 0, invalidJudgment("criterion_coverage", "every rubric criterion must appear exactly once")
 	}
 	limits := map[string]float64{}
 	for _, c := range d.Rubric.Criteria {
@@ -136,10 +136,10 @@ func ValidateJudgments(d Document, js []Judgment, approval bool) (score, max flo
 	evidence := map[string]bool{}
 	for _, a := range d.Artifacts {
 		if a.Issue != "" {
-			return 0, 0, fmt.Errorf("resolve artifact issue for %s before assessment", a.Path)
+			return 0, 0, invalidJudgment("artifact_incomplete", "resolve artifact issues before assessment")
 		}
 		if DigestBytes(a.Original) != a.SHA256 {
-			return 0, 0, fmt.Errorf("artifact digest mismatch")
+			return 0, 0, invalidJudgment("artifact_digest", "artifact digest mismatch")
 		}
 		for _, seg := range a.Segments {
 			evidence[a.Path+"\x00"+a.SHA256+"\x00"+seg.Location] = true
@@ -149,28 +149,31 @@ func ValidateJudgments(d Document, js []Judgment, approval bool) (score, max flo
 	for _, j := range js {
 		limit, ok := limits[j.CriterionID]
 		if !ok || seen[j.CriterionID] {
-			return 0, 0, fmt.Errorf("unknown or duplicate criterion")
+			return 0, 0, invalidJudgment("criterion_identity", "unknown or duplicate criterion")
 		}
 		seen[j.CriterionID] = true
-		if strings.TrimSpace(j.Feedback) == "" || len(j.Feedback) > 8000 || strings.TrimSpace(j.Uncertainty) == "" || len(j.Uncertainty) > 2000 || len(j.Citations) > 32 {
-			return 0, 0, fmt.Errorf("bounded feedback and uncertainty are required")
+		if strings.TrimSpace(j.Feedback) == "" || len(j.Feedback) > 8000 || strings.TrimSpace(j.Uncertainty) == "" || len(j.Uncertainty) > 2000 {
+			return 0, 0, invalidJudgment("feedback_bounds", "bounded feedback and uncertainty are required")
+		}
+		if len(j.Citations) > 32 {
+			return 0, 0, invalidJudgment("citation_count", "at most 32 citations per criterion are accepted")
 		}
 		if j.Points == nil {
 			if approval {
-				return 0, 0, fmt.Errorf("unassessable criterion requires instructor resolution")
+				return 0, 0, invalidJudgment("unassessable", "unassessable criterion requires instructor resolution")
 			}
 		} else {
 			if !finite(*j.Points) || *j.Points < 0 || *j.Points > limit {
-				return 0, 0, fmt.Errorf("points outside instructor rubric")
+				return 0, 0, invalidJudgment("points_range", "points outside instructor rubric")
 			}
 			if len(j.Citations) == 0 {
-				return 0, 0, fmt.Errorf("scored criteria need evidence citations")
+				return 0, 0, invalidJudgment("citation_missing", "scored criteria need evidence citations")
 			}
 			score += *j.Points
 		}
 		for _, c := range j.Citations {
 			if !evidence[c.Path+"\x00"+c.SHA256+"\x00"+c.Location] {
-				return 0, 0, fmt.Errorf("citation does not match captured evidence")
+				return 0, 0, invalidJudgment("citation_location", "citation does not match captured evidence")
 			}
 		}
 	}
