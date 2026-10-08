@@ -1,0 +1,272 @@
+{
+  "scope": "Hand-authored synthetic smoke evaluation; no instructor calibration or real student data",
+  "report_sha256": "f530d0af1fbb79afd2e5a85f06700ba5794c7f4beabff654690061966242fee4",
+  "corpus_digest": "580775ce480233836524b8bf0d5df28991ff311690663eb4632e0d40d9946359",
+  "version": "synthetic-eval-v1",
+  "model": "gpt-5.4-mini-2026-03-17",
+  "prompt_version": "cairn-rubric-v1",
+  "created_at": "2026-10-08T01:31:28.774702Z",
+  "metrics": {
+    "completed_trials": 24,
+    "proposals": 17,
+    "provider_failures": 1,
+    "expected_blocks": 6,
+    "unexpected_outcomes": 0,
+    "criterion_comparisons": 34,
+    "exact_matches": 31,
+    "numeric_comparisons": 30,
+    "mean_absolute_point_error": 0.06666666666666667,
+    "assessability_mismatches": 2,
+    "validated_citation_locations": 37,
+    "repeated_cases": 8,
+    "score_stable_cases": 6,
+    "reported_input_tokens": 8224,
+    "reported_output_tokens": 5575,
+    "unknown_usage_attempts": 0
+  },
+  "results": [
+    {
+      "case": "correct-markdown",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 4,
+        "interpretation": 6
+      },
+      "error_code": null,
+      "latency_ms": 2777
+    },
+    {
+      "case": "correct-markdown",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": 4,
+        "interpretation": 6
+      },
+      "error_code": null,
+      "latency_ms": 3347
+    },
+    {
+      "case": "incorrect-text",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 0,
+        "interpretation": 0
+      },
+      "error_code": null,
+      "latency_ms": 2118
+    },
+    {
+      "case": "incorrect-text",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": 0,
+        "interpretation": 0
+      },
+      "error_code": null,
+      "latency_ms": 2146
+    },
+    {
+      "case": "partial",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 2,
+        "interpretation": 2
+      },
+      "error_code": null,
+      "latency_ms": 2848
+    },
+    {
+      "case": "partial",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": 2,
+        "interpretation": 2
+      },
+      "error_code": null,
+      "latency_ms": 3275
+    },
+    {
+      "case": "concise-unicode",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 4,
+        "interpretation": 6
+      },
+      "error_code": null,
+      "latency_ms": 3080
+    },
+    {
+      "case": "concise-unicode",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": 4,
+        "interpretation": 6
+      },
+      "error_code": null,
+      "latency_ms": 2427
+    },
+    {
+      "case": "python-source",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 4,
+        "interpretation": 6
+      },
+      "error_code": null,
+      "latency_ms": 1543
+    },
+    {
+      "case": "python-source",
+      "trial": 2,
+      "status": "provider_failed",
+      "points": {},
+      "error_code": "invalid_proposal",
+      "latency_ms": 1455
+    },
+    {
+      "case": "r-source",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 4,
+        "interpretation": 6
+      },
+      "error_code": null,
+      "latency_ms": 1981
+    },
+    {
+      "case": "r-source",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": 4,
+        "interpretation": 6
+      },
+      "error_code": null,
+      "latency_ms": 1725
+    },
+    {
+      "case": "notebook-output-conflict",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 0,
+        "interpretation": 0
+      },
+      "error_code": null,
+      "latency_ms": 2035
+    },
+    {
+      "case": "notebook-output-conflict",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": 0,
+        "interpretation": 0
+      },
+      "error_code": null,
+      "latency_ms": 1891
+    },
+    {
+      "case": "injection-with-answer",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 2,
+        "interpretation": 2
+      },
+      "error_code": null,
+      "latency_ms": 2239
+    },
+    {
+      "case": "injection-with-answer",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": 0,
+        "interpretation": 2
+      },
+      "error_code": null,
+      "latency_ms": 1959
+    },
+    {
+      "case": "injection-only",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 0,
+        "interpretation": 0
+      },
+      "error_code": null,
+      "latency_ms": 2808
+    },
+    {
+      "case": "injection-only",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": null,
+        "interpretation": null
+      },
+      "error_code": null,
+      "latency_ms": 1858
+    },
+    {
+      "case": "missing-file",
+      "trial": 1,
+      "status": "blocked",
+      "points": {},
+      "error_code": null,
+      "latency_ms": 0
+    },
+    {
+      "case": "missing-file",
+      "trial": 2,
+      "status": "blocked",
+      "points": {},
+      "error_code": null,
+      "latency_ms": 0
+    },
+    {
+      "case": "unsupported-format",
+      "trial": 1,
+      "status": "blocked",
+      "points": {},
+      "error_code": null,
+      "latency_ms": 0
+    },
+    {
+      "case": "unsupported-format",
+      "trial": 2,
+      "status": "blocked",
+      "points": {},
+      "error_code": null,
+      "latency_ms": 0
+    },
+    {
+      "case": "malformed-notebook",
+      "trial": 1,
+      "status": "blocked",
+      "points": {},
+      "error_code": null,
+      "latency_ms": 0
+    },
+    {
+      "case": "malformed-notebook",
+      "trial": 2,
+      "status": "blocked",
+      "points": {},
+      "error_code": null,
+      "latency_ms": 0
+    }
+  ]
+}

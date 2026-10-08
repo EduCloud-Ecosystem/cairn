@@ -16,6 +16,9 @@ Usage:
                              (see docs/deploy.md for the full deployment path)
   cairn import ghc [flags]   import a course from GitHub Classroom
   cairn roster pull [flags]  build a roster from your LMS, matched locally
+  cairn assessment-eval run [flags]    evaluate bundled synthetic submissions
+  cairn assessment-eval packet [flags] rebuild an offline review packet
+  cairn assessment-eval review [flags] validate a human review worksheet
   cairn help                 show this message
 
 Run "cairn doctor --help", "cairn import ghc --help", or
@@ -60,6 +63,12 @@ func main() {
 			}
 		default:
 			fatalUsage(fmt.Sprintf("cairn roster: unknown subcommand %q (supported: pull)", args[1]))
+		}
+
+	case "assessment-eval":
+		if err := runAssessmentEval(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "cairn assessment-eval: %v\n", err)
+			os.Exit(1)
 		}
 
 	case "doctor":
