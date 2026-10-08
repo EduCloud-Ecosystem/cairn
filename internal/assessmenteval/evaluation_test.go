@@ -31,7 +31,10 @@ func fixtureGenerator(t *testing.T, st store.Store, calls *int) Generate {
 				ref = c
 			}
 		}
-		p := assessment.Proposal{Source: "fixture", Model: "synthetic-test", PromptVersion: "fixture-v1", InputDigest: digest}
+		p := assessment.Proposal{SubmissionStatus: "relevant_work", Source: "fixture", Model: "synthetic-test", PromptVersion: "fixture-v1", InputDigest: digest}
+		if ref.ID == "injection-only" {
+			p.SubmissionStatus = "no_relevant_work"
+		}
 		a := d.Artifacts[0]
 		for _, c := range ref.Rubric.Criteria {
 			p.Criteria = append(p.Criteria, assessment.Judgment{CriterionID: c.ID, Points: ref.Expected[c.ID], Feedback: "Synthetic feedback", Uncertainty: "Synthetic uncertainty", Citations: []assessment.Citation{{Path: a.Path, SHA256: a.SHA256, Location: a.Segments[0].Location}}})

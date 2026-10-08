@@ -62,8 +62,15 @@ func (c checkout) FetchRevision(_ context.Context, _ adapter.RepoRef, _ string, 
 // Run uses the real capture, extraction and proposal persistence boundaries in a
 // dedicated evaluation store. A save failure stops further paid requests.
 func Run(ctx context.Context, st store.Store, generate Generate, trials int, save func(Report) error) (Report, error) {
-	cases := Corpus()
-	r := Report{Version: Version, CorpusDigest: assessment.Digest(cases), ReferenceStatus: "agent-authored; not instructor-calibrated", CreatedAt: time.Now().UTC(), Live: generate != nil, Trials: trials, Cases: cases, Results: []Result{}}
+	return RunSuite(ctx, st, generate, trials, Version, save)
+}
+
+func RunSuite(ctx context.Context, st store.Store, generate Generate, trials int, version string, save func(Report) error) (Report, error) {
+	cases, err := CorpusForVersion(version)
+	if err != nil {
+		return Report{}, err
+	}
+	r := Report{Version: version, CorpusDigest: assessment.Digest(cases), ReferenceStatus: "agent-authored; not instructor-calibrated", CreatedAt: time.Now().UTC(), Live: generate != nil, Trials: trials, Cases: cases, Results: []Result{}}
 	if trials < 1 || trials > 2 {
 		return r, errors.New("trials must be 1 or 2 (at most 18 model requests)")
 	}

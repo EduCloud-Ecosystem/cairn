@@ -36,6 +36,7 @@ func runAssessmentEval(args []string) error {
 func runEvaluation(args []string) error {
 	fs := flag.NewFlagSet("assessment-eval run", flag.ContinueOnError)
 	out := fs.String("out", "", "new private output directory (required)")
+	suite := fs.String("suite", "regression", "regression or transfer (new synthetic cases)")
 	live := fs.Bool("live", false, "send bundled synthetic source to OpenAI; up to 9 calls per trial")
 	trials := fs.Int("trials", 1, "1 or 2 trials; maximum 18 calls")
 	keyFile := fs.String("key-file", "", "private OPENAI_API_KEY file, required with --live")
@@ -47,6 +48,12 @@ func runEvaluation(args []string) error {
 	}
 	if fs.NArg() != 0 || *out == "" || *trials < 1 || *trials > 2 {
 		return errors.New("provide --out and --trials 1 or 2; positional arguments are not supported")
+	}
+	version := assessmenteval.Version
+	if *suite == "transfer" {
+		version = assessmenteval.TransferVersion
+	} else if *suite != "regression" {
+		return errors.New("suite must be regression or transfer")
 	}
 	var provider *assessment.OpenAI
 	if *live {
@@ -89,7 +96,7 @@ func runEvaluation(args []string) error {
 		fmt.Fprintf(os.Stderr, "Evaluation: %d/%d trials recorded; %d proposals, %d provider failures\n", len(r.Results), len(r.Cases)*r.Trials, r.Metrics.Proposals, r.Metrics.ProviderFailures)
 		return nil
 	}
-	r, err := assessmenteval.Run(ctx, st, generate, *trials, save)
+	r, err := assessmenteval.RunSuite(ctx, st, generate, *trials, version, save)
 	if err != nil {
 		return err
 	}

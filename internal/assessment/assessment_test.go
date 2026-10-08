@@ -49,7 +49,7 @@ func fixture(t *testing.T) (Service, *store.AssessmentRecord, Proposal) {
 	}
 	var d Document
 	json.Unmarshal(r.Document, &d)
-	p := Proposal{Source: "fixture", Model: "synthetic-v1", PromptVersion: "test-v1", InputDigest: d.InputDigest, Criteria: []Judgment{{CriterionID: "reason", Points: ptr(6), Feedback: "Explain the evidence further.", Uncertainty: "Fixture only, no model judgment.", Citations: []Citation{{Path: "response.md", SHA256: d.Artifacts[0].SHA256, Location: "line:1"}}}}}
+	p := Proposal{SubmissionStatus: "relevant_work", Source: "fixture", Model: "synthetic-v1", PromptVersion: "test-v1", InputDigest: d.InputDigest, Criteria: []Judgment{{CriterionID: "reason", Points: ptr(6), Feedback: "Explain the evidence further.", Uncertainty: "Fixture only, no model judgment.", Citations: []Citation{{Path: "response.md", SHA256: d.Artifacts[0].SHA256, Location: "line:1"}}}}}
 	return svc, r, p
 }
 func ptr(v float64) *float64 { return &v }

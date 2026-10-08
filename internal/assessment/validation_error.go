@@ -13,7 +13,7 @@ func judgmentFailureCode(err error) string {
 	var e judgmentError
 	if errors.As(err, &e) {
 		switch e.code {
-		case "criterion_coverage", "criterion_identity", "artifact_incomplete", "artifact_digest", "feedback_bounds", "unassessable", "points_range", "citation_missing", "citation_location", "citation_count":
+		case "assessment_policy", "submission_status", "missing_work_policy", "criterion_coverage", "criterion_identity", "artifact_incomplete", "artifact_digest", "feedback_bounds", "unassessable", "points_range", "citation_missing", "citation_location", "citation_count":
 			return "invalid_proposal_" + e.code
 		}
 	}

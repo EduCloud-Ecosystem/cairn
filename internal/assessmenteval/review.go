@@ -93,11 +93,10 @@ func ValidateReport(r Report) error {
 		if v.Document.Revision != strings.Repeat("a", 40) || assessment.Digest(v.Document.Artifacts) != assessment.Digest(expectedArtifacts[v.CaseID]) {
 			return errors.New("captured evidence does not match the bundled synthetic case")
 		}
-		digest := assessment.Digest(struct {
-			Revision  string
-			Rubric    assessment.Rubric
-			Artifacts []assessment.Artifact
-		}{v.Document.Revision, v.Document.Rubric, v.Document.Artifacts})
+		if v.Document.PolicyVersion != "" && v.Document.PolicyVersion != assessment.PolicyVersion {
+			return errors.New("unknown captured assessment policy")
+		}
+		digest := assessment.InputDigest(v.Document)
 		if v.Document.InputDigest != digest {
 			return errors.New("captured input digest does not match evidence")
 		}
@@ -123,7 +122,7 @@ func ValidateReport(r Report) error {
 			if v.Document.Proposal == nil {
 				return errors.New("missing proposal")
 			}
-			if _, _, err := assessment.ValidateJudgments(v.Document, v.Document.Proposal.Criteria, false); err != nil {
+			if err := assessment.ValidateProposalJudgments(v.Document, *v.Document.Proposal); err != nil {
 				return err
 			}
 		case "blocked", "collected", "provider_failed":

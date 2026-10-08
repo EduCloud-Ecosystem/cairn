@@ -57,12 +57,8 @@ func (s Service) Capture(ctx context.Context, subID, actor string) (*store.Asses
 	if err = s.Checkout.FetchRevision(ctx, sub.Repo, sub.LatestCommit, dir); err != nil {
 		return nil, fmt.Errorf("could not capture pinned submission")
 	}
-	d := Document{CreatedAt: time.Now().UTC(), CapturedBy: actor, Revision: sub.LatestCommit, Rubric: r, Artifacts: Extract(dir, r.Paths)}
-	d.InputDigest = Digest(struct {
-		Revision  string
-		Rubric    Rubric
-		Artifacts []Artifact
-	}{d.Revision, d.Rubric, d.Artifacts})
+	d := Document{PolicyVersion: PolicyVersion, CreatedAt: time.Now().UTC(), CapturedBy: actor, Revision: sub.LatestCommit, Rubric: r, Artifacts: Extract(dir, r.Paths)}
+	d.InputDigest = InputDigest(d)
 	status := "collected"
 	for _, a := range d.Artifacts {
 		if a.Issue != "" {

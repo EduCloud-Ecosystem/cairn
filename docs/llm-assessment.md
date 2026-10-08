@@ -7,6 +7,36 @@ fixture/instructor proposals, and supports instructor review/edit/reject/publish
 The OpenAI adapter is separately opt-in and has passed local synthetic acceptance.
 It is not enabled in the production pilot or accepted for real course grading.
 
+## Assessability and uncertainty policy (October 8, 2026)
+
+New captures record `policy_version: unassessable-until-review-v1`, included in
+`input_digest`. The course provider prompt (`cairn-rubric-v2`) applies this policy
+before rubric scoring: entirely blank, off-topic, or instruction-only readable
+work is unassessable, with null points on every criterion. Relevant wrong or
+partial attempts receive the rubric's normal points, including zero for missing
+parts. Unsupported or unreadable files still block assessment.
+
+New generated and imported proposals must declare `submission_status` as
+`relevant_work` or `no_relevant_work`. Validation rejects numeric scores paired
+with `no_relevant_work`, and independently rejects a relevant-work classification
+for entirely whitespace-only extracted source. Relevance for nonblank text is
+still a model/reviewer judgment, not deterministically verified. An instructor
+must inspect all classifications. Approval still requires resolved numeric points
+and an explicit review note, preserving the original proposal when corrected.
+
+Old saved proposals and reports remain readable and reviewable. New generation
+from a legacy capture is refused before any provider reservation or transmission;
+capture current work again to bind the policy. Existing course rubric text and
+previous grades are not silently rewritten.
+
+Provider output uses `uncertainty_level` (`low`, `medium`, `high`) and
+`uncertainty_reason`. Cairn constructs the stored label, such as "Low uncertainty:
+The values are explicit in the source." Reasons must describe evidence without
+confidence/uncertainty labels; contradictory label language is rejected with
+`invalid_uncertainty`, retaining usage and the no-retry reservation. This enforces
+consistent vocabulary, not calibrated confidence or semantic correctness.
+Instructor-edited uncertainty and legacy feedback retain their existing format.
+
 ## Assessment pipeline
 
 1. The instructor pins an assignment rubric, accepted formats and weighting.
@@ -142,6 +172,7 @@ Example proposal (replace digest values with those returned by capture):
 ```json
 {
   "source": "fixture",
+  "submission_status": "relevant_work",
   "model": "synthetic-no-model",
   "prompt_version": "fixture-v1",
   "input_digest": "CAPTURE_INPUT_DIGEST",

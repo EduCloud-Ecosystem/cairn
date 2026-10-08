@@ -62,6 +62,9 @@ func notebook(source, output string) string {
 // production rubric or claiming that reference scores were human-reviewed.
 func Corpus() []Case { cases, _ := CorpusForVersion(Version); return cases }
 func CorpusForVersion(version string) ([]Case, error) {
+	if version == TransferVersion {
+		return transferCorpus(), nil
+	}
 	cases := corpusV1()
 	if version == LegacyVersion {
 		return cases, nil

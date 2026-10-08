@@ -79,7 +79,7 @@ func TestAssessmentBrowserFixture(t *testing.T) {
 	var d assessment.Document
 	json.Unmarshal(r.Document, &d)
 	points := 6.0
-	proposal := assessment.Proposal{Source: "fixture", Model: "synthetic-no-model", PromptVersion: "fixture-v1", InputDigest: d.InputDigest, Criteria: []assessment.Judgment{{CriterionID: "reason", Points: &points, Feedback: "Add detail linking your evidence to the conclusion.", Uncertainty: "Synthetic proposal only", Citations: []assessment.Citation{{Path: "response.md", SHA256: d.Artifacts[0].SHA256, Location: "line:1"}}}}}
+	proposal := assessment.Proposal{SubmissionStatus: "relevant_work", Source: "fixture", Model: "synthetic-no-model", PromptVersion: "fixture-v1", InputDigest: d.InputDigest, Criteria: []assessment.Judgment{{CriterionID: "reason", Points: &points, Feedback: "Add detail linking your evidence to the conclusion.", Uncertainty: "Synthetic proposal only", Citations: []assessment.Citation{{Path: "response.md", SHA256: d.Artifacts[0].SHA256, Location: "line:1"}}}}}
 	b, _ = json.Marshal(proposal)
 	os.WriteFile(filepath.Join(dir, "proposal.json"), b, 0600)
 	os.WriteFile(filepath.Join(dir, "url"), []byte(server.URL), 0600)
