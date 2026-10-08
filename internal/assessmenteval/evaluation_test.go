@@ -253,3 +253,36 @@ func TestPolicyDecisionIsSeparateFromHumanScores(t *testing.T) {
 		t.Fatalf("legacy worksheet not preserved: %+v %v", s, err)
 	}
 }
+
+func TestVersionedMissingWorkPolicyPreservesBaseline(t *testing.T) {
+	old, err := CorpusForVersion(LegacyVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if assessment.Digest(old) != "580775ce480233836524b8bf0d5df28991ff311690663eb4632e0d40d9946359" {
+		t.Fatal("original corpus changed")
+	}
+	current := Corpus()
+	if assessment.Digest(current) == assessment.Digest(old) {
+		t.Fatal("policy revision did not change corpus identity")
+	}
+	for i, c := range current {
+		if assessment.Digest(c.Files) != assessment.Digest(old[i].Files) || assessment.Digest(c.Expected) != assessment.Digest(old[i].Expected) {
+			t.Fatal("source or score references changed with policy")
+		}
+		for _, j := range c.Rubric.Criteria {
+			if strings.Count(j.Description, "Assessability first:") != 1 || !strings.Contains(j.Description, "return points:null for every criterion") {
+				t.Fatal("policy missing or duplicated")
+			}
+		}
+	}
+	if _, err := CorpusForVersion("unknown"); err == nil {
+		t.Fatal("unknown version accepted")
+	}
+	// Merely relabeling a V2 report as V1 must not pass corpus binding.
+	r := evaluated(t)
+	r.Version = LegacyVersion
+	if err := ValidateReport(r); err == nil {
+		t.Fatal("wrong corpus version accepted")
+	}
+}

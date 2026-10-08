@@ -7,6 +7,29 @@ publication. The bundled 12-case corpus is hand-authored synthetic material with
 **agent-authored provisional references**, not instructor-scored ground truth.
 No claim of fairness or course readiness follows from matching these references.
 
+## Selected missing-work policy
+
+On October 7, 2026, the user selected: **“Mark it unassessable until instructor
+review.”** The selection applies to a readable submission with no relevant
+substantive answer, including prompt-injection-only content. The V2 calibration
+rubric now instructs the model to return `points: null` for every criterion in
+that situation. Incorrect or partial substantive attempts still follow the
+point rules for answered and omitted parts. Missing/unreadable/unsupported files
+continue to block extraction; they are never silently scored zero.
+
+This policy is implemented in `synthetic-eval-v2`'s instructor rubric, which is
+captured, hashed and sent through the existing provider path. It does not silently
+change any stored course rubric, global provider prompt or published grade.
+Normal publication still requires an instructor to resolve null criteria with
+finite reviewed scores and citations. The decision does not supply the still-
+pending human score/feedback ratings.
+
+New runs use V2. `synthetic-eval-v1` and its original corpus digest are preserved
+for old reports and worksheets. The V2 rubric also makes the existing rule clear
+that worked calculations cannot be demanded unless the rubric requires them.
+The source cases and provisional score references are unchanged. A recheck on
+these same examples is a **development regression**, not a held-out benchmark.
+
 ## Run and reproduce
 
 Build `go build -o ./bin/cairn ./cmd/cairn`. Create the parent output directory
@@ -68,8 +91,8 @@ is useful, whether uncertainty is appropriate, and a rationale for each criterio
 The missing-work policy field records `zero` or `unassessable` plus a rationale,
 reviewer and time. It starts undecided and is separate from the criterion ratings.
 It is a calibration decision record only: exporting it does not change the
-provider prompt, frozen references, course rubric or grades. A later rubric
-revision and evaluation must implement the selected policy. Legacy worksheets
+provider prompt, frozen references, course rubric or grades. An exported worksheet alone cannot implement a choice; V2 implements the user-selected
+unassessable policy in its calibration rubric. Legacy worksheets
 without these fields remain valid but show policy review as incomplete.
 Provisional reference scores are collapsed at the bottom. The page has no external
 scripts, analytics or provider calls; evidence/feedback are HTML-escaped.
@@ -175,3 +198,22 @@ Local regression tests exercise categorized provider failures without live API
 calls, preserve their usage/no-retry behavior, reject substituted evidence, and
 keep policy decisions distinct from human score ratings. No additional paid run
 was needed for this diagnostics and calibration-record update.
+
+
+## V2 development recheck — October 7, 2026
+
+The user-selected unassessable policy was checked with two new trials on the same
+synthetic source cases. See the [frozen V2 summary](evaluations/2026-10-07-unassessable-v2.json).
+All **18/18** provider attempts yielded valid pending proposals, with **36/36**
+provisional criterion matches and **9/9** stable score/assessability pairs. Both
+injection-only trials returned null for both criteria. Partial work and mixed
+injection-with-answer retained 2/4 calculation and 2/6 interpretation points.
+All six extraction checks blocked as expected. Reported usage was 12,148 input
+and 5,307 output tokens; the separate ledger recorded 18 attempts and zero grades.
+
+This is a development recheck after clarifying the rubric, using the same source
+cases as V1. It does not establish performance on unseen work, fairness, semantic
+citation accuracy or feedback usefulness. The old failure remains part of the
+V1 record; this run does not identify its cause. The selected policy is recorded
+in a private report-bound `policy-decision.json`; all **36 criterion ratings remain
+blank**. Policy-review completion and human score-review completion remain separate.

@@ -227,7 +227,10 @@ supported Brightspace), so the manual fallback ships first and independently.
   See `docs/assessment-evaluation.md` (October 7).
 - [x] Safe proposal failure categories, corpus-bound report verification and
   a separate missing-work policy decision in the offline review packet. Human
-  scoring and policy implementation remain pending (October 7).
+  scoring remains pending (October 7).
+- [x] User-selected no-relevant-work policy: unassessable until instructor review.
+  V2 calibration rubrics encode the policy; V1 reports and references remain
+  readable. This does not modify any production course rubric.
 - [ ] Instructor-scored evaluation and course destination/retention acceptance;
   broader format extraction, production queuing and billing-aware budgets remain
   follow-ups. See `docs/llm-assessment.md`; production provider activation is off.

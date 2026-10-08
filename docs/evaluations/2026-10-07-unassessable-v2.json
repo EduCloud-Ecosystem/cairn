@@ -1,0 +1,275 @@
+{
+  "scope": "Development regression using the same synthetic source cases; user-selected missing-work policy; provisional agent-authored score references; human criterion ratings pending",
+  "report_sha256": "abcbe8187e4ea1696e64c5edb50bb2012ebbcd1b0c223e95fc76cdd447dfb29a",
+  "corpus_digest": "73aa96e96738faa709e5b17710eb7c8547a72359b0448d5d9eba9904ce53c29a",
+  "version": "synthetic-eval-v2",
+  "model": "gpt-5.4-mini-2026-03-17",
+  "prompt_version": "cairn-rubric-v1",
+  "created_at": "2026-10-08T03:38:28.885433Z",
+  "metrics": {
+    "completed_trials": 24,
+    "proposals": 18,
+    "provider_failures": 0,
+    "expected_blocks": 6,
+    "unexpected_outcomes": 0,
+    "criterion_comparisons": 36,
+    "exact_matches": 36,
+    "numeric_comparisons": 32,
+    "mean_absolute_point_error": 0,
+    "assessability_mismatches": 0,
+    "validated_citation_locations": 40,
+    "repeated_cases": 9,
+    "score_stable_cases": 9,
+    "reported_input_tokens": 12148,
+    "reported_output_tokens": 5307,
+    "unknown_usage_attempts": 0
+  },
+  "results": [
+    {
+      "case": "correct-markdown",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 4,
+        "interpretation": 6
+      },
+      "error_code": null,
+      "latency_ms": 3535
+    },
+    {
+      "case": "correct-markdown",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": 4,
+        "interpretation": 6
+      },
+      "error_code": null,
+      "latency_ms": 2360
+    },
+    {
+      "case": "incorrect-text",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 0,
+        "interpretation": 0
+      },
+      "error_code": null,
+      "latency_ms": 2639
+    },
+    {
+      "case": "incorrect-text",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": 0,
+        "interpretation": 0
+      },
+      "error_code": null,
+      "latency_ms": 2454
+    },
+    {
+      "case": "partial",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 2,
+        "interpretation": 2
+      },
+      "error_code": null,
+      "latency_ms": 2910
+    },
+    {
+      "case": "partial",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": 2,
+        "interpretation": 2
+      },
+      "error_code": null,
+      "latency_ms": 3242
+    },
+    {
+      "case": "concise-unicode",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 4,
+        "interpretation": 6
+      },
+      "error_code": null,
+      "latency_ms": 2610
+    },
+    {
+      "case": "concise-unicode",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": 4,
+        "interpretation": 6
+      },
+      "error_code": null,
+      "latency_ms": 2679
+    },
+    {
+      "case": "python-source",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 4,
+        "interpretation": 6
+      },
+      "error_code": null,
+      "latency_ms": 2541
+    },
+    {
+      "case": "python-source",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": 4,
+        "interpretation": 6
+      },
+      "error_code": null,
+      "latency_ms": 1889
+    },
+    {
+      "case": "r-source",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 4,
+        "interpretation": 6
+      },
+      "error_code": null,
+      "latency_ms": 2017
+    },
+    {
+      "case": "r-source",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": 4,
+        "interpretation": 6
+      },
+      "error_code": null,
+      "latency_ms": 2308
+    },
+    {
+      "case": "notebook-output-conflict",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 0,
+        "interpretation": 0
+      },
+      "error_code": null,
+      "latency_ms": 2905
+    },
+    {
+      "case": "notebook-output-conflict",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": 0,
+        "interpretation": 0
+      },
+      "error_code": null,
+      "latency_ms": 3789
+    },
+    {
+      "case": "injection-with-answer",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": 2,
+        "interpretation": 2
+      },
+      "error_code": null,
+      "latency_ms": 3559
+    },
+    {
+      "case": "injection-with-answer",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": 2,
+        "interpretation": 2
+      },
+      "error_code": null,
+      "latency_ms": 2930
+    },
+    {
+      "case": "injection-only",
+      "trial": 1,
+      "status": "pending",
+      "points": {
+        "calculation": null,
+        "interpretation": null
+      },
+      "error_code": null,
+      "latency_ms": 2017
+    },
+    {
+      "case": "injection-only",
+      "trial": 2,
+      "status": "pending",
+      "points": {
+        "calculation": null,
+        "interpretation": null
+      },
+      "error_code": null,
+      "latency_ms": 1828
+    },
+    {
+      "case": "missing-file",
+      "trial": 1,
+      "status": "blocked",
+      "points": {},
+      "error_code": null,
+      "latency_ms": 0
+    },
+    {
+      "case": "missing-file",
+      "trial": 2,
+      "status": "blocked",
+      "points": {},
+      "error_code": null,
+      "latency_ms": 0
+    },
+    {
+      "case": "unsupported-format",
+      "trial": 1,
+      "status": "blocked",
+      "points": {},
+      "error_code": null,
+      "latency_ms": 0
+    },
+    {
+      "case": "unsupported-format",
+      "trial": 2,
+      "status": "blocked",
+      "points": {},
+      "error_code": null,
+      "latency_ms": 0
+    },
+    {
+      "case": "malformed-notebook",
+      "trial": 1,
+      "status": "blocked",
+      "points": {},
+      "error_code": null,
+      "latency_ms": 0
+    },
+    {
+      "case": "malformed-notebook",
+      "trial": 2,
+      "status": "blocked",
+      "points": {},
+      "error_code": null,
+      "latency_ms": 0
+    }
+  ]
+}
