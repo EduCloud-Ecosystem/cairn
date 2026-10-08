@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Package assessment captures evidence and validates proposals. It deliberately
-// contains no model client: a validated proposal is not a verified judgment.
+// treats a validated model proposal as structurally valid, not a verified judgment.
 package assessment
 
 import (
@@ -57,11 +57,12 @@ type Judgment struct {
 	Citations   []Citation `json:"citations"`
 }
 type Proposal struct {
-	Source        string     `json:"source"`
-	Model         string     `json:"model"`
-	PromptVersion string     `json:"prompt_version"`
-	InputDigest   string     `json:"input_digest"`
-	Criteria      []Judgment `json:"criteria"`
+	Usage         *ProviderUsage `json:"usage,omitempty"`
+	Source        string         `json:"source"`
+	Model         string         `json:"model"`
+	PromptVersion string         `json:"prompt_version"`
+	InputDigest   string         `json:"input_digest"`
+	Criteria      []Judgment     `json:"criteria"`
 }
 type Review struct {
 	Reviewer   string     `json:"reviewer"`
@@ -176,8 +177,8 @@ func ValidateJudgments(d Document, js []Judgment, approval bool) (score, max flo
 	return score, max, nil
 }
 func ValidateProposal(d Document, p Proposal) error {
-	if p.Source != "fixture" && p.Source != "instructor-import" {
-		return fmt.Errorf("source must be fixture or instructor-import; no model provider is enabled")
+	if p.Usage != nil || (p.Source != "fixture" && p.Source != "instructor-import") {
+		return fmt.Errorf("import source must be fixture or instructor-import, without provider attestation")
 	}
 	if p.InputDigest != d.InputDigest || strings.TrimSpace(p.Model) == "" || len(p.Model) > 200 || strings.TrimSpace(p.PromptVersion) == "" || len(p.PromptVersion) > 200 {
 		return fmt.Errorf("proposal provenance does not match captured input")

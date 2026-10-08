@@ -27,3 +27,23 @@ func (s *Store) ListAssessments(ctx context.Context, id string) ([]*store.Assess
 func (s *Store) TransitionAssessment(ctx context.Context, r *store.AssessmentRecord, from string, g *store.Grade) error {
 	return s.assessmentSQL().TransitionAssessment(ctx, r, from, g)
 }
+
+func (s *Store) ReserveGeneration(ctx context.Context, r *store.AssessmentRecord, g *store.Generation, l store.GenerationLimits) error {
+	return s.assessmentSQL().ReserveGeneration(ctx, r, g, l)
+}
+
+func (s *Store) FinishGeneration(ctx context.Context, g *store.Generation) error {
+	return s.assessmentSQL().FinishGeneration(ctx, g)
+}
+
+func (s *Store) GetGeneration(ctx context.Context, id string) (*store.Generation, error) {
+	return s.assessmentSQL().GetGeneration(ctx, id)
+}
+
+func (s *Store) GenerationPaused(ctx context.Context) (bool, error) {
+	return s.assessmentSQL().GenerationPaused(ctx)
+}
+
+func (s *Store) SetGenerationPaused(ctx context.Context, paused bool) error {
+	return s.assessmentSQL().SetGenerationPaused(ctx, paused)
+}

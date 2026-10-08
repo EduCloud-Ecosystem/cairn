@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/EduCloud-Ecosystem/cairn/internal/assessment"
+	"github.com/EduCloud-Ecosystem/cairn/internal/grading"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store/sqlite"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/adapter"
@@ -39,12 +40,26 @@ func TestAssessmentBrowserFixture(t *testing.T) {
 		}
 	}
 	rubric := assessment.Rubric{Title: "Reasoning", Paths: []string{"response.md"}, Criteria: []assessment.Criterion{{ID: "reason", Description: "Support reasoning with evidence", MaxPoints: 10}}}
+	var provider *assessment.OpenAI
+	var checkout grading.RevisionCheckout = assessmentFixture{}
+	if keyFile := os.Getenv("CAIRN_ASSESSMENT_BROWSER_OPENAI_KEY_FILE"); keyFile != "" {
+		key, err := assessment.LoadOpenAIKeyFile(keyFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		provider, err = assessment.NewOpenAI(key, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkout = openAIBrowserCheckout{}
+		rubric.Criteria[0].Description = "Award 4 points for correctly stating that the mean of 2,4,6 is 4, 4 points for correctly stating that adding 20 changes the mean to 8, and 2 points for explaining the effect of the high value. Wrong or absent parts earn no points."
+	}
 	b, _ := json.Marshal(rubric)
 	if err = st.PutAssessmentRubric(ctx, &store.AssessmentRubric{AssignmentID: "a", Digest: assessment.DigestBytes(b), Document: b}); err != nil {
 		t.Fatal(err)
 	}
 	webDir, _ := filepath.Abs("../../web/dist")
-	srv := New(Options{Store: st, AuthEnabled: true, AdminUsers: []string{"synthetic-instructor"}, WebDir: webDir, AssessmentCheckout: assessmentFixture{}})
+	srv := New(Options{Store: st, AuthEnabled: true, AdminUsers: []string{"synthetic-instructor"}, WebDir: webDir, AssessmentCheckout: checkout, OpenAIProvider: provider, OpenAIClassrooms: []string{"c"}})
 	// Session cookies are random, synthetic, and expire when this fixture ends.
 	teacherToken, studentToken := newSessionToken(), newSessionToken()
 	srv.sessions[teacherToken] = session{userID: "fixture-instructor", username: "synthetic-instructor", host: adapter.HostGitHub, isOperator: true, created: time.Now()}
@@ -82,4 +97,10 @@ func TestAssessmentBrowserFixture(t *testing.T) {
 			}
 		}
 	}
+}
+
+type openAIBrowserCheckout struct{}
+
+func (openAIBrowserCheckout) FetchRevision(_ context.Context, _ adapter.RepoRef, _, dir string) error {
+	return os.WriteFile(filepath.Join(dir, "response.md"), []byte("The mean of 2,4,6 is 4. Adding 20 changes the mean to 8. The high value pulls the mean upward, showing its sensitivity to outliers."), 0600)
 }

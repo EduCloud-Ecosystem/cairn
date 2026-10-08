@@ -143,7 +143,21 @@ export interface Judgment {
   uncertainty: string;
   citations: Evidence[];
 }
+export interface AssessmentCapabilities {
+  review: boolean;
+  model_provider: boolean;
+  paused: boolean;
+  classrooms: string[];
+}
 export interface AssessmentRecord {
+  generation?: {
+    status: string;
+    error_code?: string;
+    model: string;
+    input_tokens: number;
+    output_tokens: number;
+    reserved_units: number;
+  };
   id: string;
   submission_id: string;
   revision: string;
@@ -173,7 +187,13 @@ export interface AssessmentRecord {
 }
 export const api = {
   assessmentCapabilities: () =>
-    req<{ review: boolean }>("GET", "/assessment-capabilities"),
+    req<AssessmentCapabilities>("GET", "/assessment-capabilities"),
+  generateAssessment: (id: string, input_digest: string) =>
+    req<AssessmentRecord>("POST", `/assessments/${id}/generate`, {
+      input_digest,
+    }),
+  pauseAssessmentProvider: (paused: boolean) =>
+    req<unknown>("POST", "/assessment-provider/control", { paused }),
   assessmentRubric: (id: string) =>
     req<{ document: AssessmentRubric }>(
       "GET",

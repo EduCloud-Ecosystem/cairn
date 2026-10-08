@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   api,
   type AssessmentRecord,
+  type AssessmentCapabilities,
   type AssessmentRubric,
   type Judgment,
   type SubmissionView,
@@ -21,17 +22,20 @@ const initial: AssessmentRubric = {
 };
 
 export function AssessmentPanel({
+  classroomID,
   assignmentID,
   submissions,
   notify,
   refreshSubmissions,
 }: {
+  classroomID: string;
   assignmentID: string;
   submissions: SubmissionView[];
   notify: Notify;
   refreshSubmissions: () => Promise<void>;
 }) {
   const [enabled, setEnabled] = useState(false);
+  const [provider, setProvider] = useState<AssessmentCapabilities | null>(null);
   const [rubric, setRubric] = useState<AssessmentRubric>(initial);
   const [paths, setPaths] = useState(initial.paths.join("\n"));
   const [sub, setSub] = useState("");
@@ -45,6 +49,7 @@ export function AssessmentPanel({
       .then(async (c) => {
         if (!live) return;
         setEnabled(c.review);
+        setProvider(c);
         if (!c.review) return;
         try {
           const r = await api.assessmentRubric(assignmentID);
@@ -95,10 +100,37 @@ export function AssessmentPanel({
     <section className="assessment-panel" aria-label="Assessment review">
       <h3>Feedback and proposed scores</h3>
       <p>
-        Review pilot: import a fixture or an instructor-prepared proposal. No
-        model provider is connected. Publishing requires your review and creates
-        a new recorded grade.
+        {provider?.model_provider
+          ? "Generate a draft with OpenAI or import a proposal. Only approved classroom source may be sent."
+          : "Import a fixture or an instructor-prepared proposal. No model provider is connected."}{" "}
+        Publishing requires your review and creates a new recorded grade.
       </p>
+      {provider?.model_provider && (
+        <div>
+          <p>
+            OpenAI requests: {provider.paused ? "paused" : "enabled"}. This
+            classroom:{" "}
+            {provider.classrooms.includes(classroomID)
+              ? "allowed"
+              : "not enabled"}
+            . Limits: 20 requests per UTC day across the instance; 3 per learner
+            enrollment. Failed attempts count.
+          </p>
+          <Button
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                await api.pauseAssessmentProvider(!provider.paused);
+                setProvider(await api.assessmentCapabilities());
+              })
+            }
+          >
+            {provider.paused
+              ? "Resume new model requests"
+              : "Pause new model requests"}
+          </Button>
+        </div>
+      )}
       <fieldset disabled={busy}>
         <legend>Assessment rubric</legend>
         <label>
@@ -273,6 +305,11 @@ export function AssessmentPanel({
         <ReviewCard
           key={r.id}
           record={r}
+          canGenerate={
+            !!provider?.model_provider &&
+            !provider.paused &&
+            provider.classrooms.includes(classroomID)
+          }
           busy={busy}
           run={run}
           refresh={refresh}
@@ -283,11 +320,13 @@ export function AssessmentPanel({
 }
 
 function ReviewCard({
+  canGenerate,
   record: r,
   busy,
   run,
   refresh,
 }: {
+  canGenerate: boolean;
   record: AssessmentRecord;
   busy: boolean;
   run: (fn: () => Promise<unknown>) => Promise<void>;
@@ -343,6 +382,44 @@ function ReviewCard({
           </section>
         ))}
       </details>
+      {r.generation && (
+        <p role="status">
+          Model request: {r.generation.status}
+          {r.generation.error_code ? ` (${r.generation.error_code})` : ""}.
+          {r.generation.input_tokens > 0
+            ? `Reported input/output tokens: ${r.generation.input_tokens}/${r.generation.output_tokens}.`
+            : "Provider token usage unavailable."}{" "}
+          Usage reservation: {r.generation.reserved_units} units. A failed or
+          uncertain request is not automatically retried.
+        </p>
+      )}
+      {r.status === "collected" && canGenerate && !r.generation && (
+        <div>
+          <p>
+            This sends the saved rubric and extracted source to OpenAI. Review
+            the captured evidence first. Roster details and original files are
+            excluded; identifying details inside the source are not
+            automatically removed.
+          </p>
+          <Button
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                try {
+                  await api.generateAssessment(r.id, r.document.input_digest);
+                } finally {
+                  await refresh();
+                }
+              })
+            }
+          >
+            Send source to OpenAI and generate proposal
+          </Button>
+          {busy && (
+            <p role="status">Working… the request may take up to one minute.</p>
+          )}
+        </div>
+      )}
       {r.status === "collected" && (
         <label>
           Import proposal JSON
@@ -370,8 +447,10 @@ function ReviewCard({
       {r.document.proposal && (
         <p>
           Proposal source: {r.document.proposal.source}; model label:{" "}
-          {r.document.proposal.model}. Imported provenance is supplied by the
-          instructor.
+          {r.document.proposal.model}.{" "}
+          {r.document.proposal.source === "openai"
+            ? "Generated through Cairn; verify the judgment and evidence before approval."
+            : "Imported provenance is supplied by the instructor."}
         </p>
       )}
       {r.document.proposal && (

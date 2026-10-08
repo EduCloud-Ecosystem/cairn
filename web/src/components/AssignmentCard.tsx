@@ -183,7 +183,7 @@ export function AssignmentCard({
             {policyPinned && <p className="muted small">Saved commit: <code>{savedRevision}</code></p>}
           </fieldset>
 
-          <AssessmentPanel assignmentID={assignment.id} submissions={subs || []} notify={notify} refreshSubmissions={loadSubs} />
+          <AssessmentPanel classroomID={assignment.classroom_id} assignmentID={assignment.id} submissions={subs || []} notify={notify} refreshSubmissions={loadSubs} />
 
           <div className="deadline-row">
             <label htmlFor={`dl-${assignment.id}`}>Deadline</label>

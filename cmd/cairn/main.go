@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/EduCloud-Ecosystem/cairn/internal/api"
+	"github.com/EduCloud-Ecosystem/cairn/internal/assessment"
 	"github.com/EduCloud-Ecosystem/cairn/internal/config"
 	"github.com/EduCloud-Ecosystem/cairn/internal/grading"
 	"github.com/EduCloud-Ecosystem/cairn/internal/identity"
@@ -232,7 +233,26 @@ func serve() {
 	if os.Getenv("CAIRN_ASSESSMENT_REVIEW") == "1" {
 		assessmentCheckout = checkoutFromEnv()
 	}
+	var provider *assessment.OpenAI
+	openAIClassrooms := splitCSV(os.Getenv("CAIRN_OPENAI_CLASSROOMS"))
+	if os.Getenv("CAIRN_OPENAI_ENABLED") == "1" {
+		if !authEnabled || assessmentCheckout == nil || len(openAIClassrooms) == 0 {
+			log.Fatal("OpenAI requires operator authentication, assessment review and explicit CAIRN_OPENAI_CLASSROOMS")
+		}
+		key := os.Getenv("OPENAI_API_KEY")
+		if key == "" {
+			key, err = assessment.LoadOpenAIKeyFile(os.Getenv("CAIRN_OPENAI_KEY_FILE"))
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		provider, err = assessment.NewOpenAI(key, os.Getenv("CAIRN_OPENAI_MODEL"))
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 	srv := api.New(api.Options{
+		OpenAIProvider: provider, OpenAIClassrooms: openAIClassrooms,
 		AssessmentCheckout: assessmentCheckout,
 		WorkspaceURLs:      workspaceURLs,
 		Store:              st,

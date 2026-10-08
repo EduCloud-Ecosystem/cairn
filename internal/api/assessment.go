@@ -12,7 +12,18 @@ import (
 
 func (s *Server) assessmentRoutes(protect func(http.HandlerFunc) http.HandlerFunc) {
 	s.mux.HandleFunc("GET /assessment-capabilities", protect(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]bool{"review": s.assessment != nil, "model_provider": false})
+		paused, err := s.store.GenerationPaused(r.Context())
+		if err != nil {
+			httpError(w, 500, "could not read provider state")
+			return
+		}
+		classrooms := []string{}
+		if s.assessmentGenerator != nil {
+			for id := range s.assessmentGenerator.Classrooms {
+				classrooms = append(classrooms, id)
+			}
+		}
+		writeJSON(w, 200, map[string]any{"review": s.assessment != nil, "model_provider": s.assessmentGenerator != nil, "paused": paused, "classrooms": classrooms})
 	}))
 	if s.assessment == nil {
 		return
@@ -23,6 +34,10 @@ func (s *Server) assessmentRoutes(protect func(http.HandlerFunc) http.HandlerFun
 	s.mux.HandleFunc("POST /submissions/{id}/assessments", protect(s.handleCaptureAssessment))
 	s.mux.HandleFunc("POST /assessments/{id}/proposal", protect(s.handleAssessmentProposal))
 	s.mux.HandleFunc("POST /assessments/{id}/review", protect(s.handleAssessmentReview))
+	if s.assessmentGenerator != nil {
+		s.mux.HandleFunc("POST /assessments/{id}/generate", protect(s.handleGenerateAssessment))
+		s.mux.HandleFunc("POST /assessment-provider/control", protect(s.handleAssessmentProviderControl))
+	}
 }
 
 // Require JSON and reject unknown/trailing fields; this also prevents cross-site
@@ -48,6 +63,8 @@ func assessmentError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		httpError(w, 404, "assessment, rubric or submission not found")
+	case errors.Is(err, store.ErrGenerationLimit) || errors.Is(err, assessment.ErrProviderBusy):
+		httpError(w, 429, err.Error())
 	case errors.Is(err, store.ErrConflict):
 		httpError(w, 409, "assessment changed, is stale, or has already been reviewed; capture current work again")
 	default:
@@ -89,6 +106,15 @@ func (s *Server) handleListAssessments(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httpError(w, 500, "could not list assessments")
 		return
+	}
+	for _, record := range v {
+		attempt, e := s.store.GetGeneration(r.Context(), record.ID)
+		if e == nil {
+			record.Generation = attempt
+		} else if !errors.Is(e, store.ErrNotFound) {
+			httpError(w, 500, "could not read generation outcome")
+			return
+		}
 	}
 	writeJSON(w, 200, v)
 }
@@ -147,4 +173,36 @@ func assessmentActor(actor *store.User) string {
 		return actor.ID
 	}
 	return "local-development"
+}
+
+func (s *Server) handleGenerateAssessment(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		InputDigest string `json:"input_digest"`
+	}
+	if !assessmentJSON(w, r, &body) {
+		return
+	}
+	v, err := s.assessmentGenerator.Generate(r.Context(), r.PathValue("id"), body.InputDigest)
+	if err != nil {
+		assessmentError(w, err)
+		return
+	}
+	writeJSON(w, 200, v)
+}
+func (s *Server) handleAssessmentProviderControl(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Paused *bool `json:"paused"`
+	}
+	if !assessmentJSON(w, r, &body) {
+		return
+	}
+	if body.Paused == nil {
+		httpError(w, 400, "paused is required")
+		return
+	}
+	if err := s.store.SetGenerationPaused(r.Context(), *body.Paused); err != nil {
+		httpError(w, 500, "could not change provider state")
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"paused": *body.Paused})
 }

@@ -88,3 +88,41 @@ func TestAssessmentOperatorReviewAndStudentPrivacy(t *testing.T) {
 		t.Fatal("duplicate approval accepted")
 	}
 }
+
+func TestOpenAIRoutesRequireOperator(t *testing.T) {
+	srv, st := newAuthServer("alice")
+	provider, err := assessment.NewOpenAI("synthetic-never-sent", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.assessment = &assessment.Service{Store: st, Checkout: assessmentFixture{}}
+	srv.assessmentGenerator = assessment.NewGenerator(*srv.assessment, provider, []string{"c"})
+	srv.mux = http.NewServeMux()
+	srv.routes()
+	for _, path := range []string{"/assessments/p/generate", "/assessment-provider/control"} {
+		for _, cookie := range []*http.Cookie{nil, studentCookie(srv, adapter.HostGitHub, "bob")} {
+			req := httptest.NewRequest("POST", path, strings.NewReader(`{"paused":true}`))
+			req.Header.Set("Content-Type", "application/json")
+			if cookie != nil {
+				req.AddCookie(cookie)
+			}
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, req)
+			if rec.Code != 401 {
+				t.Fatalf("non-operator access %s: %d", path, rec.Code)
+			}
+		}
+	}
+	req := httptest.NewRequest("POST", "/assessment-provider/control", strings.NewReader(`{"paused":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(login(t, srv))
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatal(rec.Body.String())
+	}
+	paused, err := st.GenerationPaused(context.Background())
+	if err != nil || !paused {
+		t.Fatal("pause not persisted")
+	}
+}

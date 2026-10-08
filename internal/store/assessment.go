@@ -17,6 +17,7 @@ func AssessmentActivity(t *time.Time) string {
 }
 
 type AssessmentRecord struct {
+	Generation         *Generation     `json:"generation,omitempty"`
 	GradeID            string          `json:"grade_id,omitempty"`
 	SubmissionActivity string          `json:"submission_activity"`
 	ID                 string          `json:"id"`
