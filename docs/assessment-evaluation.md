@@ -262,3 +262,24 @@ Instructor review procedure:
 
 Completing the implementation or automated transfer run does not complete these
 human calibration and course-acceptance steps.
+
+
+### Frozen first transfer run
+
+The October 8 run used `cairn-rubric-v2` with two trials of each new case:
+**17/18 valid proposals**, **34/34 provisional criterion matches**, zero
+assessability mismatches, and 8/8 stable completed pairs. All 34 accepted
+uncertainty fields used the canonical low-uncertainty label with an evidence
+reason. This does not establish calibrated uncertainty across harder tasks.
+
+The first multi-file Python trial failed with
+`invalid_proposal_citation_location`. It was rejected, its token usage retained,
+and no retry performed. The exact invalid location was not retained in safe
+failure diagnostics, so its cause remains unresolved. The second trial succeeded;
+that does not erase the first failure. Investigate citation reliability before
+course acceptance. Raw failed provider output was not logged.
+
+Provider-reported usage was 13,306 input and 5,081 output tokens. The isolated
+ledger contains 18 attempts (17 succeeded, one failed), and zero grades. The
+[frozen summary](evaluations/2026-10-08-transfer-v1.json) records report/corpus
+hashes and every outcome. All **34 human criterion ratings remain blank**.

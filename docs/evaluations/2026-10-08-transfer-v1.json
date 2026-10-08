@@ -1,0 +1,150 @@
+{
+  "scope": "Frozen first-run synthetic transfer evaluation; agent-authored references; not independent instructor calibration or course acceptance",
+  "implementation_commit": "3e5749a",
+  "report_sha256": "42d615c1d2490233bd0191d33564e5622ab7cb4ccbf700f5f19d238767320e50",
+  "corpus_version": "synthetic-transfer-v1",
+  "corpus_digest": "d736502b0e3f23f1da3e918ffa0c407ddc93f5e8d0beef2927822d68b8ea91e6",
+  "model": "gpt-5.4-mini-2026-03-17",
+  "prompt_version": "cairn-rubric-v2",
+  "policy_version": "unassessable-until-review-v1",
+  "metrics": {
+    "completed_trials": 18,
+    "proposals": 17,
+    "provider_failures": 1,
+    "expected_blocks": 0,
+    "unexpected_outcomes": 0,
+    "criterion_comparisons": 34,
+    "exact_matches": 34,
+    "numeric_comparisons": 22,
+    "mean_absolute_point_error": 0,
+    "assessability_mismatches": 0,
+    "validated_citation_locations": 36,
+    "repeated_cases": 8,
+    "score_stable_cases": 8,
+    "reported_input_tokens": 13306,
+    "reported_output_tokens": 5081,
+    "unknown_usage_attempts": 0
+  },
+  "human_ratings": {
+    "reviewed": 0,
+    "required": 34
+  },
+  "open_findings": [
+    {
+      "case": "python-multiple-files",
+      "trial": 1,
+      "error": "invalid_proposal_citation_location",
+      "disposition": "Rejected before persistence; usage retained; no retry. Exact invalid location not retained in safe diagnostics. Investigate in a separate diagnostic evaluation; do not edit this frozen run."
+    }
+  ],
+  "results": [
+    {
+      "case_id": "blank-readable",
+      "trial": 1,
+      "status": "pending",
+      "error_code": ""
+    },
+    {
+      "case_id": "blank-readable",
+      "trial": 2,
+      "status": "pending",
+      "error_code": ""
+    },
+    {
+      "case_id": "off-topic",
+      "trial": 1,
+      "status": "pending",
+      "error_code": ""
+    },
+    {
+      "case_id": "off-topic",
+      "trial": 2,
+      "status": "pending",
+      "error_code": ""
+    },
+    {
+      "case_id": "instructions-only",
+      "trial": 1,
+      "status": "pending",
+      "error_code": ""
+    },
+    {
+      "case_id": "instructions-only",
+      "trial": 2,
+      "status": "pending",
+      "error_code": ""
+    },
+    {
+      "case_id": "mixed-partial",
+      "trial": 1,
+      "status": "pending",
+      "error_code": ""
+    },
+    {
+      "case_id": "mixed-partial",
+      "trial": 2,
+      "status": "pending",
+      "error_code": ""
+    },
+    {
+      "case_id": "right-results-wrong-reason",
+      "trial": 1,
+      "status": "pending",
+      "error_code": ""
+    },
+    {
+      "case_id": "right-results-wrong-reason",
+      "trial": 2,
+      "status": "pending",
+      "error_code": ""
+    },
+    {
+      "case_id": "conflicting-python-comments",
+      "trial": 1,
+      "status": "pending",
+      "error_code": ""
+    },
+    {
+      "case_id": "conflicting-python-comments",
+      "trial": 2,
+      "status": "pending",
+      "error_code": ""
+    },
+    {
+      "case_id": "python-multiple-files",
+      "trial": 1,
+      "status": "provider_failed",
+      "error_code": "invalid_proposal_citation_location"
+    },
+    {
+      "case_id": "python-multiple-files",
+      "trial": 2,
+      "status": "pending",
+      "error_code": ""
+    },
+    {
+      "case_id": "r-missing-observations",
+      "trial": 1,
+      "status": "pending",
+      "error_code": ""
+    },
+    {
+      "case_id": "r-missing-observations",
+      "trial": 2,
+      "status": "pending",
+      "error_code": ""
+    },
+    {
+      "case_id": "notebook-multiple-cells",
+      "trial": 1,
+      "status": "pending",
+      "error_code": ""
+    },
+    {
+      "case_id": "notebook-multiple-cells",
+      "trial": 2,
+      "status": "pending",
+      "error_code": ""
+    }
+  ]
+}
