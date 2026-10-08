@@ -65,7 +65,22 @@ func Open(path string) (*Store, error) {
 
 // schema is the SQLite-adapted version of the Postgres 0001_init schema plus
 // the last_error column added in migration 0002.
-const schema = `CREATE TABLE IF NOT EXISTS assessment_provider_control (
+const schema = `CREATE TABLE IF NOT EXISTS calibration_sources (
+ calibration_id TEXT NOT NULL REFERENCES calibrations(id) ON DELETE CASCADE,
+ submission_id TEXT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+ PRIMARY KEY (calibration_id,submission_id)
+);
+CREATE TABLE IF NOT EXISTS calibrations (
+ id TEXT PRIMARY KEY,
+ owner_id TEXT NOT NULL,
+ assignment_id TEXT NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
+ rubric_digest TEXT NOT NULL,
+ revision INTEGER NOT NULL,
+ status TEXT NOT NULL CHECK (status IN ('draft','ready')),
+ document TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_calibration_owner_assignment ON calibrations(owner_id,assignment_id);
+CREATE TABLE IF NOT EXISTS assessment_provider_control (
  id INTEGER PRIMARY KEY CHECK (id=1), paused INTEGER NOT NULL DEFAULT 0
 );
 INSERT INTO assessment_provider_control (id,paused) VALUES (1,0) ON CONFLICT (id) DO NOTHING;
@@ -567,8 +582,7 @@ func (s *Store) ListRosterEntries(ctx context.Context, classroomID string) ([]*s
 // DELETE CASCADE (roster_entries -> submissions -> grades/grading_runs) to
 // remove every dependent row.
 func (s *Store) DeleteRosterEntry(ctx context.Context, id string) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM roster_entries WHERE id=?`, id)
-	return affected(res, err)
+	return s.assessmentSQL().DeleteRosterWithCalibration(ctx, id)
 }
 
 // --- submissions ----------------------------------------------------------

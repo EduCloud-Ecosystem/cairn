@@ -12,6 +12,15 @@ const MissingWorkPolicy = `Assessability first: classify the entire readable sub
 
 // Preserve the exact legacy digest shape for saved reports and proposals.
 func InputDigest(d Document) string {
+	if d.Calibration != nil {
+		return Digest(struct {
+			PolicyVersion string
+			Revision      string
+			Rubric        Rubric
+			Artifacts     []Artifact
+			Calibration   CalibrationBinding
+		}{d.PolicyVersion, d.Revision, d.Rubric, d.Artifacts, *d.Calibration})
+	}
 	if d.PolicyVersion == "" {
 		return Digest(struct {
 			Revision  string

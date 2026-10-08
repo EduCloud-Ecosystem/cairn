@@ -412,8 +412,7 @@ func (s *Store) ListRosterEntries(ctx context.Context, classroomID string) ([]*s
 // (roster_entries -> submissions -> grades/grading_runs) to remove every
 // dependent row; see migrations/0001_init.up.sql.
 func (s *Store) DeleteRosterEntry(ctx context.Context, id string) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM roster_entries WHERE id=$1`, id)
-	return affected(res, err)
+	return s.assessmentSQL().DeleteRosterWithCalibration(ctx, id)
 }
 
 // ========================= submissions =========================

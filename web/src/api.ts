@@ -144,6 +144,7 @@ export interface Judgment {
   citations: Evidence[];
 }
 export interface AssessmentCapabilities {
+  calibration?: boolean;
   review: boolean;
   model_provider: boolean;
   paused: boolean;
@@ -163,6 +164,13 @@ export interface AssessmentRecord {
   revision: string;
   status: string;
   document: {
+    calibration?: {
+      id: string;
+      owner_id: string;
+      revision: number;
+      digest: string;
+      guidance: string;
+    };
     policy_version?: string;
     rubric: AssessmentRubric;
     input_digest: string;
@@ -187,7 +195,102 @@ export interface AssessmentRecord {
     };
   };
 }
+export interface CalibrationExample {
+  exclusion_note?: string;
+  id: string;
+  source_submission_id?: string;
+  document: AssessmentRecord["document"] & { revision: string };
+  review?: {
+    reviewer: string;
+    reviewed_at: string;
+    note: string;
+    criteria: Judgment[];
+  };
+  generation?: AssessmentRecord["generation"];
+}
+export interface Calibration {
+  id: string;
+  owner_id: string;
+  assignment_id: string;
+  rubric_digest: string;
+  revision: number;
+  status: "draft" | "ready";
+  document?: {
+    rubric: AssessmentRubric;
+    model: string;
+    prompt_version: string;
+    policy_version: string;
+    guidance: string;
+    examples: CalibrationExample[];
+  };
+}
 export const api = {
+  listCalibrations: (id: string) =>
+    req<Calibration[]>("GET", `/assignments/${id}/calibrations`),
+  createCalibration: (id: string, based_on = "") =>
+    req<Calibration>("POST", `/assignments/${id}/calibrations`, { based_on }),
+  calibration: (id: string) => req<Calibration>("GET", `/calibrations/${id}`),
+  deleteCalibration: (id: string) =>
+    req<unknown>("DELETE", `/calibrations/${id}`, {}),
+  addCalibrationExample: (
+    id: string,
+    revision: number,
+    files: Record<string, string>,
+  ) =>
+    req<Calibration>("POST", `/calibrations/${id}/examples`, {
+      revision,
+      files,
+    }),
+  captureCalibrationExample: (
+    id: string,
+    revision: number,
+    submission_id: string,
+    commit: string,
+  ) =>
+    req<Calibration>("POST", `/calibrations/${id}/capture`, {
+      revision,
+      submission_id,
+      commit,
+    }),
+  generateCalibration: (
+    id: string,
+    example: string,
+    revision: number,
+    input_digest: string,
+  ) =>
+    req<Calibration>(
+      "POST",
+      `/calibrations/${id}/examples/${example}/generate`,
+      { revision, input_digest, source_reviewed: true },
+    ),
+  reviewCalibration: (
+    id: string,
+    example: string,
+    revision: number,
+    criteria: Judgment[],
+    note: string,
+  ) =>
+    req<Calibration>("POST", `/calibrations/${id}/examples/${example}/review`, {
+      revision,
+      criteria,
+      note,
+    }),
+  excludeCalibration: (
+    id: string,
+    example: string,
+    revision: number,
+    note: string,
+  ) =>
+    req<Calibration>(
+      "POST",
+      `/calibrations/${id}/examples/${example}/exclude`,
+      { revision, note },
+    ),
+  approveCalibration: (id: string, revision: number, guidance: string) =>
+    req<Calibration>("POST", `/calibrations/${id}/approve`, {
+      revision,
+      guidance,
+    }),
   assessmentCapabilities: () =>
     req<AssessmentCapabilities>("GET", "/assessment-capabilities"),
   generateAssessment: (id: string, input_digest: string) =>
@@ -205,8 +308,10 @@ export const api = {
     req<unknown>("PUT", `/assignments/${id}/assessment-rubric`, r),
   assessments: (id: string) =>
     req<AssessmentRecord[]>("GET", `/submissions/${id}/assessments`),
-  captureAssessment: (id: string) =>
-    req<AssessmentRecord>("POST", `/submissions/${id}/assessments`, {}),
+  captureAssessment: (id: string, calibration_id = "") =>
+    req<AssessmentRecord>("POST", `/submissions/${id}/assessments`, {
+      calibration_id,
+    }),
   importAssessment: (id: string, p: unknown) =>
     req<AssessmentRecord>("POST", `/assessments/${id}/proposal`, p),
   reviewAssessment: (

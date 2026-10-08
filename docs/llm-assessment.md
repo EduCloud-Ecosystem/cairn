@@ -10,7 +10,7 @@ It is not enabled in the production pilot or accepted for real course grading.
 ## Assessability and uncertainty policy (October 8, 2026)
 
 New captures record `policy_version: unassessable-until-review-v1`, included in
-`input_digest`. The course provider prompt (`cairn-rubric-v2`) applies this policy
+`input_digest`. The course provider prompt (`cairn-rubric-v3`) applies this policy
 before rubric scoring: entirely blank, off-topic, or instruction-only readable
 work is unassessable, with null points on every criterion. Relevant wrong or
 partial attempts receive the rubric's normal points, including zero for missing
@@ -36,6 +36,84 @@ confidence/uncertainty labels; contradictory label language is rejected with
 `invalid_uncertainty`, retaining usage and the no-retry reservation. This enforces
 consistent vocabulary, not calibrated confidence or semantic correctness.
 Instructor-edited uncertainty and legacy feedback retain their existing format.
+
+## Per-instructor calibration
+
+Calibration belongs to an authenticated instructor and an assignment rubric,
+not to the installation or a shared synthetic benchmark. In the assignment's
+**Your instructor calibration** panel, start a private draft after saving the
+rubric. Each instructor sees only their own profiles.
+
+1. Upload past files at the rubric's required paths, or select an existing Cairn
+   classroom, assignment and submission. Optionally specify a full historical
+   commit; otherwise Cairn pins the recorded latest commit. These are private
+   calibration copies, not new student submissions or grades.
+2. Inspect the extracted source. Remove identifying details from uploads and use
+   only work you are authorized to reuse. Each model request requires a separate
+   explicit source-review/send action. Nothing is sent by uploading or capturing.
+3. Generate feedback using the shared classroom allowlist, pause and request/unit
+   budget. Review criterion scores, feedback, limitations and citations, then save
+   your corrections and rationale. Past recorded grades are not automatically
+   adopted as reference scores: the current rubric may differ.
+4. Write reusable guidance describing the implications of your corrections for
+   future feedback. Approve the reviewed profile. All included examples must have
+   a generated proposal and an instructor review; failed/unhelpful examples may be
+   explicitly excluded with a retained rationale. At least one reviewed example
+   is required. Completion does not certify quality or representative coverage.
+5. Select that profile for new assessment captures. Its ID, revision, document
+   digest and approved guidance are bound into the input digest. Only guidance
+   accompanies new student evidence; historical examples, reviewer identity and
+   calibration scores are not sent as few-shot examples. This is instructor-owned
+   prompt guidance, not model-weight training or automatic learning from grades.
+6. Use **Test selected profile on another historical sample** for a fresh round
+   using its guidance. Compare proposed scores with your own judgments and revise
+   guidance in the new profile. Use fresh, representative examples for an honest
+   transfer check. Every profile remains scoped to its owner, assignment, exact
+   rubric digest, model, prompt and policy version. Changes require recalibration.
+
+Existing uncalibrated capture/import paths remain available and explicitly show
+that no instructor profile was used. Calibration never bypasses live instructor
+review or creates a published grade. A reviewed profile is a configuration
+approved by its instructor, not a system-wide acceptance certificate. Do not
+activate a course based solely on one sample or a perfect synthetic match.
+
+Current limits: nine examples per profile, 4 MiB stored profile document, existing
+extraction/provider limits and the shared instance's 20 daily requests/200,000
+reservation units. Calibration uses the same admission lock and usage ledger as
+normal assessments. Failed and uncertain attempts are retained without automatic
+retry or refund, including after a profile is deleted. Repeated new profiles are
+additional paid requests under the same serving-instance cap.
+
+Profile ownership is enforced in the API and store using the authenticated
+operator's stable user ID; the auth-disabled development identity cannot create
+profiles. Existing course/submission management permissions remain instance-wide.
+Calibrated assessment records containing private guidance are also owner-scoped.
+
+Delete a profile to erase its historical source and private reviews. For examples
+copied from Cairn, permanent roster erasure removes every profile containing that
+student's stored submission; the instructor must recalibrate. Independent uploads
+are not linked to roster identities and must be erased through profile deletion.
+Usage-only audit records remain. Existing live assessment captures retain their
+approved guidance and review history, but deletion prevents new generation using
+the deleted profile. No historical examples are copied into those live captures.
+
+The UI and bounded OpenAI path remain a local pilot. Permission to reuse actual
+course work and institutional destination/retention acceptance are course-specific.
+
+### Synthetic calibration workflow verification — October 8, 2026
+
+An isolated authenticated browser fixture exercised both file upload and capture
+of a Cairn submission at a full commit ID. Two synthetic historical examples
+received live proposals, simulated review corrections and an approved profile.
+A third live request used that profile on a new assessment and saved a pending
+proposal with the captured profile revision. All three requests succeeded; the
+fixture database contained zero grades. The learner page showed no published
+feedback or private calibration data. Automated tests separately check owner
+isolation, guidance-only transmission, shared limits, erasure and stale profiles.
+
+These were hand-authored synthetic examples and explicitly labeled simulated
+reviews. They verify the workflow, not any instructor's calibration or grading
+quality. Production remains unchanged.
 
 ## Assessment pipeline
 
@@ -280,7 +358,8 @@ open. Use a durable store for local testing that must survive restarts.
 
 ### Data sent and retained
 
-Only criterion IDs/descriptions/maxima and extracted source segments go to OpenAI.
+Criterion IDs/descriptions/maxima, extracted source segments and any selected
+profile's approved instructor guidance go to OpenAI.
 Cairn replaces filenames with artifact aliases and binds returned citations back
 to its stored paths, hashes and exact locations. It omits roster/actor metadata,
 repository URLs, revision IDs, original bytes, notebook outputs and prior proposals.
