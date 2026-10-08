@@ -239,6 +239,10 @@ supported Brightspace), so the manual fallback ships first and independently.
   Human ratings remain 0/34; see `docs/evaluations/2026-10-08-transfer-v1.json`.
 - [ ] Investigate the rejected multi-file citation before course acceptance;
   the successful second trial does not resolve the first failure.
-- [ ] Instructor-scored evaluation and course destination/retention acceptance;
+- [x] Per-instructor calibration projects: uploads and pinned existing Cairn
+  submissions, explicit model transmission, reviewed scores/feedback, frozen
+  owner/rubric/model profiles and fresh-sample follow-up rounds. Only approved
+  guidance is applied to future captures; historical work never publishes grades.
+- [ ] Each instructor's representative calibration and course destination/retention acceptance;
   broader format extraction, production queuing and billing-aware budgets remain
   follow-ups. See `docs/llm-assessment.md`; production provider activation is off.

@@ -73,15 +73,16 @@ type Review struct {
 	GradeID    string     `json:"grade_id,omitempty"`
 }
 type Document struct {
-	PolicyVersion string     `json:"policy_version,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
-	CapturedBy    string     `json:"captured_by"`
-	Revision      string     `json:"revision"`
-	Rubric        Rubric     `json:"rubric"`
-	Artifacts     []Artifact `json:"artifacts"`
-	InputDigest   string     `json:"input_digest"`
-	Proposal      *Proposal  `json:"proposal,omitempty"`
-	Review        *Review    `json:"review,omitempty"`
+	Calibration   *CalibrationBinding `json:"calibration,omitempty"`
+	PolicyVersion string              `json:"policy_version,omitempty"`
+	CreatedAt     time.Time           `json:"created_at"`
+	CapturedBy    string              `json:"captured_by"`
+	Revision      string              `json:"revision"`
+	Rubric        Rubric              `json:"rubric"`
+	Artifacts     []Artifact          `json:"artifacts"`
+	InputDigest   string              `json:"input_digest"`
+	Proposal      *Proposal           `json:"proposal,omitempty"`
+	Review        *Review             `json:"review,omitempty"`
 }
 
 func DigestBytes(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }

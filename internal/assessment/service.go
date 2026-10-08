@@ -19,6 +19,9 @@ type Service struct {
 }
 
 func (s Service) Capture(ctx context.Context, subID, actor string) (*store.AssessmentRecord, error) {
+	return s.CaptureCalibrated(ctx, subID, actor, "")
+}
+func (s Service) CaptureCalibrated(ctx context.Context, subID, actor, calibrationID string) (*store.AssessmentRecord, error) {
 	if s.Checkout == nil {
 		return nil, fmt.Errorf("assessment checkout is not configured")
 	}
@@ -47,6 +50,13 @@ func (s Service) Capture(ctx context.Context, subID, actor string) (*store.Asses
 	if err = ValidateRubric(r); err != nil {
 		return nil, err
 	}
+	var calibration *CalibrationBinding
+	if calibrationID != "" {
+		calibration, err = s.CalibrationBinding(ctx, calibrationID, actor, sub.AssignmentID, rubric.Digest)
+		if err != nil {
+			return nil, err
+		}
+	}
 	dir, err := os.MkdirTemp("", "cairn-assessment-*")
 	if err != nil {
 		return nil, err
@@ -57,7 +67,7 @@ func (s Service) Capture(ctx context.Context, subID, actor string) (*store.Asses
 	if err = s.Checkout.FetchRevision(ctx, sub.Repo, sub.LatestCommit, dir); err != nil {
 		return nil, fmt.Errorf("could not capture pinned submission")
 	}
-	d := Document{PolicyVersion: PolicyVersion, CreatedAt: time.Now().UTC(), CapturedBy: actor, Revision: sub.LatestCommit, Rubric: r, Artifacts: Extract(dir, r.Paths)}
+	d := Document{Calibration: calibration, PolicyVersion: PolicyVersion, CreatedAt: time.Now().UTC(), CapturedBy: actor, Revision: sub.LatestCommit, Rubric: r, Artifacts: Extract(dir, r.Paths)}
 	d.InputDigest = InputDigest(d)
 	status := "collected"
 	for _, a := range d.Artifacts {

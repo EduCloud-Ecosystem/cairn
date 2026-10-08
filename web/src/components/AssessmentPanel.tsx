@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CalibrationPanel } from "./CalibrationPanel";
 import {
   api,
   type AssessmentRecord,
@@ -42,6 +43,7 @@ export function AssessmentPanel({
   const [records, setRecords] = useState<AssessmentRecord[]>([]);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [calibrationID, setCalibrationID] = useState("");
   useEffect(() => {
     let live = true;
     void api
@@ -273,6 +275,20 @@ export function AssessmentPanel({
           Save assessment rubric
         </Button>
       </fieldset>
+      {saved && provider?.calibration ? (
+        <CalibrationPanel
+          key={assignmentID}
+          assignmentID={assignmentID}
+          notify={notify}
+          selected={calibrationID}
+          onSelect={setCalibrationID}
+          canGenerate={
+            !!provider.model_provider &&
+            !provider.paused &&
+            provider.classrooms.includes(classroomID)
+          }
+        />
+      ) : null}
       <label>
         Submission
         <select
@@ -293,7 +309,7 @@ export function AssessmentPanel({
         disabled={busy || !sub || !saved}
         onClick={() =>
           void run(async () => {
-            await api.captureAssessment(sub);
+            await api.captureAssessment(sub, calibrationID);
             await refresh();
             notify("Submission evidence captured");
           })
@@ -350,6 +366,11 @@ function ReviewCard({
     <article className="card">
       <h4>Assessment: {r.status}</h4>
       <p>
+        {r.document.calibration
+          ? `Instructor calibration: ${r.document.calibration.id.slice(0, 8)} · revision ${r.document.calibration.revision}.`
+          : "No instructor calibration was selected for this capture."}
+      </p>
+      <p>
         Submission commit: <code>{r.revision}</code>
       </p>
       <p>
@@ -358,7 +379,10 @@ function ReviewCard({
           : "Legacy capture: capture current work again before generating a new model proposal."}
       </p>
       {r.document.proposal?.submission_status === "no_relevant_work" && (
-        <p role="status">The proposal found no relevant answer. Verify the captured evidence; resolve every unassessable criterion before publishing a grade.</p>
+        <p role="status">
+          The proposal found no relevant answer. Verify the captured evidence;
+          resolve every unassessable criterion before publishing a grade.
+        </p>
       )}
       <details>
         <summary>Captured evidence</summary>
@@ -401,33 +425,38 @@ function ReviewCard({
           uncertain request is not automatically retried.
         </p>
       )}
-      {r.status === "collected" && r.document.policy_version && canGenerate && !r.generation && (
-        <div>
-          <p>
-            This sends the saved rubric and extracted source to OpenAI. Review
-            the captured evidence first. Roster details and original files are
-            excluded; identifying details inside the source are not
-            automatically removed.
-          </p>
-          <Button
-            disabled={busy}
-            onClick={() =>
-              void run(async () => {
-                try {
-                  await api.generateAssessment(r.id, r.document.input_digest);
-                } finally {
-                  await refresh();
-                }
-              })
-            }
-          >
-            Send source to OpenAI and generate proposal
-          </Button>
-          {busy && (
-            <p role="status">Working… the request may take up to one minute.</p>
-          )}
-        </div>
-      )}
+      {r.status === "collected" &&
+        r.document.policy_version &&
+        canGenerate &&
+        !r.generation && (
+          <div>
+            <p>
+              This sends the saved rubric, extracted source and any captured
+              instructor guidance to OpenAI. Review the captured evidence first. Roster details and original files are
+              excluded; identifying details inside the source are not
+              automatically removed.
+            </p>
+            <Button
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  try {
+                    await api.generateAssessment(r.id, r.document.input_digest);
+                  } finally {
+                    await refresh();
+                  }
+                })
+              }
+            >
+              Send source to OpenAI and generate proposal
+            </Button>
+            {busy && (
+              <p role="status">
+                Working… the request may take up to one minute.
+              </p>
+            )}
+          </div>
+        )}
       {r.status === "collected" && (
         <label>
           Import proposal JSON

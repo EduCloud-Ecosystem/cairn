@@ -1,5 +1,10 @@
 # Synthetic assessment evaluation and human review
 
+These suites test Cairn itself. They are not a shared instructor calibration, and
+no instructor is required to adopt their agent-authored score references. Each
+instructor calibrates with their own historical work and rubric using the
+workflow in [LLM assessment](llm-assessment.md#per-instructor-calibration).
+
 `cairn assessment-eval` evaluates the **existing** extraction → bounded OpenAI →
 private pending proposal path in a dedicated SQLite database. It never connects
 to the serving database, real Git repositories, enrolled learners or grade

@@ -23,11 +23,12 @@ func (s *Server) assessmentRoutes(protect func(http.HandlerFunc) http.HandlerFun
 				classrooms = append(classrooms, id)
 			}
 		}
-		writeJSON(w, 200, map[string]any{"review": s.assessment != nil, "model_provider": s.assessmentGenerator != nil, "paused": paused, "classrooms": classrooms})
+		writeJSON(w, 200, map[string]any{"review": s.assessment != nil, "calibration": s.authEnabled && s.assessment != nil, "model_provider": s.assessmentGenerator != nil, "paused": paused, "classrooms": classrooms})
 	}))
 	if s.assessment == nil {
 		return
 	}
+	s.calibrationRoutes(protect)
 	s.mux.HandleFunc("GET /assignments/{id}/assessment-rubric", protect(s.handleGetAssessmentRubric))
 	s.mux.HandleFunc("PUT /assignments/{id}/assessment-rubric", protect(s.handlePutAssessmentRubric))
 	s.mux.HandleFunc("GET /submissions/{id}/assessments", protect(s.handleListAssessments))
@@ -107,7 +108,18 @@ func (s *Server) handleListAssessments(w http.ResponseWriter, r *http.Request) {
 		httpError(w, 500, "could not list assessments")
 		return
 	}
+	actor, _ := operatorFrom(r.Context())
+	visible := []*store.AssessmentRecord{}
 	for _, record := range v {
+		var doc assessment.Document
+		if json.Unmarshal(record.Document, &doc) != nil {
+			httpError(w, 500, "could not read assessment")
+			return
+		}
+		if doc.Calibration != nil && (actor == nil || actor.ID != doc.Calibration.OwnerID) {
+			continue
+		}
+		visible = append(visible, record)
 		attempt, e := s.store.GetGeneration(r.Context(), record.ID)
 		if e == nil {
 			record.Generation = attempt
@@ -116,11 +128,13 @@ func (s *Server) handleListAssessments(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	writeJSON(w, 200, v)
+	writeJSON(w, 200, visible)
 }
 func (s *Server) handleCaptureAssessment(w http.ResponseWriter, r *http.Request) {
-	var empty struct{}
-	if !assessmentJSON(w, r, &empty) {
+	var body struct {
+		CalibrationID string `json:"calibration_id"`
+	}
+	if !assessmentJSON(w, r, &body) {
 		return
 	}
 	select {
@@ -131,7 +145,7 @@ func (s *Server) handleCaptureAssessment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	actor, _ := operatorFrom(r.Context())
-	v, err := s.assessment.Capture(r.Context(), r.PathValue("id"), assessmentActor(actor))
+	v, err := s.assessment.CaptureCalibrated(r.Context(), r.PathValue("id"), assessmentActor(actor), body.CalibrationID)
 	if err != nil {
 		assessmentError(w, err)
 		return
@@ -139,6 +153,9 @@ func (s *Server) handleCaptureAssessment(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, 201, v)
 }
 func (s *Server) handleAssessmentProposal(w http.ResponseWriter, r *http.Request) {
+	if !s.authorizeCalibratedAssessment(w, r) {
+		return
+	}
 	var p assessment.Proposal
 	if !assessmentJSON(w, r, &p) {
 		return
@@ -151,6 +168,9 @@ func (s *Server) handleAssessmentProposal(w http.ResponseWriter, r *http.Request
 	writeJSON(w, 200, v)
 }
 func (s *Server) handleAssessmentReview(w http.ResponseWriter, r *http.Request) {
+	if !s.authorizeCalibratedAssessment(w, r) {
+		return
+	}
 	var body struct {
 		Action   string                `json:"action"`
 		Note     string                `json:"note"`
@@ -176,6 +196,9 @@ func assessmentActor(actor *store.User) string {
 }
 
 func (s *Server) handleGenerateAssessment(w http.ResponseWriter, r *http.Request) {
+	if !s.authorizeCalibratedAssessment(w, r) {
+		return
+	}
 	var body struct {
 		InputDigest string `json:"input_digest"`
 	}

@@ -16,6 +16,8 @@ import (
 
 // Store is a goroutine-safe in-memory store.Store.
 type Store struct {
+	calibrationSources map[string]map[string]bool
+	calibrations       map[string]store.Calibration
 	generations        map[string]store.Generation
 	generationLearners map[string]string
 	generationPaused   bool
@@ -36,7 +38,9 @@ type Store struct {
 // New returns an empty in-memory store.
 func New() *Store {
 	return &Store{
-		generations: map[string]store.Generation{}, generationLearners: map[string]string{},
+		calibrationSources: map[string]map[string]bool{},
+		calibrations:       map[string]store.Calibration{},
+		generations:        map[string]store.Generation{}, generationLearners: map[string]string{},
 		users:             map[string]store.User{},
 		assessmentRubrics: map[string]store.AssessmentRubric{},
 		assessments:       map[string]store.AssessmentRecord{},
@@ -262,6 +266,12 @@ func (m *Store) DeleteRosterEntry(_ context.Context, id string) error {
 		for aid, a := range m.assessments {
 			if a.SubmissionID == subID {
 				delete(m.assessments, aid)
+			}
+		}
+		for cid, sources := range m.calibrationSources {
+			if sources[subID] {
+				delete(m.calibrations, cid)
+				delete(m.calibrationSources, cid)
 			}
 		}
 		delete(m.submissions, subID)

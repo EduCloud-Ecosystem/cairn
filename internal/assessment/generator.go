@@ -58,6 +58,9 @@ func (g *Generator) Generate(ctx context.Context, aid, inputDigest string) (*sto
 	if json.Unmarshal(r.Document, &d) != nil || inputDigest == "" || d.InputDigest != inputDigest {
 		return nil, store.ErrConflict
 	}
+	if err := g.validateCalibration(ctx, d, sub.AssignmentID, r.RubricDigest); err != nil {
+		return nil, err
+	}
 	body, err := g.Provider.request(d)
 	if err != nil {
 		return nil, err
@@ -75,6 +78,9 @@ func (g *Generator) Generate(ctx context.Context, aid, inputDigest string) (*sto
 		attempt.InputTokens = p.Usage.InputTokens
 		attempt.OutputTokens = p.Usage.OutputTokens
 		attempt.ResponseID = p.Usage.ResponseID
+	}
+	if callErr == nil {
+		callErr = g.validateCalibration(ctx, d, sub.AssignmentID, r.RubricDigest)
 	}
 	if callErr == nil {
 		d.Proposal = &p
@@ -103,4 +109,21 @@ func (g *Generator) Generate(ctx context.Context, aid, inputDigest string) (*sto
 	}
 	r.Generation = attempt
 	return r, nil
+}
+
+func (g *Generator) validateCalibration(ctx context.Context, d Document, assignment, rubricDigest string) error {
+	if d.Calibration == nil {
+		return nil
+	}
+	if g.Provider.model != DefaultOpenAIModel {
+		return errors.New("calibration model does not match provider")
+	}
+	binding, err := g.Service.CalibrationBinding(ctx, d.Calibration.ID, d.Calibration.OwnerID, assignment, rubricDigest)
+	if err != nil {
+		return err
+	}
+	if Digest(binding) != Digest(d.Calibration) {
+		return store.ErrConflict
+	}
+	return nil
 }
