@@ -307,6 +307,8 @@ For the synthetic browser fixture above, additionally set
 calls the provider when its operator presses the generate button. Normal test/CI
 runs skip both opt-in live paths and require no key.
 
-Next: build an instructor-scored evaluation corpus using synthetic/permissioned
-examples, measure score/evidence/feedback quality and costs, and resolve the
-retention and course-destination gates before enabling a real course.
+A repeatable synthetic evaluation and offline human-review packet are now
+implemented: see [assessment evaluation](assessment-evaluation.md). The 18-call
+baseline recorded one rejected proposal and score/assessability instability; it
+is not course acceptance. Next: instructor review, a held-out permissioned
+benchmark, and the retention/course-destination gates before real course use.

@@ -221,6 +221,10 @@ supported Brightspace), so the manual fallback ships first and independently.
   classroom allowlist, durable admission/usage accounting and pause control,
   citation validation, pending proposals and instructor-only publication. Four
   live synthetic calls and the browser approval/student path passed (October 7).
+- [x] Repeatable synthetic evaluation CLI, two-trial score/assessability metrics,
+  failure retention and offline human-review packet with export/import. Baseline:
+  17/18 valid proposals, 31/34 provisional criterion matches; human review pending.
+  See `docs/assessment-evaluation.md` (October 7).
 - [ ] Instructor-scored evaluation and course destination/retention acceptance;
   broader format extraction, production queuing and billing-aware budgets remain
   follow-ups. See `docs/llm-assessment.md`; production provider activation is off.
