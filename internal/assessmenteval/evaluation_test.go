@@ -187,3 +187,69 @@ func TestReportValidationAndEscapedPacket(t *testing.T) {
 		t.Fatal("duplicate trial accepted")
 	}
 }
+
+func TestCorpusBindingRejectsSelfConsistentSubstitution(t *testing.T) {
+	for _, mode := range []string{"source", "segments", "revision", "input_digest", "proposal_digest", "unattempted"} {
+		t.Run(mode, func(t *testing.T) {
+			r := evaluated(t)
+			v := &r.Results[0]
+			switch mode {
+			case "source":
+				a := &v.Document.Artifacts[0]
+				a.Original = []byte("unrelated source")
+				a.SHA256 = assessment.DigestBytes(a.Original)
+				a.Size = len(a.Original)
+				a.Segments[0].Text = string(a.Original)
+				for i := range v.Document.Proposal.Criteria {
+					v.Document.Proposal.Criteria[i].Citations[0].SHA256 = a.SHA256
+				}
+			case "segments":
+				v.Document.Artifacts[0].Segments[0].Text = "fabricated extracted evidence"
+			case "revision":
+				v.Document.Revision = strings.Repeat("b", 40)
+			case "input_digest":
+				v.Document.InputDigest = "wrong"
+			case "proposal_digest":
+				v.Document.Proposal.InputDigest = "wrong"
+			case "unattempted":
+				v.Status = "collected"
+				v.Document.Proposal = nil
+			}
+			if err := ValidateReport(r); err == nil {
+				t.Fatal("altered evaluation accepted")
+			}
+		})
+	}
+}
+func TestPolicyDecisionIsSeparateFromHumanScores(t *testing.T) {
+	r := evaluated(t)
+	raw, _ := json.Marshal(r)
+	w := NewWorksheet(r, assessment.DigestBytes(raw))
+	s, err := Review(raw, w)
+	if err != nil || s.PolicyReviewComplete || s.Complete {
+		t.Fatalf("blank decision accepted: %+v %v", s, err)
+	}
+	w.MissingWorkPolicy = "zero"
+	w.PolicyNote = "Synthetic test only: missing readable work receives zero."
+	if _, err = Review(raw, w); err == nil {
+		t.Fatal("policy decision without reviewer accepted")
+	}
+	w.Reviewer = "Synthetic reviewer"
+	w.ReviewedAt = time.Now().UTC().Format(time.RFC3339)
+	s, err = Review(raw, w)
+	if err != nil || !s.PolicyReviewComplete || s.Complete || s.Reviewed != 0 {
+		t.Fatalf("policy conflated with human scoring: %+v %v", s, err)
+	}
+	w.MissingWorkPolicy = "arbitrary"
+	if _, err = Review(raw, w); err == nil {
+		t.Fatal("unknown policy accepted")
+	}
+	// Legacy worksheets remain readable, with no inferred policy decision.
+	legacy, _ := json.Marshal(map[string]any{"report_digest": w.ReportDigest, "judgments": []HumanJudgment{}})
+	var old Worksheet
+	json.Unmarshal(legacy, &old)
+	s, err = Review(raw, old)
+	if err != nil || s.PolicyReviewComplete {
+		t.Fatalf("legacy worksheet not preserved: %+v %v", s, err)
+	}
+}

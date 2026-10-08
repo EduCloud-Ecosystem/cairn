@@ -236,6 +236,9 @@ open. Use a durable store for local testing that must survive restarts.
   recorded submission activity and active enrollment must still match. Freshness
   is checked again before saving a pending proposal. Neither generation nor a
   provider failure can create a grade.
+- Rejected judgments record fixed categories for score, citation, coverage and
+  feedback validation failures. Raw rejected responses and credentials are not
+  logged; older `invalid_proposal` entries cannot be diagnosed retrospectively.
 - One model attempt per captured assessment. Failed, cancelled, stale and uncertain
   calls retain their reservation; there is no automatic retry/refund. A crash can
   leave an attempt marked running. Inspect it, use an instructor import, or

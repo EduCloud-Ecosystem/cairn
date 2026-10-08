@@ -2,14 +2,17 @@
 package assessmenteval
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/EduCloud-Ecosystem/cairn/internal/assessment"
+	"github.com/EduCloud-Ecosystem/cairn/pkg/adapter"
 )
 
 type HumanJudgment struct {
@@ -24,12 +27,17 @@ type HumanJudgment struct {
 	Note                   string   `json:"note"`
 }
 type Worksheet struct {
-	ReportDigest string          `json:"report_digest"`
-	Reviewer     string          `json:"reviewer"`
-	ReviewedAt   string          `json:"reviewed_at"`
-	Judgments    []HumanJudgment `json:"judgments"`
+	MissingWorkPolicy string          `json:"missing_work_policy"`
+	PolicyNote        string          `json:"policy_note"`
+	ReportDigest      string          `json:"report_digest"`
+	Reviewer          string          `json:"reviewer"`
+	ReviewedAt        string          `json:"reviewed_at"`
+	Judgments         []HumanJudgment `json:"judgments"`
 }
 type HumanSummary struct {
+	MissingWorkPolicy        string `json:"missing_work_policy"`
+	PolicyReviewComplete     bool   `json:"policy_review_complete"`
+	ProviderFailures         int    `json:"provider_failures"`
 	ReportDigest             string `json:"report_digest"`
 	Reviewer                 string `json:"reviewer"`
 	Complete                 bool   `json:"human_review_complete"`
@@ -65,12 +73,48 @@ func ValidateReport(r Report) error {
 	for _, c := range r.Cases {
 		cases[c.ID] = c
 	}
+	expectedArtifacts := map[string][]assessment.Artifact{}
+	for _, c := range r.Cases {
+		artifacts, err := corpusArtifacts(c)
+		if err != nil {
+			return err
+		}
+		expectedArtifacts[c.ID] = artifacts
+	}
 	seen := map[string]bool{}
 	for _, v := range r.Results {
 		c, ok := cases[v.CaseID]
 		key := resultKey(v.CaseID, v.Trial, "")
 		if !ok || v.Trial < 1 || v.Trial > r.Trials || seen[key] || assessment.Digest(v.Document.Rubric) != assessment.Digest(c.Rubric) {
 			return errors.New("invalid or duplicate evaluation result")
+		}
+
+		if v.Document.Revision != strings.Repeat("a", 40) || assessment.Digest(v.Document.Artifacts) != assessment.Digest(expectedArtifacts[v.CaseID]) {
+			return errors.New("captured evidence does not match the bundled synthetic case")
+		}
+		digest := assessment.Digest(struct {
+			Revision  string
+			Rubric    assessment.Rubric
+			Artifacts []assessment.Artifact
+		}{v.Document.Revision, v.Document.Rubric, v.Document.Artifacts})
+		if v.Document.InputDigest != digest {
+			return errors.New("captured input digest does not match evidence")
+		}
+		if v.Document.Proposal != nil && v.Document.Proposal.InputDigest != digest {
+			return errors.New("proposal is bound to different evidence")
+		}
+		if v.Status != "pending" && v.Document.Proposal != nil {
+			return errors.New("proposal attached to a non-pending result")
+		}
+		hasIssue := false
+		for _, a := range v.Document.Artifacts {
+			hasIssue = hasIssue || a.Issue != ""
+		}
+		if (v.Status == "blocked") != hasIssue {
+			return errors.New("outcome contradicts captured extraction state")
+		}
+		if r.Complete && r.Live && v.Status == "collected" {
+			return errors.New("completed live run is missing a provider outcome")
 		}
 		seen[key] = true
 		switch v.Status {
@@ -118,6 +162,15 @@ func Review(raw []byte, w Worksheet) (HumanSummary, error) {
 			}
 		}
 	}
+	s.ProviderFailures = Measure(r).ProviderFailures
+	s.MissingWorkPolicy = w.MissingWorkPolicy
+	if w.MissingWorkPolicy != "" && w.MissingWorkPolicy != "zero" && w.MissingWorkPolicy != "unassessable" {
+		return s, errors.New("missing_work_policy must be zero or unassessable")
+	}
+	if len(w.PolicyNote) > 4000 {
+		return s, errors.New("policy note exceeds 4000 characters")
+	}
+	s.PolicyReviewComplete = w.MissingWorkPolicy != "" && strings.TrimSpace(w.PolicyNote) != ""
 	s.Required = len(expected)
 	seen := map[string]bool{}
 	for _, j := range w.Judgments {
@@ -156,7 +209,7 @@ func Review(raw []byte, w Worksheet) (HumanSummary, error) {
 			s.InappropriateUncertainty++
 		}
 	}
-	if s.Reviewed > 0 {
+	if s.Reviewed > 0 || s.PolicyReviewComplete {
 		if strings.TrimSpace(w.Reviewer) == "" || len(w.Reviewer) > 200 {
 			return s, errors.New("reviewer is required")
 		}
@@ -166,4 +219,18 @@ func Review(raw []byte, w Worksheet) (HumanSummary, error) {
 	}
 	s.Complete = r.Complete && s.Required > 0 && s.Reviewed == s.Required
 	return s, nil
+}
+
+// Re-extract only bundled synthetic files. Matching self-reported hashes alone
+// would allow a report to substitute unrelated source under a known case ID.
+func corpusArtifacts(c Case) ([]assessment.Artifact, error) {
+	dir, err := os.MkdirTemp("", "cairn-eval-check-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	if err = (checkout(c.Files)).FetchRevision(context.Background(), adapter.RepoRef{}, "", dir); err != nil {
+		return nil, err
+	}
+	return assessment.Extract(dir, c.Rubric.Paths), nil
 }

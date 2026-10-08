@@ -197,7 +197,7 @@ func (o *OpenAI) respond(ctx context.Context, body []byte, d Document) (Proposal
 		p.Criteria = append(p.Criteria, converted)
 	}
 	if _, _, err := ValidateJudgments(d, p.Criteria, false); err != nil {
-		return p, providerFailure("invalid_proposal")
+		return p, providerFailure(judgmentFailureCode(err))
 	}
 	return p, nil
 }
