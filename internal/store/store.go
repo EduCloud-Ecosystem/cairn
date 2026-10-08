@@ -25,6 +25,7 @@ var ErrConflict = errors.New("store: conflict")
 // a student's legal name, SIS ID, or plaintext email. See DESIGN.md sections 5–6.
 type Store interface {
 	AssessmentStore
+	GenerationStore
 	// Users (platform operators).
 	CreateUser(ctx context.Context, u *User) error
 	GetUser(ctx context.Context, id string) (*User, error)

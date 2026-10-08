@@ -46,8 +46,11 @@ func testStore(t *testing.T) *Store {
 		t.Fatalf("migrate: %v", err)
 	}
 	if _, err := db.ExecContext(ctx,
-		`TRUNCATE grading_runs, grades, submissions, roster_entries, assignments, provisioning_jobs, classrooms, users RESTART IDENTITY CASCADE`); err != nil {
+		`TRUNCATE assessment_generations, grading_runs, grades, submissions, roster_entries, assignments, provisioning_jobs, classrooms, users RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
+	}
+	if err := s.SetGenerationPaused(ctx, false); err != nil {
+		t.Fatal(err)
 	}
 	return s
 }

@@ -30,6 +30,8 @@ import (
 
 // Options holds the Server's dependencies.
 type Options struct {
+	OpenAIProvider     *assessment.OpenAI
+	OpenAIClassrooms   []string
 	AssessmentCheckout grading.RevisionCheckout // nil disables assessment review routes
 	// WorkspaceURLs maps classroom IDs to operator-approved browser workspace origins.
 	// The destination authenticates independently; links carry no credentials.
@@ -74,9 +76,10 @@ type Options struct {
 
 // Server routes and serves the control-plane API.
 type Server struct {
-	assessment        *assessment.Service
-	assessmentCapture chan struct{}
-	workspaceURLs     map[string]string
+	assessmentGenerator *assessment.Generator
+	assessment          *assessment.Service
+	assessmentCapture   chan struct{}
+	workspaceURLs       map[string]string
 
 	store     store.Store
 	queue     provisioning.Queue
@@ -156,6 +159,9 @@ func New(opts Options) *Server {
 	if opts.AssessmentCheckout != nil {
 		s.assessment = &assessment.Service{Store: opts.Store, Checkout: opts.AssessmentCheckout}
 		s.assessmentCapture = make(chan struct{}, 1)
+		if opts.OpenAIProvider != nil {
+			s.assessmentGenerator = assessment.NewGenerator(*s.assessment, opts.OpenAIProvider, opts.OpenAIClassrooms)
+		}
 	}
 	s.routes()
 	return s

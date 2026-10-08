@@ -217,8 +217,10 @@ supported Brightspace), so the manual fallback ships first and independently.
 - [x] Local assessment review foundation: pinned source capture, fixture/imported
   proposals, editable rubric scores/feedback, atomic instructor publication,
   student feedback, freshness checks and assessment retention linkage (October 7).
-- [ ] LLM-assisted rubric feedback **plus proposed scores** with a bounded provider
-  adapter and instructor-scored evaluation;
-  flexible format extraction, evidence citations, bounded model use and explicit
-  publication. Design decision: `docs/llm-assessment.md`. No provider/review UI is
-  implemented by the push-grading change.
+- [x] Bounded OpenAI adapter for rubric feedback **plus proposed scores**: explicit
+  classroom allowlist, durable admission/usage accounting and pause control,
+  citation validation, pending proposals and instructor-only publication. Four
+  live synthetic calls and the browser approval/student path passed (October 7).
+- [ ] Instructor-scored evaluation and course destination/retention acceptance;
+  broader format extraction, production queuing and billing-aware budgets remain
+  follow-ups. See `docs/llm-assessment.md`; production provider activation is off.

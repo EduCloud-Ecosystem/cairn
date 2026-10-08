@@ -16,23 +16,27 @@ import (
 
 // Store is a goroutine-safe in-memory store.Store.
 type Store struct {
-	mu                sync.RWMutex
-	assessmentRubrics map[string]store.AssessmentRubric
-	assessments       map[string]store.AssessmentRecord
-	users             map[string]store.User
-	classrooms        map[string]store.Classroom
-	assignments       map[string]store.Assignment
-	roster            map[string]store.RosterEntry
-	submissions       map[string]store.Submission
-	grades            map[string]store.Grade
-	gradingRuns       map[string]store.GradingRun
-	jobs              map[string]store.ProvisioningJob
-	jobIdem           map[string]bool
+	generations        map[string]store.Generation
+	generationLearners map[string]string
+	generationPaused   bool
+	mu                 sync.RWMutex
+	assessmentRubrics  map[string]store.AssessmentRubric
+	assessments        map[string]store.AssessmentRecord
+	users              map[string]store.User
+	classrooms         map[string]store.Classroom
+	assignments        map[string]store.Assignment
+	roster             map[string]store.RosterEntry
+	submissions        map[string]store.Submission
+	grades             map[string]store.Grade
+	gradingRuns        map[string]store.GradingRun
+	jobs               map[string]store.ProvisioningJob
+	jobIdem            map[string]bool
 }
 
 // New returns an empty in-memory store.
 func New() *Store {
 	return &Store{
+		generations: map[string]store.Generation{}, generationLearners: map[string]string{},
 		users:             map[string]store.User{},
 		assessmentRubrics: map[string]store.AssessmentRubric{},
 		assessments:       map[string]store.AssessmentRecord{},

@@ -82,16 +82,9 @@ func (s AssessmentSQL) TransitionAssessment(ctx context.Context, r *AssessmentRe
 	if err != nil {
 		return assessmentErr(err)
 	}
-	var currentActivityKey string
-	switch t := currentActivity.(type) {
-	case time.Time:
-		currentActivityKey = AssessmentActivity(&t)
-	case string:
-		parsed, e := time.Parse(time.RFC3339Nano, t)
-		if e != nil {
-			return e
-		}
-		currentActivityKey = AssessmentActivity(&parsed)
+	currentActivityKey, err := assessmentSQLActivity(currentActivity)
+	if err != nil {
+		return err
 	}
 	if activity != r.SubmissionActivity {
 		return ErrConflict
@@ -127,4 +120,21 @@ func (s AssessmentSQL) TransitionAssessment(ctx context.Context, r *AssessmentRe
 		r.GradeID = g.ID
 	}
 	return nil
+}
+
+func assessmentSQLActivity(activity any) (string, error) {
+	switch t := activity.(type) {
+	case nil:
+		return "", nil
+	case time.Time:
+		return AssessmentActivity(&t), nil
+	case string:
+		p, e := time.Parse(time.RFC3339Nano, t)
+		if e != nil {
+			return "", e
+		}
+		return AssessmentActivity(&p), nil
+	default:
+		return "", ErrConflict
+	}
 }
