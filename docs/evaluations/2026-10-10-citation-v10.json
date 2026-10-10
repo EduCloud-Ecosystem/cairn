@@ -1,0 +1,121 @@
+{
+  "date": "2026-10-10",
+  "model": "gpt-5.4-mini-2026-03-17",
+  "final_prompt_version": "cairn-rubric-v10",
+  "total_request_attempts_this_development_round": 25,
+  "synthetic_runs": {
+    "8": {
+      "requests": 7,
+      "accepted": 7,
+      "input_tokens_reported": 7508,
+      "output_tokens_reported": 1527,
+      "errors": []
+    },
+    "9": {
+      "requests": 7,
+      "accepted": 5,
+      "input_tokens_reported": 4983,
+      "output_tokens_reported": 1011,
+      "errors": [
+        "OpenAI assessment failed: provider_http_error",
+        "OpenAI assessment failed: provider_http_error"
+      ]
+    },
+    "10": {
+      "requests": 7,
+      "accepted": 7,
+      "input_tokens_reported": 7838,
+      "output_tokens_reported": 1515,
+      "errors": []
+    }
+  },
+  "historical_stages": [
+    {
+      "prompt": "v8",
+      "requests": 1,
+      "accepted": 0,
+      "error": "unmatched_citation_quote",
+      "finding": "Model inserted ellipses; raw 5/5 response was rejected."
+    },
+    {
+      "prompt": "v10",
+      "requests": 1,
+      "accepted": 1,
+      "model_points": 4,
+      "assistant_adjudicated_points": 5,
+      "finding": "Exact citations, but quality deduction contradicted accepted historical GMM alternatives."
+    },
+    {
+      "prompt": "v10",
+      "requests": 2,
+      "accepted": 2,
+      "policy": "historical-quality-v4",
+      "outcomes": [
+        {
+          "sample_alias": "523-clustering-sample-01",
+          "model_points": 4,
+          "assistant_adjudicated_points": 5,
+          "max_points": 5,
+          "exact_citations": 3,
+          "input_tokens": 14955,
+          "output_tokens": 556,
+          "reserved_units": 57202
+        },
+        {
+          "sample_alias": "523-clustering-sample-03",
+          "model_points": 5,
+          "assistant_adjudicated_points": 5,
+          "max_points": 5,
+          "exact_citations": 6,
+          "input_tokens": 13635,
+          "output_tokens": 415,
+          "reserved_units": 56070
+        }
+      ]
+    }
+  ],
+  "original_case_resolved": true,
+  "all_v10_requests_have_valid_citations": true,
+  "remaining_limitation": "A development regression still needed delegated correction for already-waived constant-column handling. Exact citations do not ensure valid deductions. Instructor review remains mandatory.",
+  "private_database_audits": [
+    {
+      "run": "live-trial",
+      "grades": 0,
+      "generations": 1,
+      "calibration_states": [
+        [
+          "draft",
+          1
+        ]
+      ]
+    },
+    {
+      "run": "diagnostic-v10/live-trial",
+      "grades": 0,
+      "generations": 1,
+      "calibration_states": [
+        [
+          "draft",
+          1
+        ]
+      ]
+    },
+    {
+      "run": "confirmation-v10/live-trial",
+      "grades": 0,
+      "generations": 2,
+      "calibration_states": [
+        [
+          "draft",
+          1
+        ]
+      ]
+    }
+  ],
+  "fresh_reserved_samples_used": 0,
+  "automatic_retries": 0,
+  "production_activation": false,
+  "independent_instructor_validation": false,
+  "documentation_source": "https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses",
+  "note": "v8 and v9 were intermediate experiments, never released. v9 had two API schema rejections for multiline enum literals; v10 uses short excerpt IDs. Changed configurations were separately recorded, not retried until pass."
+}
