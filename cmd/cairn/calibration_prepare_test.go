@@ -22,7 +22,7 @@ func TestPreparePrivateBundleAndEscapedInspection(t *testing.T) {
 	if err := runCalibrationPrepare(args); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"bundle.json", "rubric.json", "inspect.html"} {
+	for _, name := range []string{"bundle.json", "rubric.json", "inspect.html", "preflight.json"} {
 		info, err := os.Stat(filepath.Join(out, name))
 		if err != nil || info.Mode().Perm()&0077 != 0 {
 			t.Fatal("output not private")
@@ -50,5 +50,40 @@ func TestPreparePrivateBundleAndEscapedInspection(t *testing.T) {
 	os.WriteFile(m, []byte(manifest), 0600)
 	if runCalibrationPrepare([]string{"--manifest", m, "--source-root", root, "--out", filepath.Join(root, "linked")}) == nil {
 		t.Fatal("symlink source accepted")
+	}
+}
+
+func TestPrepareReportsOversizedSourceWithoutTruncating(t *testing.T) {
+	root := t.TempDir()
+	os.Mkdir(filepath.Join(root, "sample"), 0700)
+	source := strings.Repeat("x", assessment.MaxProviderInputBytes)
+	os.WriteFile(filepath.Join(root, "sample", "answer.py"), []byte(source), 0600)
+	manifest := `{"purpose":"calibration","rubric":{"title":"Review","paths":["answer.py"],"criteria":[{"id":"quality","description":"Explain the code","max_points":10}]},"examples":[{"id":"sample-01","directory":"sample"}]}`
+	m := filepath.Join(root, "manifest.json")
+	os.WriteFile(m, []byte(manifest), 0600)
+	out := filepath.Join(root, "packet")
+	if err := runCalibrationPrepare([]string{"--manifest", m, "--source-root", root, "--out", out}); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(out, "preflight.json"))
+	var checks []calibrationPreflight
+	if err := json.Unmarshal(raw, &checks); err != nil {
+		t.Fatal(err)
+	}
+	if len(checks) != 1 || checks[0].Fits || checks[0].InputBytes <= checks[0].LimitBytes || checks[0].Issue == "" {
+		t.Fatal("missing preflight blockage")
+	}
+	if strings.Contains(string(raw), root) || strings.Contains(string(raw), source) {
+		t.Fatal("preflight leaked paths or source")
+	}
+	raw, _ = os.ReadFile(filepath.Join(out, "bundle.json"))
+	var bundle assessment.CalibrationBundle
+	json.Unmarshal(raw, &bundle)
+	if bundle.Examples[0].Files["answer.py"] != source {
+		t.Fatal("oversized source was truncated")
+	}
+	raw, _ = os.ReadFile(filepath.Join(out, "inspect.html"))
+	if !strings.Contains(string(raw), "Blocked") {
+		t.Fatal("inspection hid input blockage")
 	}
 }
