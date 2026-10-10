@@ -10,7 +10,7 @@ It is not enabled in the production pilot or accepted for real course grading.
 ## Assessability and uncertainty policy (October 8, 2026)
 
 New captures record `policy_version: unassessable-until-review-v1`, included in
-`input_digest`. The course provider prompt (`cairn-rubric-v3`) applies this policy
+`input_digest`. The course provider prompt (`cairn-rubric-v4`) applies this policy
 before rubric scoring: entirely blank, off-topic, or instruction-only readable
 work is unassessable, with null points on every criterion. Relevant wrong or
 partial attempts receive the rubric's normal points, including zero for missing
@@ -488,3 +488,36 @@ readable submissions with no relevant answer. V2 calibration rubrics encode that
 choice and passed an 18-call development recheck; no stored course rubric changed.
 Next: instructor score/feedback ratings, a held-out permissioned benchmark, and
 the retention/course-destination gates before real course use.
+
+### Complete source with compact line citations
+
+Prompt v4 sends consecutive text lines in blocks of at most 20 lines, with a
+starting line number and a newline-delimited text string. All source text, blank lines and trailing
+empty lines are retained. Notebook cells and nonconsecutive locations retain
+explicit segments. Stored evidence, source hashes and returned `line:N`/`cell:N`
+citation validation are unchanged. This reduces repeated JSON labels; it does
+not truncate source or increase the 16,000-byte provider-input limit. Changing
+the prompt version requires a new calibration profile before reusing guidance.
+
+`calibration-prepare` also writes private `preflight.json` results and shows them
+in `inspect.html`, using the exact live-request serializer without credentials
+or network access. The results include each sample's complete input size and
+whether it fits without instructor guidance. Oversized samples remain intact in
+the bundle for inspection, but are visibly blocked for generation; preparation
+success does not mean every example can be sent. Bound guidance adds to input
+size, and live generation always checks the complete input again. Source review,
+destination authorization and instructor approval remain separate requirements.
+
+### Compact-input synthetic check — October 9, 2026
+
+Five opt-in live synthetic calls passed with prompt v4: correct and incorrect
+arithmetic, instruction-only work, a 421-line correct submission with exact
+answer citations at `line:21` and `line:401`, and a 421-line instruction-only
+submission whose criteria remained unassessable. The two long inputs measured
+13,678 and 13,756 bytes. These validate a bounded compatibility example, not
+instructor calibration, course accuracy, or general citation reliability. No
+real coursework was transmitted and no grades were created.
+
+Repeat the two long-source checks with `TestOpenAILiveCompactSource`, the same
+opt-in `CAIRN_OPENAI_LIVE_KEY_FILE`, and optionally `CAIRN_COMPACT_EVAL_OUTPUT`
+pointing to a private output file. Normal test runs skip provider calls.
