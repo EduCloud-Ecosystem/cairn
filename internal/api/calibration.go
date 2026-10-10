@@ -57,6 +57,28 @@ func (s *Server) calibrationRoutes(protect func(http.HandlerFunc) http.HandlerFu
 		}
 		writeJSON(w, 200, map[string]bool{"deleted": true})
 	}))
+	s.mux.HandleFunc("POST /calibrations/{id}/bundle", ownerOnly(func(w http.ResponseWriter, r *http.Request, owner string) {
+		var body struct {
+			Revision int                          `json:"revision"`
+			Bundle   assessment.CalibrationBundle `json:"bundle"`
+		}
+		if !assessmentJSON(w, r, &body) {
+			return
+		}
+		select {
+		case s.assessmentCapture <- struct{}{}:
+			defer func() { <-s.assessmentCapture }()
+		default:
+			httpError(w, 429, "another capture is in progress")
+			return
+		}
+		_, err := s.assessment.ImportCalibrationBundle(r.Context(), r.PathValue("id"), owner, body.Revision, body.Bundle)
+		if err != nil {
+			assessmentError(w, err)
+			return
+		}
+		s.writeCalibration(w, r, r.PathValue("id"), owner)
+	}))
 	s.mux.HandleFunc("POST /calibrations/{id}/examples", ownerOnly(func(w http.ResponseWriter, r *http.Request, owner string) {
 		var body struct {
 			Revision int               `json:"revision"`

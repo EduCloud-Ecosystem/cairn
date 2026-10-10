@@ -100,6 +100,66 @@ the deleted profile. No historical examples are copied into those live captures.
 The UI and bounded OpenAI path remain a local pilot. Permission to reuse actual
 course work and institutional destination/retention acceptance are course-specific.
 
+### Preparing historical samples from GitHub or local archives
+
+`cairn calibration-prepare` builds a private, source-only bundle and an offline
+inspection page from local files. Fetch repository files at full commit IDs
+first; preserve the repository, commit, original SHA-256 and any redactions or
+scope extraction in a separate private provenance log. Never commit real course
+samples or that identity mapping into Cairn. The command has no network access,
+provider credentials or serving database, and never executes student source.
+
+A manifest contains `purpose` (`calibration` or `holdout`), the intended `rubric`,
+and 1–9 `examples`, each with a neutral `id` and a relative `directory`. Each
+sample directory contains all files named by `rubric.paths`. For example:
+
+```json
+{
+  "purpose": "calibration",
+  "rubric": {
+    "title": "Design explanation",
+    "paths": ["answer.qmd"],
+    "criteria": [{"id": "reasoning", "description": "Explain the design choice using the assignment requirements.", "max_points": 5}]
+  },
+  "examples": [{"id": "sample-01", "directory": "sample-01"}]
+}
+```
+
+```sh
+cairn calibration-prepare --manifest /private/manifest.json \
+  --source-root /private/reviewed-source --out /private/new-packet
+```
+
+Inspect `inspect.html` and `rubric.json`, save the intended rubric in Cairn, then
+start an empty calibration draft and use **Import a prepared historical sample**
+to load `bundle.json`. Importing sends nothing to OpenAI; every generation and
+instructor review remains explicit. Source inspection and rubric interpretation
+remain human responsibilities. The command does not redact identifying text.
+Files are created with owner-only permissions in a new directory. Bundles are
+limited to 900 KiB including JSON encoding to fit the bounded import API.
+
+The server requires an exact rubric match and commits the entire validated batch
+in one update. Bundle membership is frozen after import. Source-only imports
+cannot inject reviews, scores, owner identities or approvals. The recorded bundle
+digest and sample aliases preserve which prepared set was used. A holdout bundle
+requires a new round based on an approved profile and rejects exact source reuse
+from its calibration lineage, including renamed samples. This does not detect
+paraphrases, near-duplicates, or related work from the same learner; select splits
+before reviewing feedback and maintain that provenance outside the bundle.
+
+`.qmd` and `.Rmd` are extracted as inert text with line citations. Cairn does not
+run code, render documents, follow includes, open links or inspect plotted pixels.
+Source can support narrative/code feedback; visual appearance and live deployment
+criteria require additional evidence or remain unassessable. If only one exercise
+is sampled, use a rubric explicitly limited to that exercise and retain the
+original line range and transformation hash in the private provenance log.
+
+An October 9 authenticated browser check imported two synthetic examples into an
+empty draft, recorded the bundle identity/purpose, froze membership, and left
+both instructor reviews pending. The isolated database had zero provider requests
+and zero grades. Private real-course packets were prepared separately; no real
+course sources are included in this repository or its tests.
+
 ### Synthetic calibration workflow verification — October 8, 2026
 
 An isolated authenticated browser fixture exercised both file upload and capture
@@ -123,7 +183,7 @@ quality. Production remains unchanged.
    explanation, argument, design, interpretation and other suitable criteria.
 2. Capture a submission commit and an artifact manifest with paths, media types,
    sizes and SHA-256 digests. Start with text/Markdown, Python/R source and notebook
-   source; add PDF, office documents, images and other formats only with tested
+   source (including passive Quarto/R Markdown); add PDF, office documents, images and other formats only with tested
    extractors. Preserve originals and extraction provenance. Unsupported,
    unreadable or truncated material must be surfaced for review, never silently
    treated as absent or scored zero.

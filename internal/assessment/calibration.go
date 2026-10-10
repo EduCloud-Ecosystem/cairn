@@ -24,6 +24,7 @@ type CalibrationBinding struct {
 	Guidance string `json:"guidance"`
 }
 type CalibrationExample struct {
+	SampleID           string            `json:"sample_id,omitempty"`
 	ExclusionNote      string            `json:"exclusion_note,omitempty"`
 	SourceSubmissionID string            `json:"source_submission_id,omitempty"`
 	ID                 string            `json:"id"`
@@ -37,7 +38,7 @@ func (s Service) CaptureCalibrationExample(ctx context.Context, cid, owner, subm
 	if err != nil {
 		return nil, err
 	}
-	if c.Status != "draft" || c.Revision != revision {
+	if c.Status != "draft" || c.Revision != revision || d.BundleDigest != "" {
 		return nil, store.ErrConflict
 	}
 	if len(d.Examples) >= 9 {
@@ -79,6 +80,8 @@ func (s Service) CaptureCalibrationExample(ctx context.Context, cid, owner, subm
 }
 
 type CalibrationDocument struct {
+	BundleDigest  string               `json:"bundle_digest,omitempty"`
+	SamplePurpose string               `json:"sample_purpose,omitempty"`
 	BasedOn       *CalibrationBinding  `json:"based_on,omitempty"`
 	Rubric        Rubric               `json:"rubric"`
 	Model         string               `json:"model"`
@@ -146,48 +149,57 @@ func (s Service) AddCalibrationExample(ctx context.Context, cid, owner string, r
 	if err != nil {
 		return nil, err
 	}
-	if c.Status != "draft" || revision != c.Revision {
+	if c.Status != "draft" || revision != c.Revision || d.BundleDigest != "" {
 		return nil, store.ErrConflict
 	}
 	if len(d.Examples) >= 9 {
 		return nil, errors.New("use at most nine representative historical submissions per calibration")
 	}
-	if len(files) != len(d.Rubric.Paths) {
-		return nil, errors.New("provide exactly the rubric's required files")
-	}
-	dir, err := os.MkdirTemp("", "cairn-calibration-*")
+	evidence, err := uploadedCalibrationDocument(d.Rubric, d.BasedOn, owner, files)
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(dir)
-	total := 0
-	for _, p := range d.Rubric.Paths {
-		content, ok := files[p]
-		if !ok || !ValidPath(p) {
-			return nil, errors.New("required calibration file missing")
-		}
-		total += len(content)
-		if len(content) > MaxFileBytes || total > MaxTotalBytes {
-			return nil, errors.New("historical files exceed extraction limits")
-		}
-		dest := filepath.Join(dir, p)
-		if err = os.MkdirAll(filepath.Dir(dest), 0700); err != nil {
-			return nil, err
-		}
-		if err = os.WriteFile(dest, []byte(content), 0600); err != nil {
-			return nil, err
-		}
-	}
-	evidence := Document{Calibration: d.BasedOn, CreatedAt: time.Now().UTC(), CapturedBy: owner, PolicyVersion: PolicyVersion, Revision: "historical-upload", Rubric: d.Rubric, Artifacts: Extract(dir, d.Rubric.Paths)}
-	for _, a := range evidence.Artifacts {
-		if a.Issue != "" {
-			return nil, fmt.Errorf("historical source cannot be extracted: %s", a.Issue)
-		}
-	}
-	evidence.InputDigest = InputDigest(evidence)
 	d.Examples = append(d.Examples, CalibrationExample{ID: id.New(), Document: evidence})
 	return s.saveCalibration(ctx, c, d)
 }
+
+func uploadedCalibrationDocument(rubric Rubric, binding *CalibrationBinding, owner string, files map[string]string) (Document, error) {
+	if len(files) != len(rubric.Paths) {
+		return Document{}, errors.New("provide exactly the rubric's required files")
+	}
+	dir, err := os.MkdirTemp("", "cairn-calibration-*")
+	if err != nil {
+		return Document{}, err
+	}
+	defer os.RemoveAll(dir)
+	total := 0
+	for _, p := range rubric.Paths {
+		content, ok := files[p]
+		if !ok || !ValidPath(p) {
+			return Document{}, errors.New("required calibration file missing")
+		}
+		total += len(content)
+		if len(content) > MaxFileBytes || total > MaxTotalBytes {
+			return Document{}, errors.New("historical files exceed extraction limits")
+		}
+		dest := filepath.Join(dir, p)
+		if err = os.MkdirAll(filepath.Dir(dest), 0700); err != nil {
+			return Document{}, err
+		}
+		if err = os.WriteFile(dest, []byte(content), 0600); err != nil {
+			return Document{}, err
+		}
+	}
+	evidence := Document{Calibration: binding, CreatedAt: time.Now().UTC(), CapturedBy: owner, PolicyVersion: PolicyVersion, Revision: "historical-upload", Rubric: rubric, Artifacts: Extract(dir, rubric.Paths)}
+	for _, a := range evidence.Artifacts {
+		if a.Issue != "" {
+			return Document{}, fmt.Errorf("historical source cannot be extracted: %s", a.Issue)
+		}
+	}
+	evidence.InputDigest = InputDigest(evidence)
+	return evidence, nil
+}
+
 func (s Service) ReviewCalibrationExample(ctx context.Context, cid, owner, eid string, revision int, criteria []Judgment, note string) (*store.Calibration, error) {
 	c, d, err := s.calibration(ctx, cid, owner)
 	if err != nil {

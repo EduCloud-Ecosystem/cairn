@@ -22,7 +22,7 @@ func Extract(dir string, paths []string) []Artifact {
 		switch ext {
 		case ".txt", ".py", ".r":
 			a.MediaType = "text/plain"
-		case ".md":
+		case ".md", ".qmd", ".rmd":
 			a.MediaType = "text/markdown"
 		case ".ipynb":
 			a.MediaType = "application/x-ipynb+json"
