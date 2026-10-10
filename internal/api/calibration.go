@@ -27,21 +27,91 @@ func (s *Server) calibrationRoutes(protect func(http.HandlerFunc) http.HandlerFu
 			assessmentError(w, err)
 			return
 		}
-		writeJSON(w, 200, v)
+		// Listing includes only scope metadata, never source or judgments.
+		type summary struct {
+			*store.Calibration
+			SectionTitle string `json:"section_title,omitempty"`
+		}
+		summaries := []summary{}
+		for _, item := range v {
+			full, e := s.store.GetCalibration(r.Context(), item.ID, owner)
+			if e != nil {
+				assessmentError(w, e)
+				return
+			}
+			var d assessment.CalibrationDocument
+			if e = json.Unmarshal(full.Document, &d); e != nil {
+				httpError(w, 500, "could not read calibration")
+				return
+			}
+			title := ""
+			if d.Section {
+				title = d.Rubric.Title
+			}
+			item.Document = nil
+			summaries = append(summaries, summary{item, title})
+		}
+		writeJSON(w, 200, summaries)
 	}))
 	s.mux.HandleFunc("POST /assignments/{id}/calibrations", ownerOnly(func(w http.ResponseWriter, r *http.Request, owner string) {
 		var body struct {
-			BasedOn string `json:"based_on"`
+			BasedOn string             `json:"based_on"`
+			Section *assessment.Rubric `json:"section,omitempty"`
 		}
 		if !assessmentJSON(w, r, &body) {
 			return
 		}
-		v, err := s.assessment.CreateCalibrationFrom(r.Context(), r.PathValue("id"), owner, body.BasedOn)
+		v, err := s.assessment.CreateCalibrationSection(r.Context(), r.PathValue("id"), owner, body.BasedOn, body.Section)
 		if err != nil {
 			assessmentError(w, err)
 			return
 		}
 		writeJSON(w, 201, v)
+	}))
+	s.mux.HandleFunc("POST /assignments/{id}/calibrations/coverage", ownerOnly(func(w http.ResponseWriter, r *http.Request, owner string) {
+		var body struct {
+			ProfileIDs []string `json:"profile_ids"`
+		}
+		if !assessmentJSON(w, r, &body) {
+			return
+		}
+		result, err := s.assessment.CalibrationCoverage(r.Context(), r.PathValue("id"), owner, body.ProfileIDs)
+		if err != nil {
+			assessmentError(w, err)
+			return
+		}
+		writeJSON(w, 200, result)
+	}))
+	s.mux.HandleFunc("POST /calibrations/{id}/preflight", ownerOnly(func(w http.ResponseWriter, r *http.Request, owner string) {
+		var body struct {
+			Revision int    `json:"revision"`
+			Guidance string `json:"guidance"`
+		}
+		if !assessmentJSON(w, r, &body) {
+			return
+		}
+		result, err := s.assessment.PreflightCalibration(r.Context(), r.PathValue("id"), owner, body.Revision, body.Guidance)
+		if err != nil {
+			assessmentError(w, err)
+			return
+		}
+		writeJSON(w, 200, result)
+	}))
+	s.mux.HandleFunc("POST /calibrations/{id}/examples/{example}/reference", ownerOnly(func(w http.ResponseWriter, r *http.Request, owner string) {
+		var body struct {
+			Revision int                   `json:"revision"`
+			Criteria []assessment.Judgment `json:"criteria"`
+			Note     string                `json:"note"`
+		}
+		if !assessmentJSON(w, r, &body) {
+			return
+		}
+		_, err := s.assessment.SaveCalibrationReference(r.Context(), r.PathValue("id"), owner, r.PathValue("example"), body.Revision, body.Criteria, body.Note)
+		if err != nil {
+			assessmentError(w, err)
+			return
+		}
+		s.writeCalibration(w, r, r.PathValue("id"), owner)
 	}))
 	s.mux.HandleFunc("GET /calibrations/{id}", ownerOnly(func(w http.ResponseWriter, r *http.Request, owner string) {
 		s.writeCalibration(w, r, r.PathValue("id"), owner)

@@ -87,3 +87,39 @@ func TestPrepareReportsOversizedSourceWithoutTruncating(t *testing.T) {
 		t.Fatal("inspection hid input blockage")
 	}
 }
+
+func TestPrepareIncludesGuidanceWithoutAddingItToBundle(t *testing.T) {
+	root := t.TempDir()
+	os.Mkdir(filepath.Join(root, "sample"), 0700)
+	source := strings.Repeat("x", 14500)
+	os.WriteFile(filepath.Join(root, "sample", "answer.py"), []byte(source), 0600)
+	manifest := `{"purpose":"holdout","rubric":{"title":"Review","paths":["answer.py"],"criteria":[{"id":"quality","description":"Explain the code","max_points":10}]},"examples":[{"id":"sample-01","directory":"sample"}]}`
+	m, guidanceFile, out := filepath.Join(root, "manifest.json"), filepath.Join(root, "guidance.txt"), filepath.Join(root, "packet")
+	os.WriteFile(m, []byte(manifest), 0600)
+	guidance := strings.Repeat("g", 2000)
+	os.WriteFile(guidanceFile, []byte(guidance), 0600)
+	if err := runCalibrationPrepare([]string{"--manifest", m, "--source-root", root, "--out", out, "--guidance-file", guidanceFile}); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(out, "preflight.json"))
+	var checks []calibrationPreflight
+	if err := json.Unmarshal(raw, &checks); err != nil {
+		t.Fatal(err)
+	}
+	if len(checks) != 1 || checks[0].Fits || checks[0].InputBytes >= 16000 || checks[0].WithGuidance == nil || *checks[0].WithGuidance <= 16000 || checks[0].GuidanceDigest != assessment.DigestBytes([]byte(guidance)) {
+		t.Fatal("guidance headroom failure not reported")
+	}
+	raw, _ = os.ReadFile(filepath.Join(out, "bundle.json"))
+	if strings.Contains(string(raw), guidance) {
+		t.Fatal("guidance was imported as source")
+	}
+	var bundle assessment.CalibrationBundle
+	json.Unmarshal(raw, &bundle)
+	if bundle.Examples[0].Files["answer.py"] != source {
+		t.Fatal("source was truncated")
+	}
+	raw, _ = os.ReadFile(filepath.Join(out, "inspect.html"))
+	if !strings.Contains(string(raw), "bytes with checked guidance") || !strings.Contains(string(raw), "Blocked") {
+		t.Fatal("inspection omitted guidance result")
+	}
+}

@@ -178,3 +178,60 @@ func TestOpenAILiveCompactSource(t *testing.T) {
 		}
 	}
 }
+
+// Staff-authored scaffold must not earn quality points. Both examples are
+// synthetic; no historical source or instructor reference is transmitted.
+func TestOpenAILiveStarterControl(t *testing.T) {
+	keyFile := os.Getenv("CAIRN_OPENAI_LIVE_KEY_FILE")
+	if keyFile == "" {
+		t.Skip("live synthetic evaluation is opt-in")
+	}
+	key, err := LoadOpenAIKeyFile(keyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, err := NewOpenAI(key, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, implemented := range []bool{false, true} {
+		name := "starter-only"
+		body := "    raise NotImplementedError('Implement this function')\n"
+		if implemented {
+			name = "student-attempt"
+			body = "    return sum(values) / len(values)\n"
+		}
+		t.Run(name, func(t *testing.T) {
+			d := inputDocument(t, "# Instructor-provided signature and docstring; fill in the body.\ndef mean(values):\n    \"\"\"Return the arithmetic mean of a nonempty list.\"\"\"\n"+body)
+			d.Rubric.Criteria = []Criterion{{ID: "quality", Description: "Assess clarity of the student's implementation. Supplied signatures and documentation earn no credit. A starter-only file is unassessable until instructor review.", MaxPoints: 5}}
+			request, err := provider.request(d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 70*time.Second)
+			defer cancel()
+			proposal, err := provider.respond(ctx, request, d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !implemented && (proposal.SubmissionStatus != "no_relevant_work" || proposal.Criteria[0].Points != nil) {
+				t.Fatal("starter-only work received numeric credit")
+			}
+			if implemented && (proposal.SubmissionStatus != "relevant_work" || proposal.Criteria[0].Points == nil) {
+				t.Fatal("substantive implementation treated as starter")
+			}
+			if implemented {
+				found := false
+				for _, c := range proposal.Criteria[0].Citations {
+					if c.Location == "line:4" {
+						found = true
+					}
+				}
+				if !found {
+					t.Fatal("implementation feedback did not cite the student-authored operation at line:4")
+				}
+			}
+			t.Logf("%s: %s; numeric score=%t", name, proposal.SubmissionStatus, proposal.Criteria[0].Points != nil)
+		})
+	}
+}

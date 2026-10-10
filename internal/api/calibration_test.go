@@ -64,6 +64,9 @@ func TestCalibrationOwnerRoutesAndBothHistoricalSources(t *testing.T) {
 		{"GET", "/calibrations/" + c.ID, nil},
 		{"POST", "/calibrations/" + c.ID + "/examples", map[string]any{"revision": 1, "files": map[string]string{"response.md": "private work"}}},
 		{"POST", "/calibrations/" + c.ID + "/capture", map[string]any{"revision": 1, "submission_id": "s"}},
+		{"POST", "/calibrations/" + c.ID + "/preflight", map[string]any{"revision": 1, "guidance": "private"}},
+		{"POST", "/calibrations/" + c.ID + "/examples/example/reference", map[string]any{"revision": 1, "note": "private"}},
+		{"POST", "/assignments/a/calibrations/coverage", map[string]any{"profile_ids": []string{c.ID}}},
 		{"POST", "/calibrations/" + c.ID + "/approve", map[string]any{"revision": 1, "guidance": "private"}},
 		{"DELETE", "/calibrations/" + c.ID, map[string]any{}},
 	} {

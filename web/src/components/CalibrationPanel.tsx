@@ -7,6 +7,9 @@ import {
   type Classroom,
   type Assignment,
   type SubmissionView,
+  type AssessmentRubric,
+  type CalibrationInputCheck,
+  type CalibrationCoverage,
 } from "../api";
 import { Button, type Notify } from "./ui";
 
@@ -46,7 +49,8 @@ export function CalibrationPanel({
       const next = await action();
       setRecord(next);
       setProfiles(await api.listCalibrations(assignmentID));
-      if (next?.status === "ready") onSelect(next.id);
+      if (next?.status === "ready" && !next.document?.section)
+        onSelect(next.id);
     } catch (e) {
       notify(String(e), "err");
       if (record) {
@@ -79,7 +83,7 @@ export function CalibrationPanel({
         >
           <option value="">No instructor calibration selected</option>
           {profiles
-            .filter((p) => p.status === "ready")
+            .filter((p) => p.status === "ready" && !p.section_title)
             .map((p) => (
               <option key={p.id} value={p.id}>
                 Reviewed profile {p.id.slice(0, 8)} · revision {p.revision}
@@ -105,6 +109,28 @@ export function CalibrationPanel({
           ? "Test selected profile on another historical sample"
           : "Start a calibration"}
       </Button>
+      <SectionStart
+        assignmentID={assignmentID}
+        busy={busy}
+        run={run}
+        notify={notify}
+      />
+      <CoverageReview
+        key={profiles.map((p) => `${p.id}:${p.revision}`).join(",")}
+        assignmentID={assignmentID}
+        profiles={profiles}
+        notify={notify}
+      />
+      {record?.status === "ready" && record.document?.section ? (
+        <Button
+          disabled={busy}
+          onClick={() =>
+            void run(() => api.createCalibration(assignmentID, record.id))
+          }
+        >
+          Test this section on reserved examples
+        </Button>
+      ) : null}
       <label>
         Open a saved calibration
         <select
@@ -119,7 +145,8 @@ export function CalibrationPanel({
           <option value="">Choose a profile</option>
           {profiles.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.id.slice(0, 8)} · {p.status} · revision {p.revision}
+              {p.section_title || p.id.slice(0, 8)} · {p.status} · revision{" "}
+              {p.revision}
             </option>
           ))}
         </select>
@@ -177,6 +204,10 @@ function CalibrationEditor({
   notify: Notify;
 }) {
   const d = record.document!;
+  const [inputChecks, setInputChecks] = useState<
+    CalibrationInputCheck[] | null
+  >(null);
+  const [checking, setChecking] = useState(false);
   const [files, setFiles] = useState<Record<string, string>>({});
   const [guidance, setGuidance] = useState(d.guidance);
   const ready = record.status === "ready";
@@ -292,9 +323,12 @@ function CalibrationEditor({
           className="input"
           rows={5}
           maxLength={2000}
-          disabled={busy || ready}
+          disabled={busy || ready || checking}
           value={guidance}
-          onChange={(e) => setGuidance(e.target.value)}
+          onChange={(e) => {
+            setGuidance(e.target.value);
+            setInputChecks(null);
+          }}
           aria-describedby={`guidance-${record.id}`}
         />
       </label>
@@ -305,9 +339,39 @@ function CalibrationEditor({
         accompanies future work; model weights are not trained.
       </p>
       {!ready ? (
+        <>
+          <Button
+            disabled={busy || checking}
+            onClick={() => {
+              setChecking(true);
+              void api
+                .preflightCalibration(record.id, record.revision, guidance)
+                .then(setInputChecks)
+                .catch((e) => notify(String(e), "err"))
+                .finally(() => setChecking(false));
+            }}
+          >
+            Check example sizes with this guidance
+          </Button>
+          <p>
+            This checks included examples only. Reserved and future work must
+            also be checked with the approved guidance.
+          </p>
+          {inputChecks?.map((c) => (
+            <p key={c.example_id}>
+              {c.fits ? "Fits" : "Blocked"}: {c.input_bytes} / {c.limit_bytes}{" "}
+              bytes. {c.issue}
+            </p>
+          ))}
+        </>
+      ) : null}
+      {!ready ? (
         <Button
           disabled={
             busy ||
+            checking ||
+            !inputChecks ||
+            inputChecks.some((c) => !c.fits) ||
             !guidance.trim() ||
             d.examples.length === 0 ||
             d.examples.every((e) => !!e.exclusion_note) ||
@@ -319,7 +383,9 @@ function CalibrationEditor({
             )
           }
         >
-          Approve profile for new assessments
+          {d.section
+            ? "Approve this section for evaluation"
+            : "Approve profile for new assessments"}
         </Button>
       ) : (
         <p>
@@ -499,9 +565,19 @@ function ExampleReview({
 }) {
   const [sourceReviewed, setSourceReviewed] = useState(false);
   const [criteria, setCriteria] = useState<Judgment[]>(
-    () => e.review?.criteria || e.document.proposal?.criteria || [],
+    () =>
+      e.review?.criteria ||
+      e.reference?.criteria ||
+      e.document.proposal?.criteria ||
+      e.document.rubric.criteria.map((c) => ({
+        criterion_id: c.id,
+        points: null,
+        feedback: "",
+        uncertainty: "Instructor reference; execution not verified.",
+        citations: [],
+      })),
   );
-  const [note, setNote] = useState(e.review?.note || "");
+  const [note, setNote] = useState(e.review?.note || e.reference?.note || "");
   const [exclusion, setExclusion] = useState("");
   const ready = record.status === "ready";
   function change(index: number, patch: Partial<Judgment>) {
@@ -557,7 +633,9 @@ function ExampleReview({
             calibration.
           </label>
           <Button
-            disabled={!sourceReviewed}
+            disabled={
+              !sourceReviewed || (!!record.document?.section && !e.reference)
+            }
             onClick={() =>
               void run(() =>
                 api.generateCalibration(
@@ -605,8 +683,25 @@ function ExampleReview({
           </Button>
         </details>
       ) : null}
-      {e.document.proposal ? (
-        <>
+      {record.document?.section && !e.reference ? (
+        <p>
+          Save your independent reference judgments before generating feedback
+          for this section.
+        </p>
+      ) : null}
+      {e.reference ? (
+        <details>
+          <summary>Frozen independent instructor reference</summary>
+          <p>{e.reference.note}</p>
+          {e.reference.criteria.map((c) => (
+            <p key={c.criterion_id}>
+              {c.criterion_id}: {c.points ?? "Unassessable"} — {c.feedback}
+            </p>
+          ))}
+        </details>
+      ) : null}
+      <>
+        {e.document.proposal ? (
           <details>
             <summary>Original proposed feedback and scores</summary>
             {e.document.proposal.criteria.map((c) => (
@@ -616,144 +711,162 @@ function ExampleReview({
               </p>
             ))}
           </details>
-          <fieldset disabled={busy || ready || !!e.exclusion_note}>
-            <legend>Your calibration judgments</legend>
-            {criteria.map((c, i) => (
-              <fieldset key={c.criterion_id}>
-                <legend>{c.criterion_id}</legend>
-                <p>
-                  Proposed:{" "}
-                  {e.document.proposal?.criteria.find(
-                    (j) => j.criterion_id === c.criterion_id,
-                  )?.points ?? "Unassessable"}
-                  . Maximum:{" "}
-                  {
+        ) : null}
+        <fieldset
+          disabled={
+            busy ||
+            ready ||
+            !!e.exclusion_note ||
+            (!e.document.proposal && (!!e.reference || !!e.generation))
+          }
+        >
+          <legend>
+            {e.document.proposal
+              ? "Your calibration judgments"
+              : "Your independent reference judgments"}
+          </legend>
+          {criteria.map((c, i) => (
+            <fieldset key={c.criterion_id}>
+              <legend>{c.criterion_id}</legend>
+              <p>
+                {e.document.proposal ? (
+                  <>
+                    Proposed:{" "}
+                    {e.document.proposal.criteria.find(
+                      (j) => j.criterion_id === c.criterion_id,
+                    )?.points ?? "Unassessable"}
+                    .{" "}
+                  </>
+                ) : (
+                  <>No model proposal has been generated. </>
+                )}
+                Maximum:{" "}
+                {
+                  e.document.rubric.criteria.find(
+                    (j) => j.id === c.criterion_id,
+                  )?.max_points
+                }
+                .
+              </p>
+              <label>
+                Your points (empty means unassessable)
+                <input
+                  className="input"
+                  type="number"
+                  min="0"
+                  max={
                     e.document.rubric.criteria.find(
                       (j) => j.id === c.criterion_id,
                     )?.max_points
                   }
-                  .
-                </p>
-                <label>
-                  Your points (empty means unassessable)
-                  <input
-                    className="input"
-                    type="number"
-                    min="0"
-                    max={
-                      e.document.rubric.criteria.find(
-                        (j) => j.id === c.criterion_id,
-                      )?.max_points
-                    }
-                    step="any"
-                    value={c.points ?? ""}
-                    onChange={(ev) =>
-                      change(i, {
-                        points:
-                          ev.target.value === ""
-                            ? null
-                            : Number(ev.target.value),
-                      })
-                    }
-                  />
-                </label>
-                <label>
-                  Your corrected feedback
-                  <textarea
-                    className="input"
-                    value={c.feedback}
-                    onChange={(ev) => change(i, { feedback: ev.target.value })}
-                  />
-                </label>
-                <label>
-                  Uncertainty or limitations
-                  <textarea
-                    className="input"
-                    value={c.uncertainty}
-                    onChange={(ev) =>
-                      change(i, { uncertainty: ev.target.value })
-                    }
-                  />
-                </label>
-                <ul>
-                  {c.citations.map((citation, j) => (
-                    <li key={j}>
-                      {citation.path} · {citation.location}{" "}
-                      <button
-                        onClick={() =>
-                          change(i, {
-                            citations: c.citations.filter((_, n) => n !== j),
-                          })
-                        }
-                      >
-                        Remove citation
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                <label>
-                  Add supporting evidence
-                  <select
-                    className="input"
-                    value=""
-                    onChange={(ev) => {
-                      const [a, s] = ev.target.value.split(":").map(Number);
-                      const artifact = e.document.artifacts[a];
-                      const segment = artifact?.segments[s];
-                      if (segment)
+                  step="any"
+                  value={c.points ?? ""}
+                  onChange={(ev) =>
+                    change(i, {
+                      points:
+                        ev.target.value === "" ? null : Number(ev.target.value),
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Your corrected feedback
+                <textarea
+                  className="input"
+                  value={c.feedback}
+                  onChange={(ev) => change(i, { feedback: ev.target.value })}
+                />
+              </label>
+              <label>
+                Uncertainty or limitations
+                <textarea
+                  className="input"
+                  value={c.uncertainty}
+                  onChange={(ev) => change(i, { uncertainty: ev.target.value })}
+                />
+              </label>
+              <ul>
+                {c.citations.map((citation, j) => (
+                  <li key={j}>
+                    {citation.path} · {citation.location}{" "}
+                    <button
+                      onClick={() =>
                         change(i, {
-                          citations: [
-                            ...c.citations,
-                            {
-                              path: artifact.path,
-                              sha256: artifact.sha256,
-                              location: segment.location,
-                            },
-                          ],
-                        });
-                    }}
-                  >
-                    <option value="">Choose a source location</option>
-                    {e.document.artifacts.flatMap((a, ai) =>
-                      a.segments.map((s, si) => (
-                        <option key={`${ai}:${si}`} value={`${ai}:${si}`}>
-                          {a.path} · {s.location}
-                        </option>
-                      )),
-                    )}
-                  </select>
-                </label>
-              </fieldset>
-            ))}
-            <label>
-              Why you agree or what should change
-              <textarea
-                className="input"
-                value={note}
-                onChange={(ev) => setNote(ev.target.value)}
-              />
-            </label>
-            {!ready ? (
-              <Button
-                disabled={!note.trim()}
-                onClick={() =>
-                  void run(() =>
-                    api.reviewCalibration(
-                      record.id,
-                      e.id,
-                      record.revision,
-                      criteria,
-                      note,
-                    ),
-                  )
-                }
-              >
-                Save instructor calibration review
-              </Button>
-            ) : null}
-          </fieldset>
-        </>
-      ) : null}
+                          citations: c.citations.filter((_, n) => n !== j),
+                        })
+                      }
+                    >
+                      Remove citation
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <label>
+                Add supporting evidence
+                <select
+                  className="input"
+                  value=""
+                  onChange={(ev) => {
+                    const [a, s] = ev.target.value.split(":").map(Number);
+                    const artifact = e.document.artifacts[a];
+                    const segment = artifact?.segments[s];
+                    if (segment)
+                      change(i, {
+                        citations: [
+                          ...c.citations,
+                          {
+                            path: artifact.path,
+                            sha256: artifact.sha256,
+                            location: segment.location,
+                          },
+                        ],
+                      });
+                  }}
+                >
+                  <option value="">Choose a source location</option>
+                  {e.document.artifacts.flatMap((a, ai) =>
+                    a.segments.map((s, si) => (
+                      <option key={`${ai}:${si}`} value={`${ai}:${si}`}>
+                        {a.path} · {s.location}
+                      </option>
+                    )),
+                  )}
+                </select>
+              </label>
+            </fieldset>
+          ))}
+          <label>
+            Why you agree or what should change
+            <textarea
+              className="input"
+              value={note}
+              onChange={(ev) => setNote(ev.target.value)}
+            />
+          </label>
+          {!ready ? (
+            <Button
+              disabled={!note.trim()}
+              onClick={() =>
+                void run(() =>
+                  (e.document.proposal
+                    ? api.reviewCalibration
+                    : api.referenceCalibration)(
+                    record.id,
+                    e.id,
+                    record.revision,
+                    criteria,
+                    note,
+                  ),
+                )
+              }
+            >
+              {e.document.proposal
+                ? "Save instructor calibration review"
+                : "Save independent reference before generation"}
+            </Button>
+          ) : null}
+        </fieldset>
+      </>
     </article>
   );
 }
@@ -819,6 +932,140 @@ function BundleImport({
       >
         Import source for inspection
       </Button>
+    </details>
+  );
+}
+
+function SectionStart({
+  assignmentID,
+  busy,
+  run,
+  notify,
+}: {
+  assignmentID: string;
+  busy: boolean;
+  run: (fn: () => Promise<Calibration | null>) => Promise<void>;
+  notify: Notify;
+}) {
+  const [section, setSection] = useState<AssessmentRubric | null>(null);
+  const readVersion = useRef(0);
+  useEffect(
+    () => () => {
+      readVersion.current++;
+    },
+    [],
+  );
+  return (
+    <details>
+      <summary>Start a section of this assignment</summary>
+      <p>
+        Save the complete assignment rubric first. Choose the section rubric
+        from a prepared packet. Section criteria must keep the assignment’s
+        descriptions and points. Each section stays attached to the same parent
+        assignment.
+      </p>
+      <label>
+        Section rubric file
+        <input
+          type="file"
+          accept=".json,application/json"
+          disabled={busy}
+          onChange={async (e) => {
+            const version = ++readVersion.current;
+            setSection(null);
+            const file = e.target.files?.[0];
+            if (!file) return;
+            try {
+              if (file.size > 65536)
+                throw Error("Section rubric must be at most 64 KiB.");
+              const value = JSON.parse(await file.text()) as AssessmentRubric;
+              if (version === readVersion.current) setSection(value);
+            } catch (err) {
+              if (version === readVersion.current) notify(String(err), "err");
+            }
+          }}
+        />
+      </label>
+      <Button
+        disabled={busy || !section}
+        onClick={() =>
+          void run(() => api.createCalibration(assignmentID, "", section!))
+        }
+      >
+        Create private section draft
+      </Button>
+    </details>
+  );
+}
+
+function CoverageReview({
+  assignmentID,
+  profiles,
+  notify,
+}: {
+  assignmentID: string;
+  profiles: Calibration[];
+  notify: Notify;
+}) {
+  const [ids, setIDs] = useState<string[]>([]);
+  const [coverage, setCoverage] = useState<CalibrationCoverage | null>(null);
+  const [checking, setChecking] = useState(false);
+  return (
+    <details>
+      <summary>Check combined rubric coverage</summary>
+      <p>
+        Select the approved profiles for one review round. This checks for
+        missing and repeated criteria; it does not combine scores, publish a
+        grade, or make section profiles usable for whole-assignment generation.
+      </p>
+      {profiles
+        .filter((p) => p.status === "ready")
+        .map((p) => (
+          <label key={p.id}>
+            <input
+              type="checkbox"
+              disabled={checking}
+              checked={ids.includes(p.id)}
+              onChange={(e) => {
+                setCoverage(null);
+                setIDs(
+                  e.target.checked
+                    ? [...ids, p.id]
+                    : ids.filter((id) => id !== p.id),
+                );
+              }}
+            />
+            {p.section_title || `Whole rubric ${p.id.slice(0, 8)}`}
+          </label>
+        ))}
+      <Button
+        disabled={checking || ids.length === 0}
+        onClick={() => {
+          setChecking(true);
+          void api
+            .calibrationCoverage(assignmentID, ids)
+            .then(setCoverage)
+            .catch((e) => notify(String(e), "err"))
+            .finally(() => setChecking(false));
+        }}
+      >
+        Check selected profiles
+      </Button>
+      {coverage ? (
+        <div role="status">
+          <p>
+            {coverage.complete
+              ? "Every criterion is covered exactly once."
+              : "Coverage needs attention."}{" "}
+            Covered rubric weight: {coverage.covered_points} /{" "}
+            {coverage.max_points}.
+          </p>
+          <p>
+            Missing: {coverage.missing.join(", ") || "None"}. Repeated:{" "}
+            {coverage.overlapping.join(", ") || "None"}.
+          </p>
+        </div>
+      ) : null}
     </details>
   );
 }

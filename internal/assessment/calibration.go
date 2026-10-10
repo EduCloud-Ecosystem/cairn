@@ -24,6 +24,7 @@ type CalibrationBinding struct {
 	Guidance string `json:"guidance"`
 }
 type CalibrationExample struct {
+	Reference          *Review           `json:"reference,omitempty"`
 	SampleID           string            `json:"sample_id,omitempty"`
 	ExclusionNote      string            `json:"exclusion_note,omitempty"`
 	SourceSubmissionID string            `json:"source_submission_id,omitempty"`
@@ -80,6 +81,7 @@ func (s Service) CaptureCalibrationExample(ctx context.Context, cid, owner, subm
 }
 
 type CalibrationDocument struct {
+	Section       bool                 `json:"section,omitempty"`
 	BundleDigest  string               `json:"bundle_digest,omitempty"`
 	SamplePurpose string               `json:"sample_purpose,omitempty"`
 	BasedOn       *CalibrationBinding  `json:"based_on,omitempty"`
@@ -96,6 +98,10 @@ func (s Service) CreateCalibration(ctx context.Context, assignment, owner string
 	return s.CreateCalibrationFrom(ctx, assignment, owner, "")
 }
 func (s Service) CreateCalibrationFrom(ctx context.Context, assignment, owner, baseID string) (*store.Calibration, error) {
+	return s.CreateCalibrationSection(ctx, assignment, owner, baseID, nil)
+}
+
+func (s Service) CreateCalibrationSection(ctx context.Context, assignment, owner, baseID string, section *Rubric) (*store.Calibration, error) {
 	if owner == "" || owner == "local-development" {
 		return nil, errors.New("sign in as an instructor to calibrate")
 	}
@@ -110,9 +116,24 @@ func (s Service) CreateCalibrationFrom(ctx context.Context, assignment, owner, b
 	if err = ValidateRubric(rubric); err != nil {
 		return nil, err
 	}
-	d := CalibrationDocument{Rubric: rubric, Model: DefaultOpenAIModel, PromptVersion: PromptVersion, PolicyVersion: PolicyVersion, Examples: []CalibrationExample{}}
+	if baseID != "" && section == nil {
+		_, base, e := s.calibration(ctx, baseID, owner)
+		if e != nil {
+			return nil, e
+		}
+		if base.Section {
+			section = &base.Rubric
+		}
+	}
+	if section != nil {
+		if err = validateSectionRubric(rubric, *section); err != nil {
+			return nil, err
+		}
+		rubric = *section
+	}
+	d := CalibrationDocument{Section: section != nil, Rubric: rubric, Model: DefaultOpenAIModel, PromptVersion: PromptVersion, PolicyVersion: PolicyVersion, Examples: []CalibrationExample{}}
 	if baseID != "" {
-		d.BasedOn, err = s.CalibrationBinding(ctx, baseID, owner, assignment, r.Digest)
+		d.BasedOn, err = s.calibrationBindingScoped(ctx, baseID, owner, assignment, r.Digest, Digest(d.Rubric))
 		if err != nil {
 			return nil, err
 		}
@@ -237,7 +258,7 @@ func (s Service) ApproveCalibration(ctx context.Context, cid, owner string, revi
 		return nil, store.ErrConflict
 	}
 	if len(d.Examples) == 0 || strings.TrimSpace(guidance) == "" || len(guidance) > 2000 {
-		return nil, errors.New("review historical examples and provide up to 2000 characters of reusable instructor guidance")
+		return nil, errors.New("review historical examples and provide up to 2000 bytes of reusable instructor guidance")
 	}
 	reviewed := 0
 	for _, e := range d.Examples {
@@ -259,6 +280,12 @@ func (s Service) ApproveCalibration(ctx context.Context, cid, owner string, revi
 	if r.Digest != c.RubricDigest || d.Model != DefaultOpenAIModel || d.PromptVersion != PromptVersion || d.PolicyVersion != PolicyVersion {
 		return nil, errors.New("rubric or model configuration changed; start a fresh calibration")
 	}
+	checks := calibrationInputChecks(d, strings.TrimSpace(guidance))
+	for _, check := range checks {
+		if !check.Fits {
+			return nil, errors.New("instructor guidance exceeds the input budget for an included example; run preflight before approval")
+		}
+	}
 	d.Guidance = strings.TrimSpace(guidance)
 	now := time.Now().UTC()
 	d.ApprovedAt = &now
@@ -266,9 +293,15 @@ func (s Service) ApproveCalibration(ctx context.Context, cid, owner string, revi
 	return s.saveCalibration(ctx, c, d)
 }
 func (s Service) CalibrationBinding(ctx context.Context, cid, owner, assignment, rubricDigest string) (*CalibrationBinding, error) {
+	return s.calibrationBindingScoped(ctx, cid, owner, assignment, rubricDigest, "")
+}
+func (s Service) calibrationBindingScoped(ctx context.Context, cid, owner, assignment, rubricDigest, scopeDigest string) (*CalibrationBinding, error) {
 	c, d, err := s.calibration(ctx, cid, owner)
 	if err != nil {
 		return nil, err
+	}
+	if (scopeDigest == "" && d.Section) || (scopeDigest != "" && Digest(d.Rubric) != scopeDigest) {
+		return nil, errors.New("section calibration cannot be used outside its captured rubric scope")
 	}
 	if c.Status != "ready" || c.AssignmentID != assignment || c.RubricDigest != rubricDigest || d.Model != DefaultOpenAIModel || d.PromptVersion != PromptVersion || d.PolicyVersion != PolicyVersion {
 		return nil, errors.New("calibration is not approved for this instructor, rubric and model configuration")
@@ -315,6 +348,16 @@ func (g *Generator) GenerateCalibration(ctx context.Context, cid, owner, eid str
 	if e.ExclusionNote != "" || e.Document.Proposal != nil || inputDigest != e.Document.InputDigest {
 		return nil, store.ErrConflict
 	}
+	if d.Section && e.Reference == nil {
+		return nil, errors.New("save an independent instructor reference before section generation")
+	}
+	current, err := g.Service.Store.GetAssessmentRubric(ctx, c.AssignmentID)
+	if err != nil {
+		return nil, err
+	}
+	if current.Digest != c.RubricDigest {
+		return nil, errors.New("parent rubric changed; start a fresh calibration")
+	}
 	if err = g.validateCalibration(ctx, e.Document, c.AssignmentID, c.RubricDigest); err != nil {
 		return nil, err
 	}
@@ -335,6 +378,14 @@ func (g *Generator) GenerateCalibration(ctx context.Context, cid, owner, eid str
 		attempt.ResponseID = p.Usage.ResponseID
 	}
 	var result *store.Calibration
+	if callErr == nil {
+		current, freshErr := g.Service.Store.GetAssessmentRubric(ctx, c.AssignmentID)
+		if freshErr != nil {
+			callErr = freshErr
+		} else if current.Digest != c.RubricDigest {
+			callErr = store.ErrConflict
+		}
+	}
 	if callErr == nil {
 		callErr = g.validateCalibration(ctx, e.Document, c.AssignmentID, c.RubricDigest)
 	}
