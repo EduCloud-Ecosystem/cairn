@@ -30,6 +30,8 @@ import (
 
 // TestResult is the outcome of a single graded check.
 type TestResult struct {
+	ExitCode  *int    `json:"exit_code,omitempty"`
+	TimedOut  bool    `json:"timed_out,omitempty"`
 	Name      string  `json:"name"`
 	Passed    bool    `json:"passed"`
 	Points    float64 `json:"points"`     // points awarded (0 when failed)

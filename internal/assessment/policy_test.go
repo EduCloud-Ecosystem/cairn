@@ -110,7 +110,9 @@ func TestBlankSourceCannotBeScoredEvenWhenModelClaimsRelevantWork(t *testing.T) 
 	json.Unmarshal(r.Document, &d)
 	provider, _ := NewOpenAI("fixture", "")
 	provider.client.Transport = roundTripFunc(func(*http.Request) (*http.Response, error) {
-		return mockResponse(200, responseJSON(t, providerCriteria(0))), nil
+		js := providerCriteria(0)
+		js[0].Citations = nil
+		return mockResponse(200, responseJSON(t, js)), nil
 	})
 	_, err = NewGenerator(svc, provider, []string{"c"}).Generate(context.Background(), r.ID, d.InputDigest)
 	if err == nil || !strings.Contains(err.Error(), "invalid_proposal_submission_status") {

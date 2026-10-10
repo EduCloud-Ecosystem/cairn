@@ -41,6 +41,9 @@ import (
 // Setup-level changes persist between steps only within the mounted checkout, so
 // the toolchain belongs in the image; setup should build into the working tree.
 type ContainerRunner struct {
+	// ReadOnlyWork keeps captured source immutable during evidence-only checks.
+	ReadOnlyWork bool
+
 	Runtime           string        // "docker" (default) or "podman"
 	Isolation         IsolationTier // "" / "shared" (default) or "gvisor"; see IsolationTier
 	DefaultImage      string        // used when a spec sets no image
@@ -235,16 +238,33 @@ type commandRunner interface {
 
 type execCommandRunner struct{}
 
+// Discard excess output while continuing to drain the process pipes. An
+// untrusted program cannot exhaust host memory by printing until its timeout.
+type boundedOutput struct{ buf bytes.Buffer }
+
+func (b *boundedOutput) String() string { return b.buf.String() }
+func (b *boundedOutput) Write(p []byte) (int, error) {
+	n := len(p)
+	room := (64 << 10) - b.buf.Len()
+	if room > 0 {
+		if room < len(p) {
+			p = p[:room]
+		}
+		_, _ = b.buf.Write(p)
+	}
+	return n, nil
+}
+
 func (execCommandRunner) run(ctx context.Context, name string, args []string, timeout time.Duration) (cmdResult, error) {
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(cctx, name, args...)
-	var so, se bytes.Buffer
+	so, se := boundedOutput{}, boundedOutput{}
 	cmd.Stdout = &so
 	cmd.Stderr = &se
 	err := cmd.Run()
 	res := cmdResult{stdout: so.String(), stderr: se.String()}
-	if cctx.Err() == context.DeadlineExceeded {
+	if cctx.Err() != nil {
 		res.timedOut = true
 		return res, nil
 	}
@@ -371,6 +391,10 @@ func (r *ContainerRunner) resolveLimits(spec gradingspec.Spec, test *gradingspec
 // prevent, so Run resolves once up front and fails before reaching this point.
 func (r *ContainerRunner) buildRunArgs(image, command string, lim resolvedLimits, mountDir, name string, tier IsolationTier) []string {
 	mem := strconv.Itoa(lim.memoryMB) + "m"
+	mount := mountDir + ":/work"
+	if r.ReadOnlyWork {
+		mount += ":ro"
+	}
 	args := []string{
 		"run", "--rm", "--name", name,
 		"--cap-drop", "ALL",
@@ -382,7 +406,7 @@ func (r *ContainerRunner) buildRunArgs(image, command string, lim resolvedLimits
 		"--cpus", strconv.FormatFloat(lim.cpus, 'f', -1, 64),
 		"--tmpfs", "/tmp:rw,size=64m",
 		"--env", "HOME=/tmp",
-		"-v", mountDir + ":/work",
+		"-v", mount,
 		"--workdir", "/work",
 		"--user", r.user(),
 	}
@@ -462,7 +486,11 @@ func (r *ContainerRunner) Run(ctx context.Context, spec gradingspec.Spec, dir st
 			return Result{}, fmt.Errorf("container runner: %w", err)
 		}
 
-		tr := TestResult{Name: t.Name, MaxPoints: t.Points}
+		exitCode := out.exitCode
+		tr := TestResult{Name: t.Name, MaxPoints: t.Points, ExitCode: &exitCode, TimedOut: out.timedOut}
+		if out.timedOut {
+			tr.ExitCode = nil
+		}
 		passed := false
 		switch {
 		case out.timedOut:
@@ -472,7 +500,7 @@ func (r *ContainerRunner) Run(ctx context.Context, spec gradingspec.Spec, dir st
 			if t.Match.Trim {
 				got, exp = strings.TrimSpace(got), strings.TrimSpace(exp)
 			}
-			passed = got == exp
+			passed = out.exitCode == 0 && got == exp
 			if !passed {
 				tr.Detail = "stdout did not match expected"
 			}

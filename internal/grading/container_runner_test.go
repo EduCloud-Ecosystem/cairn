@@ -257,3 +257,25 @@ func TestContainerDefaultUserIsHostUID(t *testing.T) {
 		t.Fatalf("--user = %q, want host uid:gid %q", got, want)
 	}
 }
+
+func TestReadOnlyEvidenceWorkAndNonzeroMatch(t *testing.T) {
+	fr := &fakeRunner{byCommand: map[string]cmdResult{"check": {stdout: "PASS", exitCode: 2}}}
+	r := &ContainerRunner{DefaultImage: "fixture", ReadOnlyWork: true, exec: fr}
+	res, _ := runContainer(t, r, gradingspec.Spec{Tests: []gradingspec.Test{{Name: "check", Run: "check", Points: 0, Match: &gradingspec.OutputMatch{Expected: "PASS"}}}})
+	if flagValue(fr.calls[0].args, "-v") != "/host/checkout:/work:ro" {
+		t.Fatal("evidence source is writable")
+	}
+	if res.Tests[0].Passed || res.Tests[0].ExitCode == nil || *res.Tests[0].ExitCode != 2 {
+		t.Fatal("nonzero command accepted matching output")
+	}
+}
+func TestCapturedProcessOutputIsBounded(t *testing.T) {
+	var b boundedOutput
+	data := make([]byte, 128<<10)
+	if n, err := b.Write(data); err != nil || n != len(data) || len(b.String()) != 64<<10 {
+		t.Fatal("output writer did not bound retained bytes")
+	}
+	if n, _ := b.Write(data); n != len(data) || len(b.String()) != 64<<10 {
+		t.Fatal("output writer stopped draining excess bytes")
+	}
+}

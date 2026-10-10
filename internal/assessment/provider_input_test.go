@@ -136,7 +136,7 @@ func TestCompactInputCitationsBindAcrossBlockBoundary(t *testing.T) {
 	p, _ := NewOpenAI("fixture", "")
 	p.client.Transport = roundTripFunc(func(*http.Request) (*http.Response, error) {
 		criteria := providerCriteria(7)
-		criteria[0].Citations[0].Location = "line:21"
+		criteria[0].Citations[0].Quote = "Explain the evidence here."
 		return mockResponse(200, responseJSON(t, criteria)), nil
 	})
 	got, err := NewGenerator(svc, p, []string{"c"}).Generate(context.Background(), r.ID, d.InputDigest)

@@ -42,13 +42,15 @@ func TestSectionCalibrationReferencesCoverageAndReuse(t *testing.T) {
 		}
 		json.Unmarshal(body, &request)
 		var input struct {
-			Criteria []Criterion `json:"instructor_rubric"`
+			Criteria []Criterion        `json:"instructor_rubric"`
+			Evidence []providerArtifact `json:"student_evidence"`
 		}
 		json.Unmarshal([]byte(request.Input), &input)
 		js := []providerJudgment{}
 		for _, c := range input.Criteria {
 			j := providerCriteria(3)[0]
 			j.CriterionID = c.ID
+			j.Citations[0].Quote = input.Evidence[0].LineBlocks[0].Text
 			js = append(js, j)
 		}
 		return mockResponse(200, responseJSON(t, js)), nil
@@ -248,7 +250,9 @@ func TestSectionGenerationDiscardsResponseAfterParentChange(t *testing.T) {
 		if err := svc.Store.PutAssessmentRubric(ctx, &store.AssessmentRubric{AssignmentID: "a", Digest: DigestBytes(raw), Document: raw}); err != nil {
 			t.Fatal(err)
 		}
-		return mockResponse(200, responseJSON(t, providerCriteria(3))), nil
+		js := providerCriteria(3)
+		js[0].Citations[0].Quote = "Relevant historical answer"
+		return mockResponse(200, responseJSON(t, js)), nil
 	})
 	g := NewGenerator(svc, p, []string{"c"})
 	if _, err = g.GenerateCalibration(ctx, c.ID, "teacher", e.ID, c.Revision, e.Document.InputDigest); !errors.Is(err, store.ErrConflict) {

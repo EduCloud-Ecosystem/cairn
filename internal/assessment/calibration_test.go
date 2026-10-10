@@ -46,7 +46,9 @@ func TestInstructorCalibrationWorkflow(t *testing.T) {
 	e := d.Examples[0]
 	p, _ := NewOpenAI("fixture", "")
 	p.client.Transport = roundTripFunc(func(*http.Request) (*http.Response, error) {
-		return mockResponse(200, responseJSON(t, providerCriteria(7))), nil
+		js := providerCriteria(7)
+		js[0].Citations[0].Quote = "HISTORICAL_ONLY evidence and reasoning."
+		return mockResponse(200, responseJSON(t, js)), nil
 	})
 	g := NewGenerator(svc, p, []string{"c"})
 	c, err = g.GenerateCalibration(ctx, c.ID, "instructor-a", e.ID, c.Revision, e.Document.InputDigest)
@@ -116,6 +118,11 @@ func TestInstructorCalibrationWorkflow(t *testing.T) {
 	if fresh.Document.Calibration == nil || fresh.Document.Calibration.ID != c.ID {
 		t.Fatal("fresh round omitted prior guidance")
 	}
+	p.client.Transport = roundTripFunc(func(*http.Request) (*http.Response, error) {
+		js := providerCriteria(7)
+		js[0].Citations[0].Quote = "Fresh held-out reasoning."
+		return mockResponse(200, responseJSON(t, js)), nil
+	})
 	if _, err = g.GenerateCalibration(ctx, followup.ID, "instructor-a", fresh.ID, followup.Revision, fresh.Document.InputDigest); err != nil {
 		t.Fatal(err)
 	}
