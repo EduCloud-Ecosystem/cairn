@@ -82,6 +82,46 @@ func TestAssessmentBrowserFixture(t *testing.T) {
 	proposal := assessment.Proposal{SubmissionStatus: "relevant_work", Source: "fixture", Model: "synthetic-no-model", PromptVersion: "fixture-v1", InputDigest: d.InputDigest, Criteria: []assessment.Judgment{{CriterionID: "reason", Points: &points, Feedback: "Add detail linking your evidence to the conclusion.", Uncertainty: "Synthetic proposal only", Citations: []assessment.Citation{{Path: "response.md", SHA256: d.Artifacts[0].SHA256, Location: "line:1"}}}}}
 	b, _ = json.Marshal(proposal)
 	os.WriteFile(filepath.Join(dir, "proposal.json"), b, 0600)
+
+	if os.Getenv("CAIRN_ASSESSMENT_BROWSER_REVIEW_EVIDENCE") == "1" {
+		ids := map[string]string{}
+		for _, mode := range []string{"before-generation", "with-proposal"} {
+			cal, e := srv.assessment.CreateCalibrationSection(ctx, "a", "fixture-instructor", "", &rubric)
+			if e != nil {
+				t.Fatal(e)
+			}
+			source := "Synthetic evidence supports a bounded conclusion."
+			cal, e = srv.assessment.AddCalibrationExample(ctx, cal.ID, "fixture-instructor", cal.Revision, map[string]string{"response.md": source})
+			if e != nil {
+				t.Fatal(e)
+			}
+			var doc assessment.CalibrationDocument
+			json.Unmarshal(cal.Document, &doc)
+			example := doc.Examples[0]
+			points := 4.0
+			judgments := []assessment.Judgment{{CriterionID: "reason", Points: &points, Feedback: "Credit the stated evidence; the limitation needs elaboration.", Uncertainty: "Assistant-authored synthetic adjudication; not a blind instructor reference.", Citations: []assessment.Citation{{Path: "response.md", SHA256: assessment.DigestBytes([]byte(source)), Location: "line:1", Quote: source}}}}
+			zero := 0
+			report := &assessment.CalibrationExecutionReport{Version: "cairn-calibration-execution-v1", Completed: true, ExpectedSamples: 1, CreatedAt: time.Now().UTC(), RubricDigest: assessment.Digest(rubric), BundleDigest: strings.Repeat("b", 64), ChecksDigest: strings.Repeat("c", 64), Image: "sha256:" + strings.Repeat("d", 64), UncheckedCriteria: []string{}, Samples: []assessment.CalibrationExecutionSample{{SampleID: "synthetic-one", SourceHashes: map[string]string{"response.md": assessment.DigestBytes([]byte(source))}, Status: "completed", Tests: []assessment.CalibrationExecutionObservation{{CriterionID: "reason", Status: "passed", ExitCode: &zero, Detail: "Synthetic imported observation; not a live execution attestation."}}}}}
+			packet, e := assessment.PrepareCalibrationReviewPacket(assessment.CalibrationBundle{Version: assessment.CalibrationBundleVersion, Purpose: "calibration", Rubric: rubric, Examples: []assessment.CalibrationBundleExample{{ID: "synthetic-one", Files: map[string]string{"response.md": source}}}}, assessment.CalibrationReviewPacket{SampleID: "synthetic-one", Authorship: "assistant", Author: "Synthetic assistant", Note: "Delegated local review, not an independent instructor rating.", Judgments: judgments, Execution: report})
+			if e != nil {
+				t.Fatal(e)
+			}
+			raw, _ := json.MarshalIndent(packet, "", "  ")
+			os.WriteFile(filepath.Join(dir, "review-packet.json"), raw, 0600)
+			if mode == "with-proposal" {
+				doc.Examples[0].Document.Proposal = &assessment.Proposal{Source: "fixture", Model: "synthetic-no-model", PromptVersion: "fixture-v1", InputDigest: example.Document.InputDigest, Criteria: judgments, SubmissionStatus: "relevant_work"}
+				previous := cal.Revision
+				cal.Revision++
+				cal.Document, _ = json.Marshal(doc)
+				if e = st.UpdateCalibration(ctx, cal, previous); e != nil {
+					t.Fatal(e)
+				}
+			}
+			ids[mode] = cal.ID
+		}
+		raw, _ := json.Marshal(ids)
+		os.WriteFile(filepath.Join(dir, "calibration-ids.json"), raw, 0600)
+	}
 	os.WriteFile(filepath.Join(dir, "url"), []byte(server.URL), 0600)
 	t.Log("Synthetic fixture listening", server.URL)
 	deadline := time.After(10 * time.Minute)
