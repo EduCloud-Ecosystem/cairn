@@ -1,0 +1,111 @@
+{
+  "baseline": {
+    "tests": 32,
+    "passed": true
+  },
+  "mutants": [
+    {
+      "name": "missing_duplicate_removal",
+      "caught": true,
+      "required_failure": "duplicates_without_missingness",
+      "failure_count": 2
+    },
+    {
+      "name": "ignores_subset",
+      "caught": true,
+      "required_failure": "subset_preserves_unrelated_missingness",
+      "failure_count": 2
+    },
+    {
+      "name": "sample_ddof",
+      "caught": true,
+      "required_failure": "population_and_layout",
+      "failure_count": 8
+    },
+    {
+      "name": "constant_nan",
+      "caught": true,
+      "required_failure": "constant_column",
+      "failure_count": 7
+    },
+    {
+      "name": "returns_safe_not_raw_stds",
+      "caught": true,
+      "required_failure": "constant_column",
+      "failure_count": 2
+    },
+    {
+      "name": "inclusive_cutoff",
+      "caught": true,
+      "required_failure": "strict_cutoff_and_shape",
+      "failure_count": 9
+    },
+    {
+      "name": "membership_instead_of_density",
+      "caught": true,
+      "required_failure": "density_not_membership",
+      "failure_count": 12
+    },
+    {
+      "name": "recalibrate_each_batch",
+      "caught": true,
+      "required_failure": "batch_invariance",
+      "failure_count": 9
+    },
+    {
+      "name": "wrong_quantile_interpolation",
+      "caught": true,
+      "required_failure": "reference_linear_quantile",
+      "failure_count": 8
+    },
+    {
+      "name": "invalid_fraction_accepted",
+      "caught": true,
+      "required_failure": "reference_fraction_validation",
+      "failure_count": 7
+    },
+    {
+      "name": "silhouette_raises",
+      "caught": true,
+      "required_failure": "one_cluster",
+      "failure_count": 1
+    }
+  ],
+  "starter": {
+    "tests": 32,
+    "all_unimplemented": true
+  },
+  "notebook": {
+    "schema_valid": true,
+    "executed": true,
+    "training_rows": 36,
+    "reference_rows": 12,
+    "evaluation_rows": 12,
+    "batch_invariance": true
+  },
+  "environment": {
+    "numpy": "2.5.3",
+    "pandas": "3.0.6",
+    "scipy": "1.16.2",
+    "scikit-learn": "1.7.2",
+    "matplotlib": "3.11.2",
+    "nbformat": "5.11.1"
+  },
+  "version": "educloud-clustering-v2-validation-v1",
+  "assignment_version": "educloud-clustering-v2.0.0",
+  "validated_at": "2026-10-10T17:22:30.585473+00:00",
+  "template_manifest_sha256": "123c86cc06f57d860bf04b37e757397805c4e441dd0d5255dfe16ea67218449e",
+  "test_suite_sha256": "2963eef7387776dad2184526fd3d596bd04671a8e3d17269c0d8c26fbb0f0dfa",
+  "reference_fixture_sha256": "8ed622f2f8d5a047ee695f1f64eeb6ad9e0ce941cac9ef0cffcb5f841cc0aca5",
+  "validation_driver_sha256": "1ecb5440ebc50bed0b5d976d5685e5ffa031aa73cd8f693cb82b0ca625ed6410",
+  "image": "sha256:44f39230c709f8281e5ef9bd04c39924087e2e4b2e19ec5d77c77553fb1029d4",
+  "isolation": "Local container, network none, read-only files/root, UID 65534, no capabilities, 64 PIDs, 512 MiB, 1 CPU",
+  "ci_scope": "Generated materials, release hashes and six publication-drift tests. CI does not execute the student suite against a completed solution.",
+  "evidence_limits": [
+    "The completed fixture was authored by the assistant, not taken from a student. It is kept privately and excluded from the distributed template.",
+    "32 checks includes two optional membership tests. Default student run has 30 required tests plus two skips.",
+    "Notebook cells were executed as Python in the pinned environment and validated with nbformat; no interactive Jupyter UI or hosted course was tested.",
+    "Eleven deliberately faulty implementations were rejected by the expected regression checks. This is bounded synthetic verification, not proof of grading fairness or real-course acceptance.",
+    "No historical rubric, student file, grade, instructor reference or provider setting changed."
+  ]
+}

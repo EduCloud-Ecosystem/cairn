@@ -140,6 +140,14 @@ what to change; exit status is 1 if any check fails.
 Add `--verify-hosts` to make one read-only API call per configured Git host and
 prove the credentials are accepted rather than merely present.
 
+## Versioned teaching templates
+
+[`templates/clustering-v2`](templates/clustering-v2/README.md) is a prospective
+Python clustering exercise with a student starter, notebook, synthetic data,
+published contract tests and one 100-point rubric. Its manifest binds the
+release files; it includes no historical student answers. This is a new
+assignment version, not a change to existing submissions or course grades.
+
 ## Build
 
 Requires Go 1.25+.

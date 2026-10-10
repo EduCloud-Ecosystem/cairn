@@ -256,3 +256,16 @@ supported Brightspace), so the manual fallback ships first and independently.
 - [ ] Instructor review of real historical sources/rubric interpretation, followed
   by generated proposals, calibration corrections and fresh-sample evaluation.
   Prepared source alone does not establish grading quality or course acceptance.
+
+### Prospective clustering assignment contract (October 10, 2026)
+
+- [x] New v2 student template: consistent 95 functional + 5 quality points,
+  specified cleaning/default/constant-column behavior, fixed density cutoff
+  calibrated separately from evaluation, optional membership uncertainty,
+  synthetic notebook data and regression checks. CI guards generated materials
+  and release digests. See `templates/clustering-v2/README.md`.
+- [ ] Connect private execution evidence and delegated adjudications to the
+  instructor review UI with explicit authorship; they must not silently become
+  independent instructor reference judgments or approved calibration profiles.
+- [ ] Verify a real instructor/course adoption of the new assignment version.
+  Local synthetic validation does not publish or accept it for a live class.

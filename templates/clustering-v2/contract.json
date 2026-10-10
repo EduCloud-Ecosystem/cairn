@@ -1,0 +1,193 @@
+{
+  "version": "educloud-clustering-v2.0.0",
+  "status": "prospective course template; not applied to historical work",
+  "python": "3.12",
+  "total_points": 100,
+  "functions": [
+    {
+      "name": "load_energy_data",
+      "parameters": "path: str",
+      "returns": "pd.DataFrame",
+      "criterion_id": "functional_1",
+      "contract": "Read the given CSV with pandas.read_csv and return its DataFrame."
+    },
+    {
+      "name": "initial_summary",
+      "parameters": "df: pd.DataFrame",
+      "returns": "dict[str, object]",
+      "criterion_id": "functional_2",
+      "contract": "Return n_rows, n_cols, columns, numeric_columns and categorical_columns. Column lists retain input order; categorical means non-numeric. Do not mutate df."
+    },
+    {
+      "name": "clean_energy_data",
+      "parameters": "df: pd.DataFrame, subset_cols: Iterable[str] | None = None",
+      "returns": "pd.DataFrame",
+      "criterion_id": "functional_3",
+      "contract": "Return a copy after dropping duplicate rows, then rows missing any supplied subset column. With None, use all columns. An empty subset removes no rows for missingness. Keep original surviving index labels. Do not mutate df."
+    },
+    {
+      "name": "filter_year_range",
+      "parameters": "df: pd.DataFrame, start_year: int, end_year: int",
+      "returns": "pd.DataFrame",
+      "criterion_id": "functional_4",
+      "contract": "Return a copy of rows with start_year <= year <= end_year. Preserve index labels and do not mutate df. Assume a year column and start_year <= end_year."
+    },
+    {
+      "name": "select_clustering_features",
+      "parameters": "df: pd.DataFrame, feature_cols: Iterable[str]",
+      "returns": "pd.DataFrame",
+      "criterion_id": "functional_5",
+      "contract": "Return a copy containing exactly the requested columns in requested order, preserving rows and index. Assume columns exist. Do not mutate df."
+    },
+    {
+      "name": "standardize_features",
+      "parameters": "df_features: pd.DataFrame",
+      "returns": "tuple[pd.DataFrame, np.ndarray, np.ndarray]",
+      "criterion_id": "functional_6",
+      "contract": "For nonempty numeric finite input, return (scaled, means, stds) using population standard deviation ddof=0. Means and raw stds are 1D NumPy arrays in column order. Use an internal divisor of one for zero std; constant columns become zero but returned raw std stays zero. Preserve columns/index and do not mutate input. Raise ValueError for empty rows/columns or any NaN/infinite value."
+    },
+    {
+      "name": "compute_calinski_harabasz_scores",
+      "parameters": "X: pd.DataFrame | np.ndarray, cluster_range: Iterable[int], random_state: int = 42",
+      "returns": "dict[int, float]",
+      "criterion_id": "functional_7",
+      "contract": "For each valid k in cluster_range, fit sklearn KMeans(n_clusters=k, random_state=random_state, n_init=10) and compute sklearn.metrics.calinski_harabasz_score. Return {k: score}. Do not mutate X; assume finite input and valid k."
+    },
+    {
+      "name": "run_kmeans",
+      "parameters": "X: pd.DataFrame | np.ndarray, n_clusters: int, random_state: int = 42",
+      "returns": "tuple[np.ndarray, np.ndarray]",
+      "criterion_id": "functional_8",
+      "contract": "Fit sklearn KMeans(n_clusters=n_clusters, random_state=random_state, n_init=10). Return 1D labels and 2D cluster centers. Do not mutate X; assume finite valid input."
+    },
+    {
+      "name": "run_hierarchical_clustering",
+      "parameters": "X: pd.DataFrame | np.ndarray, n_clusters: int, linkage: str = \"ward\"",
+      "returns": "np.ndarray",
+      "criterion_id": "functional_9",
+      "contract": "Return sklearn AgglomerativeClustering labels with the requested n_clusters and linkage. Support ward, complete and average. Do not mutate X; assume finite valid input."
+    },
+    {
+      "name": "fit_gmm",
+      "parameters": "X: pd.DataFrame | np.ndarray, n_components: int, random_state: int = 42",
+      "returns": "object",
+      "criterion_id": "functional_10",
+      "contract": "Fit and return sklearn GaussianMixture(n_components=n_components, random_state=random_state). Do not mutate X; assume finite valid input."
+    },
+    {
+      "name": "gmm_cluster_labels",
+      "parameters": "model: object, X: pd.DataFrame | np.ndarray",
+      "returns": "np.ndarray",
+      "criterion_id": "functional_10",
+      "contract": "Return model.predict(X) as the 1D NumPy labels. Do not fit or change the model or X."
+    },
+    {
+      "name": "calibrate_outlier_cutoff",
+      "parameters": "model: object, X_reference: pd.DataFrame | np.ndarray, tail_fraction: float = 0.01",
+      "returns": "float",
+      "criterion_id": "functional_11",
+      "contract": "Using a fitted model and separate nonempty reference set, return the float quantile of model.score_samples(X_reference), with method=\"linear\". Require finite tail_fraction strictly between 0 and 1 and finite 1D scores of the same length as X_reference; otherwise raise ValueError. Do not refit the model or mutate inputs. The returned value is a log-density cutoff, not a probability."
+    },
+    {
+      "name": "gmm_outlier_mask",
+      "parameters": "model: object, X: pd.DataFrame | np.ndarray, log_density_cutoff: float",
+      "returns": "np.ndarray",
+      "criterion_id": "functional_11",
+      "contract": "Return a 1D boolean NumPy mask where model.score_samples(X) is strictly less than the supplied finite log_density_cutoff. Equality is not an outlier. Require finite 1D scores matching len(X); otherwise raise ValueError. A valid empty score array returns an empty boolean mask. Never recalibrate on this evaluation batch, refit the model or mutate X. Reject a nonfinite cutoff with ValueError."
+    },
+    {
+      "name": "silhouette_for_labels",
+      "parameters": "X: pd.DataFrame | np.ndarray, labels: np.ndarray",
+      "returns": "float",
+      "criterion_id": "functional_12",
+      "contract": "Return sklearn.metrics.silhouette_score(X, labels). Return np.nan when labels contain fewer than two clusters; do not raise for that case. Assume all other sklearn preconditions are satisfied. Do not mutate inputs."
+    },
+    {
+      "name": "membership_uncertainty_mask",
+      "parameters": "model: object, X: pd.DataFrame | np.ndarray, min_confidence: float = 0.9",
+      "returns": "np.ndarray",
+      "criterion_id": null,
+      "contract": "Optional unscored exercise. Return model.predict_proba(X).max(axis=1) < min_confidence. Require finite 0 < min_confidence <= 1 or raise ValueError. Assume valid normalized responsibilities with at least one component. Return a 1D boolean NumPy mask without changing model or input. This measures uncertain component membership, not low mixture density."
+    }
+  ],
+  "criteria": [
+    {
+      "id": "functional_1",
+      "max_points": 5,
+      "title": "CSV loading",
+      "description": "Read the given CSV and return its DataFrame."
+    },
+    {
+      "id": "functional_2",
+      "max_points": 5,
+      "title": "Data summary",
+      "description": "Correct dimensions and ordered numeric/non-numeric column lists without mutation."
+    },
+    {
+      "id": "functional_3",
+      "max_points": 10,
+      "title": "Cleaning",
+      "description": "Remove duplicates (4), implement missing-value/default/subset behavior (4), preserve input and surviving index (2)."
+    },
+    {
+      "id": "functional_4",
+      "max_points": 5,
+      "title": "Year filtering",
+      "description": "Inclusive year bounds with unchanged input and preserved surviving index."
+    },
+    {
+      "id": "functional_5",
+      "max_points": 5,
+      "title": "Feature selection",
+      "description": "Requested column order, unchanged row/index structure, independent copy."
+    },
+    {
+      "id": "functional_6",
+      "max_points": 10,
+      "title": "Standardization",
+      "description": "Population transform including constants and validation (6), correct raw means/stds arrays (2), preserved layout and input (2)."
+    },
+    {
+      "id": "functional_7",
+      "max_points": 10,
+      "title": "Calinski\u2013Harabasz search",
+      "description": "Correct k-to-score mapping using seeded KMeans n_init=10 and sklearn CH, without mutation."
+    },
+    {
+      "id": "functional_8",
+      "max_points": 10,
+      "title": "K-Means",
+      "description": "Correct labels/centers, seeded reproducibility with n_init=10, unchanged input."
+    },
+    {
+      "id": "functional_9",
+      "max_points": 5,
+      "title": "Hierarchical clustering",
+      "description": "Requested cluster count and ward/complete/average linkage with unchanged input."
+    },
+    {
+      "id": "functional_10",
+      "max_points": 10,
+      "title": "GMM fitting and labels",
+      "description": "Proper seeded GaussianMixture fit and predict, without mutation/refitting during prediction."
+    },
+    {
+      "id": "functional_11",
+      "max_points": 10,
+      "title": "Density outliers",
+      "description": "Reference-set linear quantile with valid tail fraction (4); fixed log-density cutoff, strict comparison, boolean shape, finite validation and batch invariance (6)."
+    },
+    {
+      "id": "functional_12",
+      "max_points": 10,
+      "title": "Silhouette",
+      "description": "Match sklearn and return np.nan for fewer than two clusters, without mutation."
+    },
+    {
+      "id": "quality",
+      "max_points": 5,
+      "title": "Code quality",
+      "description": "Readable modular logic and names; no hardcoding or unnecessary duplication. Instructor-reviewed. No separate style-test points."
+    }
+  ]
+}

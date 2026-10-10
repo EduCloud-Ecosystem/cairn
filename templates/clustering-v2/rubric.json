@@ -1,0 +1,73 @@
+{
+  "title": "educloud-clustering-v2.0.0",
+  "paths": [
+    "ds.py"
+  ],
+  "criteria": [
+    {
+      "id": "functional_1",
+      "max_points": 5,
+      "description": "Read the given CSV and return its DataFrame."
+    },
+    {
+      "id": "functional_2",
+      "max_points": 5,
+      "description": "Correct dimensions and ordered numeric/non-numeric column lists without mutation."
+    },
+    {
+      "id": "functional_3",
+      "max_points": 10,
+      "description": "Remove duplicates (4), implement missing-value/default/subset behavior (4), preserve input and surviving index (2)."
+    },
+    {
+      "id": "functional_4",
+      "max_points": 5,
+      "description": "Inclusive year bounds with unchanged input and preserved surviving index."
+    },
+    {
+      "id": "functional_5",
+      "max_points": 5,
+      "description": "Requested column order, unchanged row/index structure, independent copy."
+    },
+    {
+      "id": "functional_6",
+      "max_points": 10,
+      "description": "Population transform including constants and validation (6), correct raw means/stds arrays (2), preserved layout and input (2)."
+    },
+    {
+      "id": "functional_7",
+      "max_points": 10,
+      "description": "Correct k-to-score mapping using seeded KMeans n_init=10 and sklearn CH, without mutation."
+    },
+    {
+      "id": "functional_8",
+      "max_points": 10,
+      "description": "Correct labels/centers, seeded reproducibility with n_init=10, unchanged input."
+    },
+    {
+      "id": "functional_9",
+      "max_points": 5,
+      "description": "Requested cluster count and ward/complete/average linkage with unchanged input."
+    },
+    {
+      "id": "functional_10",
+      "max_points": 10,
+      "description": "Proper seeded GaussianMixture fit and predict, without mutation/refitting during prediction."
+    },
+    {
+      "id": "functional_11",
+      "max_points": 10,
+      "description": "Reference-set linear quantile with valid tail fraction (4); fixed log-density cutoff, strict comparison, boolean shape, finite validation and batch invariance (6)."
+    },
+    {
+      "id": "functional_12",
+      "max_points": 10,
+      "description": "Match sklearn and return np.nan for fewer than two clusters, without mutation."
+    },
+    {
+      "id": "quality",
+      "max_points": 5,
+      "description": "Readable modular logic and names; no hardcoding or unnecessary duplication. Instructor-reviewed. No separate style-test points."
+    }
+  ]
+}
