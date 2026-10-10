@@ -89,6 +89,33 @@ func TestCalibrationOwnerRoutesAndBothHistoricalSources(t *testing.T) {
 	if len(d.Examples) != 2 || d.Examples[1].SourceSubmissionID != "s" {
 		t.Fatal("historical inputs not captured")
 	}
+
+	// Bundle imports preserve authentication and reject attempted review injection.
+	rec = request("POST", "/assignments/a/calibrations", map[string]any{}, owner)
+	var batch store.Calibration
+	json.Unmarshal(rec.Body.Bytes(), &batch)
+	bundle := assessment.CalibrationBundle{Version: assessment.CalibrationBundleVersion, Purpose: "calibration", Rubric: rubric, Examples: []assessment.CalibrationBundleExample{{ID: "sample-one", Files: map[string]string{"response.md": "Historical batch source"}}}}
+	path := "/calibrations/" + batch.ID + "/bundle"
+	body := map[string]any{"revision": batch.Revision, "bundle": bundle}
+	for _, cookie := range []*http.Cookie{nil, student, other} {
+		rec = request("POST", path, body, cookie)
+		if rec.Code != 401 && rec.Code != 404 {
+			t.Fatal("bundle owner boundary bypassed")
+		}
+	}
+	raw, _ := json.Marshal(body)
+	var injected map[string]any
+	json.Unmarshal(raw, &injected)
+	injected["bundle"].(map[string]any)["review"] = map[string]any{"reviewer": "teacher", "points": 10}
+	if rec = request("POST", path, injected, owner); rec.Code != 400 {
+		t.Fatal("bundle accepted imported judgment")
+	}
+	if rec = request("POST", path, body, owner); rec.Code != 200 {
+		t.Fatal(rec.Body.String())
+	}
+	if rec = request("POST", path, body, owner); rec.Code != 409 {
+		t.Fatal("bundle replay duplicated source")
+	}
 	// Calibrated course captures must not expose private guidance via otherwise
 	// instance-wide operator assessment endpoints.
 	pub := &store.AssessmentRecord{ID: "bound", SubmissionID: "s", Revision: strings.Repeat("a", 40), RubricDigest: "d", Status: "collected"}

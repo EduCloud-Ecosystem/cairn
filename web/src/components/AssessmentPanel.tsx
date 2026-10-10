@@ -162,9 +162,9 @@ export function AssessmentPanel({
         />
         <p id={`artifact-help-${assignmentID}`} className="muted small">
           Each line becomes a separate file path. Press Enter or Return to add
-          another. Text, Markdown, Python, R and notebook source are supported.
-          All listed files are required; missing or unsupported files block
-          assessment.
+          another. Text, Markdown, Quarto, R Markdown, Python, R and notebook
+          source are supported. All listed files are required; missing or
+          unsupported files block assessment.
         </p>
         {rubric.criteria.map((c, i) => (
           <fieldset key={i}>
@@ -432,9 +432,9 @@ function ReviewCard({
           <div>
             <p>
               This sends the saved rubric, extracted source and any captured
-              instructor guidance to OpenAI. Review the captured evidence first. Roster details and original files are
-              excluded; identifying details inside the source are not
-              automatically removed.
+              instructor guidance to OpenAI. Review the captured evidence first.
+              Roster details and original files are excluded; identifying
+              details inside the source are not automatically removed.
             </p>
             <Button
               disabled={busy}

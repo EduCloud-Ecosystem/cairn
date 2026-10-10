@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   api,
   type Calibration,
@@ -203,6 +203,12 @@ function CalibrationEditor({
         {d.examples.filter((e) => e.exclusion_note).length}. Review completion
         does not establish accuracy on new work.
       </p>
+      {d.bundle_digest ? (
+        <p>
+          Imported {d.sample_purpose} sample. Membership is frozen; each example
+          still needs source inspection, generation and your review.
+        </p>
+      ) : null}
       <details>
         <summary>Captured rubric</summary>
         {d.rubric.criteria.map((c) => (
@@ -214,7 +220,7 @@ function CalibrationEditor({
           </p>
         ))}
       </details>
-      {!ready ? (
+      {!ready && !d.bundle_digest ? (
         <fieldset disabled={busy || d.examples.length >= 9}>
           <legend>Add past course work</legend>
           <p>
@@ -228,7 +234,7 @@ function CalibrationEditor({
               Historical file for {path}
               <input
                 type="file"
-                accept=".txt,.md,.py,.r,.R,.ipynb"
+                accept=".txt,.md,.qmd,.rmd,.Rmd,.py,.r,.R,.ipynb"
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
                   setFiles((prev) => {
@@ -264,6 +270,9 @@ function CalibrationEditor({
             Save uploaded example without sending to model
           </Button>
           <HistoricalSourcePicker record={record} run={run} notify={notify} />
+          {d.examples.length === 0 ? (
+            <BundleImport record={record} run={run} notify={notify} />
+          ) : null}
         </fieldset>
       ) : null}
       {d.examples.map((e, index) => (
@@ -502,7 +511,10 @@ function ExampleReview({
   }
   return (
     <article className="card">
-      <h5>Historical example {index + 1}</h5>
+      <h5>
+        Historical example {index + 1}
+        {e.sample_id ? ` · ${e.sample_id}` : ""}
+      </h5>
       <p>
         Source:{" "}
         {e.source_submission_id
@@ -743,5 +755,70 @@ function ExampleReview({
         </>
       ) : null}
     </article>
+  );
+}
+
+function BundleImport({
+  record,
+  run,
+  notify,
+}: {
+  record: Calibration;
+  run: (fn: () => Promise<Calibration | null>) => Promise<void>;
+  notify: Notify;
+}) {
+  const [bundle, setBundle] = useState<unknown>(null);
+  const [name, setName] = useState("");
+  const readVersion = useRef(0);
+  useEffect(
+    () => () => {
+      readVersion.current++;
+    },
+    [],
+  );
+  return (
+    <details>
+      <summary>Import a prepared historical sample</summary>
+      <p>
+        A source-only bundle must match this saved rubric exactly. Import
+        creates no proposals or grades and sends nothing to OpenAI. Use a fresh
+        round based on an approved profile for a held-out sample.
+      </p>
+      <label>
+        Calibration bundle JSON
+        <input
+          type="file"
+          accept=".json,application/json"
+          onChange={async (event) => {
+            const version = ++readVersion.current;
+            const file = event.target.files?.[0];
+            setBundle(null);
+            setName("");
+            if (!file) return;
+            try {
+              if (file.size > 900 * 1024)
+                throw Error("Bundle must be at most 900 KiB.");
+              const value = JSON.parse(await file.text());
+              if (version !== readVersion.current) return;
+              setBundle(value);
+              setName(file.name);
+            } catch (error) {
+              if (version === readVersion.current) notify(String(error), "err");
+            }
+          }}
+        />
+      </label>
+      {name ? <p>Selected: {name}</p> : null}
+      <Button
+        disabled={!bundle}
+        onClick={() =>
+          void run(() =>
+            api.importCalibrationBundle(record.id, record.revision, bundle),
+          )
+        }
+      >
+        Import source for inspection
+      </Button>
+    </details>
   );
 }

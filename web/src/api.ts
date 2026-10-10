@@ -196,6 +196,7 @@ export interface AssessmentRecord {
   };
 }
 export interface CalibrationExample {
+  sample_id?: string;
   exclusion_note?: string;
   id: string;
   source_submission_id?: string;
@@ -216,6 +217,8 @@ export interface Calibration {
   revision: number;
   status: "draft" | "ready";
   document?: {
+    bundle_digest?: string;
+    sample_purpose?: string;
     rubric: AssessmentRubric;
     model: string;
     prompt_version: string;
@@ -232,6 +235,11 @@ export const api = {
   calibration: (id: string) => req<Calibration>("GET", `/calibrations/${id}`),
   deleteCalibration: (id: string) =>
     req<unknown>("DELETE", `/calibrations/${id}`, {}),
+  importCalibrationBundle: (id: string, revision: number, bundle: unknown) =>
+    req<Calibration>("POST", `/calibrations/${id}/bundle`, {
+      revision,
+      bundle,
+    }),
   addCalibrationExample: (
     id: string,
     revision: number,

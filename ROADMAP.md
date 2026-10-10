@@ -246,3 +246,13 @@ supported Brightspace), so the manual fallback ships first and independently.
 - [ ] Each instructor's representative calibration and course destination/retention acceptance;
   broader format extraction, production queuing and billing-aware budgets remain
   follow-ups. See `docs/llm-assessment.md`; production provider activation is off.
+
+### Historical calibration intake (October 9, 2026)
+
+- [x] Private offline sample preparation, source inspection packet and atomic
+  owner-scoped bundle import into an empty draft; calibration/holdout membership
+  and exact-source overlap checks against prior profiles.
+- [x] Passive Quarto/R Markdown extraction for narrative and code feedback.
+- [ ] Instructor review of real historical sources/rubric interpretation, followed
+  by generated proposals, calibration corrections and fresh-sample evaluation.
+  Prepared source alone does not establish grading quality or course acceptance.
