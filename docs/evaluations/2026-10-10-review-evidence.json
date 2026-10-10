@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-10",
+  "scope": "Synthetic local calibration review evidence integration",
+  "checks": {
+    "go_build_vet_full_race_suite": "passed",
+    "final_affected_go_packages_race": "passed",
+    "dashboard_typecheck_build": "passed",
+    "dashboard_tests": 25,
+    "browser_upload_and_source_quote": "passed",
+    "browser_assisted_reference_block": "passed",
+    "browser_explicit_copy_and_review": "passed",
+    "browser_reload_persistence": "passed",
+    "browser_null_score_and_empty_citations": "passed",
+    "sqlite_profiles_remain_drafts": true,
+    "sqlite_independent_references_created": 0,
+    "sqlite_grades_created": 0,
+    "sqlite_provider_requests": 0
+  },
+  "fixture": "TestAssessmentBrowserFixture with CAIRN_ASSESSMENT_BROWSER_REVIEW_EVIDENCE=1",
+  "limitations": [
+    "Proposals and execution reports in the browser fixture are synthetic and preseeded.",
+    "Provider separation and assisted generation are tested with a mock transport, not a live model call.",
+    "Imported report hashes bind source and rubric but do not attest actual execution or authorship.",
+    "No historical source was transmitted, live course accepted, profile approved, or production deployment performed."
+  ]
+}

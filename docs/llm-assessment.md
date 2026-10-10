@@ -659,4 +659,69 @@ Local synthetic Docker verification distinguished correct, incorrect and stub
 implementations and exercised read-only source/policy/rootfs, denied egress,
 non-root identity, no-new-privileges, memory and PID caps. Historical execution
 is exploratory evidence, not independent held-out grading validation. Results
-are not yet automatically attached to assessment drafts or sent to a model.
+can be explicitly attached to calibration examples as supporting evidence using
+the workflow below. They are never sent to a model.
+
+### Attributed supporting evidence
+
+Build a private packet for one exact source-bundle sample:
+
+```sh
+cairn calibration-review-packet \
+  --bundle /private/bundle.json --sample sample-01 \
+  --execution /private/run/execution.json \
+  --judgments /private/judgments.json \
+  --authorship assistant --author "Local adjudication assistant" \
+  --note "Reviewed interpretation; execution has bounded coverage." \
+  --out /private/new-review-packet
+```
+
+`--judgments` accepts a JSON array of Cairn judgments (`criterion_id`, `points`,
+`feedback`, `uncertainty`, and `citations`). Citations use `path`, `sha256`,
+`location`, and an exact `quote` from the captured source. Scored judgments need
+supporting citations. Null remains unassessable; partial adjudications may omit
+criteria without assigning or renormalizing their points. Existing offline
+review formats are not interchangeable with this array.
+
+Either execution or judgments may be omitted. Judgments require authorship
+`assistant`, `instructor-assisted`, or `external-reviewer`. For checks alone,
+omit `--judgments` and select `--authorship execution-only`. The builder performs
+passive source extraction and validation only. It refuses an existing output
+directory and writes the new directory/file with permissions 0700/0600.
+
+In the instructor console, open a calibration example and choose **Supporting
+review evidence → Attach a review packet**. Upload or paste `review-packet.json`.
+The owner-scoped endpoint checks the current revision, exact rubric digest,
+source paths/hashes, score bounds, and quoted locations. Reports must be complete
+and account for checked and unchecked criteria. A full-source report cannot be
+attached to a compact excerpt or a different section rubric. Prepare evidence
+against that exact source and rubric instead of changing its hashes.
+
+The console distinguishes claimed authorship from the authenticated importing
+instructor and server timestamp. Hash matches establish source correspondence;
+they do not verify who wrote a judgment, ran a check, or whether its conclusion
+is correct. Packet/report digests identify canonical decoded JSON, not original
+file bytes or signed execution attestations. Only the selected execution sample
+is retained in the example, alongside report, bundle, check-plan and image
+identifiers. Keep the private original report for a full audit.
+
+Up to four attachments can be added before final instructor review or exclusion.
+They are immutable supporting records and do not modify model input, proposals,
+references, grades or profile approval. After generating feedback, **Use
+adjudication in instructor review form** copies only the included criteria into
+the editable form. Saving the instructor review remains a separate action.
+
+Attaching assisted judgments before a reference closes that example's independent
+reference path. Section feedback may then proceed explicitly as assisted
+calibration, subject to the usual source-send authorization and provider controls.
+A reference saved earlier stays unchanged; execution-only material does not
+block independent references. Assisted agreement is not blind validation.
+Ready profiles retain attachments but still require actual instructor reviews
+and explicit approval. Deleting the calibration deletes its attachments through
+the existing private-data lifecycle.
+
+The October 10 synthetic browser check verified upload, attributed display,
+source-quote inspection, explicit copying and review, and persistence after
+reload. Both profiles remained drafts with no independent references; the
+fixture recorded zero grades and zero provider requests. Real-course instructor
+acceptance and authorized source transmission remain separate steps.

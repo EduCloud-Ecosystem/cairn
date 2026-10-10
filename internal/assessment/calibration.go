@@ -24,14 +24,15 @@ type CalibrationBinding struct {
 	Guidance string `json:"guidance"`
 }
 type CalibrationExample struct {
-	Reference          *Review           `json:"reference,omitempty"`
-	SampleID           string            `json:"sample_id,omitempty"`
-	ExclusionNote      string            `json:"exclusion_note,omitempty"`
-	SourceSubmissionID string            `json:"source_submission_id,omitempty"`
-	ID                 string            `json:"id"`
-	Document           Document          `json:"document"`
-	Review             *Review           `json:"review,omitempty"`
-	Generation         *store.Generation `json:"generation,omitempty"`
+	ReviewEvidence     []CalibrationReviewEvidence `json:"review_evidence,omitempty"`
+	Reference          *Review                     `json:"reference,omitempty"`
+	SampleID           string                      `json:"sample_id,omitempty"`
+	ExclusionNote      string                      `json:"exclusion_note,omitempty"`
+	SourceSubmissionID string                      `json:"source_submission_id,omitempty"`
+	ID                 string                      `json:"id"`
+	Document           Document                    `json:"document"`
+	Review             *Review                     `json:"review,omitempty"`
+	Generation         *store.Generation           `json:"generation,omitempty"`
 }
 
 func (s Service) CaptureCalibrationExample(ctx context.Context, cid, owner, submissionID, commit string, revision int) (*store.Calibration, error) {
@@ -348,8 +349,8 @@ func (g *Generator) GenerateCalibration(ctx context.Context, cid, owner, eid str
 	if e.ExclusionNote != "" || e.Document.Proposal != nil || inputDigest != e.Document.InputDigest {
 		return nil, store.ErrConflict
 	}
-	if d.Section && e.Reference == nil {
-		return nil, errors.New("save an independent instructor reference before section generation")
+	if d.Section && e.Reference == nil && !e.HasAssistedJudgments() {
+		return nil, errors.New("save an independent reference or attach explicitly attributed assisted judgments before section generation")
 	}
 	current, err := g.Service.Store.GetAssessmentRubric(ctx, c.AssignmentID)
 	if err != nil {

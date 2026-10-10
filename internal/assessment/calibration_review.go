@@ -54,7 +54,7 @@ func (s Service) SaveCalibrationReference(ctx context.Context, cid, owner, eid s
 		if e.ID != eid {
 			continue
 		}
-		if e.Reference != nil || e.Document.Proposal != nil || e.ExclusionNote != "" {
+		if e.Reference != nil || e.Document.Proposal != nil || e.ExclusionNote != "" || e.HasAssistedJudgments() {
 			return nil, store.ErrConflict
 		}
 		if _, err = s.Store.GetGeneration(ctx, "calibration:"+cid+":"+eid); !errors.Is(err, store.ErrNotFound) {

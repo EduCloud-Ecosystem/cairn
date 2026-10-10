@@ -113,6 +113,22 @@ func (s *Server) calibrationRoutes(protect func(http.HandlerFunc) http.HandlerFu
 		}
 		s.writeCalibration(w, r, r.PathValue("id"), owner)
 	}))
+	s.mux.HandleFunc("POST /calibrations/{id}/examples/{example}/evidence", ownerOnly(func(w http.ResponseWriter, r *http.Request, owner string) {
+		var body struct {
+			Revision int                                `json:"revision"`
+			Packet   assessment.CalibrationReviewPacket `json:"packet"`
+		}
+		if !assessmentJSON(w, r, &body) {
+			return
+		}
+		_, err := s.assessment.ImportCalibrationReviewEvidence(r.Context(), r.PathValue("id"), owner, r.PathValue("example"), body.Revision, body.Packet)
+		if err != nil {
+			assessmentError(w, err)
+			return
+		}
+		s.writeCalibration(w, r, r.PathValue("id"), owner)
+	}))
+
 	s.mux.HandleFunc("GET /calibrations/{id}", ownerOnly(func(w http.ResponseWriter, r *http.Request, owner string) {
 		s.writeCalibration(w, r, r.PathValue("id"), owner)
 	}))

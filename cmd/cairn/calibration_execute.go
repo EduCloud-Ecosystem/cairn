@@ -27,18 +27,8 @@ type calibrationChecks struct {
 	Files   map[string]string `json:"files"`
 	Spec    gradingspec.Spec  `json:"spec"`
 }
-type checkEvidence struct {
-	SampleID     string                 `json:"sample_id"`
-	SourceHashes map[string]string      `json:"source_sha256"`
-	Status       string                 `json:"status"`
-	Tests        []executionObservation `json:"tests,omitempty"`
-}
-type executionObservation struct {
-	CriterionID string `json:"criterion_id"`
-	Status      string `json:"status"`
-	ExitCode    *int   `json:"exit_code,omitempty"`
-	Detail      string `json:"detail,omitempty"`
-}
+type checkEvidence = assessment.CalibrationExecutionSample
+type executionObservation = assessment.CalibrationExecutionObservation
 
 func checkObservations(tests []grading.TestResult) []executionObservation {
 	out := []executionObservation{}
@@ -57,21 +47,7 @@ func checkObservations(tests []grading.TestResult) []executionObservation {
 	return out
 }
 
-type executionReport struct {
-	Completed         bool               `json:"completed"`
-	ExpectedSamples   int                `json:"expected_samples"`
-	UncheckedCriteria []string           `json:"unchecked_criteria"`
-	Version           string             `json:"version"`
-	CreatedAt         time.Time          `json:"created_at"`
-	BundleDigest      string             `json:"bundle_sha256"`
-	RubricDigest      string             `json:"rubric_digest"`
-	ChecksDigest      string             `json:"checks_sha256"`
-	Image             string             `json:"image"`
-	Isolation         string             `json:"isolation"`
-	Limits            gradingspec.Limits `json:"limits"`
-	Samples           []checkEvidence    `json:"samples"`
-	Note              string             `json:"note"`
-}
+type executionReport = assessment.CalibrationExecutionReport
 
 var pinnedCheckImage = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 

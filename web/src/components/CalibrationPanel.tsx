@@ -12,6 +12,7 @@ import {
   type CalibrationCoverage,
 } from "../api";
 import { Button, type Notify } from "./ui";
+import { CalibrationEvidence } from "./CalibrationEvidence";
 
 export function CalibrationPanel({
   assignmentID,
@@ -233,6 +234,16 @@ function CalibrationEditor({
         criteria. Excluded examples:{" "}
         {d.examples.filter((e) => e.exclusion_note).length}. Review completion
         does not establish accuracy on new work.
+      </p>
+      <p>
+        Independent references: {d.examples.filter((e) => e.reference).length}.
+        Examples with assisted judgments:{" "}
+        {
+          d.examples.filter((e) =>
+            e.review_evidence?.some((v) => v.judgments?.length),
+          ).length
+        }
+        . Assisted review is not blind validation.
       </p>
       {d.bundle_digest ? (
         <p>
@@ -580,6 +591,7 @@ function ExampleReview({
   const [note, setNote] = useState(e.review?.note || e.reference?.note || "");
   const [exclusion, setExclusion] = useState("");
   const ready = record.status === "ready";
+  const assisted = !!e.review_evidence?.some((v) => v.judgments?.length);
   function change(index: number, patch: Partial<Judgment>) {
     setCriteria((old) =>
       old.map((c, i) => (i === index ? { ...c, ...patch } : c)),
@@ -614,6 +626,26 @@ function ExampleReview({
           </section>
         ))}
       </details>
+      <CalibrationEvidence
+        record={record}
+        example={e}
+        busy={busy}
+        run={run}
+        onUse={(judgments) =>
+          setCriteria((old) =>
+            old.map(
+              (c) =>
+                judgments.find((j) => j.criterion_id === c.criterion_id) || c,
+            ),
+          )
+        }
+      />
+      {assisted ? (
+        <p>
+          Assisted review material is attached. It is not an independent
+          instructor reference and does not count as a saved instructor review.
+        </p>
+      ) : null}
       {e.generation ? (
         <p>
           Model request: {e.generation.status}
@@ -634,7 +666,8 @@ function ExampleReview({
           </label>
           <Button
             disabled={
-              !sourceReviewed || (!!record.document?.section && !e.reference)
+              !sourceReviewed ||
+              (!!record.document?.section && !e.reference && !assisted)
             }
             onClick={() =>
               void run(() =>
@@ -683,7 +716,7 @@ function ExampleReview({
           </Button>
         </details>
       ) : null}
-      {record.document?.section && !e.reference ? (
+      {record.document?.section && !e.reference && !assisted ? (
         <p>
           Save your independent reference judgments before generating feedback
           for this section.
@@ -717,13 +750,16 @@ function ExampleReview({
             busy ||
             ready ||
             !!e.exclusion_note ||
-            (!e.document.proposal && (!!e.reference || !!e.generation))
+            (!e.document.proposal &&
+              (!!e.reference || !!e.generation || assisted))
           }
         >
           <legend>
             {e.document.proposal
               ? "Your calibration judgments"
-              : "Your independent reference judgments"}
+              : assisted
+                ? "Independent reference unavailable after assisted judgments"
+                : "Your independent reference judgments"}
           </legend>
           {criteria.map((c, i) => (
             <fieldset key={c.criterion_id}>

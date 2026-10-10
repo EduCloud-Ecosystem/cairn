@@ -65,6 +65,7 @@ func TestCalibrationOwnerRoutesAndBothHistoricalSources(t *testing.T) {
 		{"POST", "/calibrations/" + c.ID + "/examples", map[string]any{"revision": 1, "files": map[string]string{"response.md": "private work"}}},
 		{"POST", "/calibrations/" + c.ID + "/capture", map[string]any{"revision": 1, "submission_id": "s"}},
 		{"POST", "/calibrations/" + c.ID + "/preflight", map[string]any{"revision": 1, "guidance": "private"}},
+		{"POST", "/calibrations/" + c.ID + "/examples/example/evidence", map[string]any{"revision": 1}},
 		{"POST", "/calibrations/" + c.ID + "/examples/example/reference", map[string]any{"revision": 1, "note": "private"}},
 		{"POST", "/assignments/a/calibrations/coverage", map[string]any{"profile_ids": []string{c.ID}}},
 		{"POST", "/calibrations/" + c.ID + "/approve", map[string]any{"revision": 1, "guidance": "private"}},
@@ -91,6 +92,36 @@ func TestCalibrationOwnerRoutesAndBothHistoricalSources(t *testing.T) {
 	json.Unmarshal(c.Document, &d)
 	if len(d.Examples) != 2 || d.Examples[1].SourceSubmissionID != "s" {
 		t.Fatal("historical inputs not captured")
+	}
+
+	packet, err := assessment.PrepareCalibrationReviewPacket(assessment.CalibrationBundle{Version: assessment.CalibrationBundleVersion, Purpose: "calibration", Rubric: rubric, Examples: []assessment.CalibrationBundleExample{{ID: "sample-one", Files: map[string]string{"response.md": "Past uploaded work"}}}}, assessment.CalibrationReviewPacket{SampleID: "sample-one", Authorship: "assistant", Author: "Synthetic assistant", Note: "Private delegated adjudication", Judgments: []assessment.Judgment{{CriterionID: "reason", Points: nil, Feedback: "Unassessable", Uncertainty: "No execution", Citations: []assessment.Citation{}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidencePath := "/calibrations/" + c.ID + "/examples/" + d.Examples[0].ID + "/evidence"
+	evidenceBody := map[string]any{"revision": c.Revision, "packet": packet}
+	for _, cookie := range []*http.Cookie{nil, student, other} {
+		rec = request("POST", evidencePath, evidenceBody, cookie)
+		if rec.Code != 401 && rec.Code != 404 {
+			t.Fatal("evidence owner boundary")
+		}
+	}
+	injectedEvidence := map[string]any{"revision": c.Revision, "packet": packet, "imported_by": "fake-instructor"}
+	if rec = request("POST", evidencePath, injectedEvidence, owner); rec.Code != 400 {
+		t.Fatal("accepted forged importing identity")
+	}
+	if rec = request("POST", evidencePath, evidenceBody, owner); rec.Code != 200 {
+		t.Fatal(rec.Body.String())
+	}
+	json.Unmarshal(rec.Body.Bytes(), &c)
+	if !strings.Contains(rec.Body.String(), "review_evidence") || strings.Contains(rec.Body.String(), "\"reference\"") {
+		t.Fatal("evidence was not kept separate")
+	}
+	if rec = request("POST", evidencePath, evidenceBody, owner); rec.Code != 409 {
+		t.Fatal("stale evidence mutation")
+	}
+	if rec = request("GET", "/assignments/a/calibrations", nil, owner); strings.Contains(rec.Body.String(), "Private delegated") {
+		t.Fatal("list leaked review content")
 	}
 
 	// Bundle imports preserve authentication and reject attempted review injection.

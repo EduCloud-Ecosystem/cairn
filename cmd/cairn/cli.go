@@ -16,6 +16,7 @@ Usage:
                              (see docs/deploy.md for the full deployment path)
   cairn import ghc [flags]   import a course from GitHub Classroom
   cairn roster pull [flags]  build a roster from your LMS, matched locally
+  cairn calibration-review-packet [flags]  bind attributed review material to source
   cairn calibration-execute [flags]  collect isolated check evidence without grades
   cairn calibration-prepare [flags]  prepare private historical source bundles
   cairn assessment-eval run [flags]    evaluate bundled synthetic submissions
@@ -67,6 +68,11 @@ func main() {
 			fatalUsage(fmt.Sprintf("cairn roster: unknown subcommand %q (supported: pull)", args[1]))
 		}
 
+	case "calibration-review-packet":
+		if err := runCalibrationReviewPacket(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "cairn calibration-review-packet: %v\n", err)
+			os.Exit(1)
+		}
 	case "calibration-execute":
 		if err := runCalibrationExecute(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "cairn calibration-execute: %v\n", err)

@@ -210,7 +210,43 @@ export interface CalibrationCoverage {
   covered_points: number;
   max_points: number;
 }
+export interface CalibrationReviewEvidence {
+  packet_digest: string;
+  imported_by: string;
+  imported_at: string;
+  sample_id: string;
+  rubric_digest: string;
+  source_sha256: Record<string, string>;
+  authorship:
+    | "assistant"
+    | "instructor-assisted"
+    | "external-reviewer"
+    | "execution-only";
+  author: string;
+  note: string;
+  judgments?: Judgment[];
+  execution?: {
+    report_digest: string;
+    checks_sha256: string;
+    bundle_sha256: string;
+    reported_at: string;
+    image: string;
+    unchecked_criteria: string[];
+    sample: {
+      sample_id: string;
+      status: string;
+      source_sha256: Record<string, string>;
+      tests: {
+        criterion_id: string;
+        status: string;
+        exit_code?: number;
+        detail?: string;
+      }[];
+    };
+  };
+}
 export interface CalibrationExample {
+  review_evidence?: CalibrationReviewEvidence[];
   reference?: {
     reviewer: string;
     reviewed_at: string;
@@ -269,6 +305,17 @@ export const api = {
       revision,
       guidance,
     }),
+  importCalibrationEvidence: (
+    id: string,
+    example: string,
+    revision: number,
+    packet: unknown,
+  ) =>
+    req<Calibration>(
+      "POST",
+      `/calibrations/${id}/examples/${example}/evidence`,
+      { revision, packet },
+    ),
   referenceCalibration: (
     id: string,
     example: string,
