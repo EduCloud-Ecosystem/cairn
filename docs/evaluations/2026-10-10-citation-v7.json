@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-10",
+  "model": "gpt-5.4-mini-2026-03-17",
+  "prompt_version": "cairn-rubric-v7",
+  "scope": "Development regression and citation diagnostics, not independent course acceptance",
+  "synthetic_baseline_v6": {
+    "requests": 4,
+    "accepted": 4,
+    "note": "All subtests passed. Report writing failed because the output path was relative to the test package; raw responses were not retained. No baseline rerun was made. The test now reserves an explicit output file before sending any request."
+  },
+  "synthetic_v7": {
+    "requests": 4,
+    "accepted": 4,
+    "cases": ["fit-predict", "validation", "notebook", "starter-injection"],
+    "responses_with_exact_multiline_quotes": 2,
+    "input_tokens": 3647,
+    "output_tokens": 651,
+    "starter_numeric_score": false,
+    "raw_responses_retained_privately": true
+  },
+  "historical_diagnostic_v7": {
+    "requests": 4,
+    "accepted": 3,
+    "rejected": 1,
+    "accepted_criterion_scores": 5,
+    "matches_to_assistant_authored_references": 5,
+    "exact_multiline_excerpts_in_accepted_proposals": 5,
+    "remaining_error": "ambiguous_citation_quote",
+    "remaining_review": "The rejected quality response quotes a repeated parameter line and suggests a style deduction. Neither its score nor its ambiguous citation was accepted.",
+    "input_tokens": 9653,
+    "output_tokens": 1601,
+    "original_input_digests_and_source_hashes_preserved": true,
+    "original_archive_checksums_verified": 188,
+    "original_archive_files_changed": 0,
+    "raw_responses_retained_privately": true,
+    "fresh_reserved_samples_used": 0,
+    "automatic_retries": 0,
+    "grades_created": 0,
+    "profiles_approved": 0
+  },
+  "limitations": [
+    "Original four rejected response texts were not retained; their exact failure mechanism remains unknown.",
+    "New multiline excerpts are demonstrably exact and would fail the old segment-only resolver; this does not prove every original rejection had the same cause.",
+    "Historical diagnostic uses already reviewed work and assistant-authored references, not independent instructor ground truth or fresh held-out evidence.",
+    "No updated instructor guidance was applied in the historical diagnostic; only provider prompt and citation resolution changed.",
+    "Exact source correspondence does not establish semantic support, authorship, or correctness of proposed deductions.",
+    "No production activation or real-course readiness claim."
+  ]
+}
