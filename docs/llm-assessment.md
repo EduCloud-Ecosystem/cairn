@@ -10,7 +10,7 @@ It is not enabled in the production pilot or accepted for real course grading.
 ## Assessability and uncertainty policy (October 8, 2026)
 
 New captures record `policy_version: unassessable-until-review-v1`, included in
-`input_digest`. The course provider prompt (`cairn-rubric-v6`) applies this policy
+`input_digest`. The course provider prompt (`cairn-rubric-v7`) applies this policy
 before rubric scoring: entirely blank, off-topic, or instruction-only readable
 work is unassessable, with null points on every criterion. Relevant wrong or
 partial attempts receive the rubric's normal points, including zero for missing
@@ -590,6 +590,48 @@ citation supports feedback; do not interpret offline CI as establishing
 real-course quality. No historical student source was sent in these checks.
 
 ## Exact-quote citations and offline execution — October 10, 2026
+
+### Contiguous multiline excerpts (v7)
+
+Prompt v7 permits exact contiguous multiline excerpts in line-based artifacts.
+The resolver first checks ordinary single-segment quotes, then reconstructs only
+consecutive `line:1` through `line:N` segments and requires a unique byte-exact
+match. It expands that match into the existing per-line citations. Whitespace
+and blank lines participate in matching; blank-only pieces are not citations.
+The 1000-byte quote and 32-citations-per-criterion limits remain enforced.
+Notebook cells remain atomic. The resolver never normalizes CRLF, repairs
+indentation, joins skipped lines, bridges files/cells, or selects an arbitrary
+occurrence of repeated text. Existing stored citations remain unchanged.
+
+This fixes a reproducible mismatch between the provider's compact code blocks
+and the old one-line resolver. It does not establish the cause of old failures
+whose rejected response text was not retained. Approved profiles must be
+recalibrated for v7; old proposals retain their original provenance.
+
+Four opt-in synthetic controls passed. Two produced multiline excerpts that
+the old resolver would reject. A separate, authorized four-request diagnostic
+on previously rejected historical examples accepted three proposals, with five
+exact multiline excerpts and all five accepted criterion scores matching the
+assistant-authored references. One quality proposal was still rejected for a
+repeated parameter-line quote. Its suggested style deduction also remains
+unadjudicated. No grade or profile approval resulted; the original trial and
+fresh reserved samples were preserved. See the
+[evaluation record](evaluations/2026-10-10-citation-v7.json).
+
+Run only the four synthetic controls with an explicit key file and a **new,
+absolute** private report path whose parent already exists:
+
+```sh
+CAIRN_OPENAI_LIVE_KEY_FILE=/private/cairn-openai.env \
+CAIRN_CITATION_EVAL_OUTPUT=/private/new-citation-report.json \
+go test ./internal/assessment -run '^TestOpenAILiveCitationControls$' -count=1 -v
+```
+
+The test reserves its report before any call, refuses overwrites, and makes one
+attempt per case. The report includes synthetic response text for diagnostics;
+production error messages continue to contain fixed codes only.
+
+### Original v6 evaluation
 
 Prompt v6 asks the provider for `artifact_id` and a verbatim `quote` instead of
 model-counted line numbers. Cairn resolves each quote to exactly one captured
