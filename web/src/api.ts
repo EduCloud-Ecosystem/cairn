@@ -195,7 +195,27 @@ export interface AssessmentRecord {
     };
   };
 }
+export interface CalibrationInputCheck {
+  example_id: string;
+  input_bytes: number;
+  limit_bytes: number;
+  fits: boolean;
+  issue?: string;
+}
+export interface CalibrationCoverage {
+  complete: boolean;
+  missing: string[];
+  overlapping: string[];
+  covered_points: number;
+  max_points: number;
+}
 export interface CalibrationExample {
+  reference?: {
+    reviewer: string;
+    reviewed_at: string;
+    note: string;
+    criteria: Judgment[];
+  };
   sample_id?: string;
   exclusion_note?: string;
   id: string;
@@ -210,6 +230,7 @@ export interface CalibrationExample {
   generation?: AssessmentRecord["generation"];
 }
 export interface Calibration {
+  section_title?: string;
   id: string;
   owner_id: string;
   assignment_id: string;
@@ -217,6 +238,7 @@ export interface Calibration {
   revision: number;
   status: "draft" | "ready";
   document?: {
+    section?: boolean;
     bundle_digest?: string;
     sample_purpose?: string;
     rubric: AssessmentRubric;
@@ -230,8 +252,34 @@ export interface Calibration {
 export const api = {
   listCalibrations: (id: string) =>
     req<Calibration[]>("GET", `/assignments/${id}/calibrations`),
-  createCalibration: (id: string, based_on = "") =>
-    req<Calibration>("POST", `/assignments/${id}/calibrations`, { based_on }),
+  createCalibration: (id: string, based_on = "", section?: AssessmentRubric) =>
+    req<Calibration>("POST", `/assignments/${id}/calibrations`, {
+      based_on,
+      section,
+    }),
+  calibrationCoverage: (id: string, profile_ids: string[]) =>
+    req<CalibrationCoverage>(
+      "POST",
+      `/assignments/${id}/calibrations/coverage`,
+      { profile_ids },
+    ),
+  preflightCalibration: (id: string, revision: number, guidance: string) =>
+    req<CalibrationInputCheck[]>("POST", `/calibrations/${id}/preflight`, {
+      revision,
+      guidance,
+    }),
+  referenceCalibration: (
+    id: string,
+    example: string,
+    revision: number,
+    criteria: Judgment[],
+    note: string,
+  ) =>
+    req<Calibration>(
+      "POST",
+      `/calibrations/${id}/examples/${example}/reference`,
+      { revision, criteria, note },
+    ),
   calibration: (id: string) => req<Calibration>("GET", `/calibrations/${id}`),
   deleteCalibration: (id: string) =>
     req<unknown>("DELETE", `/calibrations/${id}`, {}),

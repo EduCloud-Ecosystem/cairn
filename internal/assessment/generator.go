@@ -118,7 +118,7 @@ func (g *Generator) validateCalibration(ctx context.Context, d Document, assignm
 	if g.Provider.model != DefaultOpenAIModel {
 		return errors.New("calibration model does not match provider")
 	}
-	binding, err := g.Service.CalibrationBinding(ctx, d.Calibration.ID, d.Calibration.OwnerID, assignment, rubricDigest)
+	binding, err := g.Service.calibrationBindingScoped(ctx, d.Calibration.ID, d.Calibration.OwnerID, assignment, rubricDigest, Digest(d.Rubric))
 	if err != nil {
 		return err
 	}

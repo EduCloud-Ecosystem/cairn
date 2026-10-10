@@ -10,7 +10,7 @@ It is not enabled in the production pilot or accepted for real course grading.
 ## Assessability and uncertainty policy (October 8, 2026)
 
 New captures record `policy_version: unassessable-until-review-v1`, included in
-`input_digest`. The course provider prompt (`cairn-rubric-v4`) applies this policy
+`input_digest`. The course provider prompt (`cairn-rubric-v5`) applies this policy
 before rubric scoring: entirely blank, off-topic, or instruction-only readable
 work is unassessable, with null points on every criterion. Relevant wrong or
 partial attempts receive the rubric's normal points, including zero for missing
@@ -521,3 +521,70 @@ real coursework was transmitted and no grades were created.
 Repeat the two long-source checks with `TestOpenAILiveCompactSource`, the same
 opt-in `CAIRN_OPENAI_LIVE_KEY_FILE`, and optionally `CAIRN_COMPACT_EVAL_OUTPUT`
 pointing to a private output file. Normal test runs skip provider calls.
+
+## Section review foundations — October 10, 2026
+
+Instructors can create a section calibration on the same assignment by providing
+`section` (a rubric) to the existing create route. A section may select parent
+paths and criteria but cannot change criterion descriptions or maxima. The row
+remains bound to the complete parent rubric digest. Changing that parent makes
+old profiles stale. A follow-up based on an approved section inherits its scope;
+whole-assignment captures explicitly reject section-only profiles.
+
+The dashboard accepts section rubric files from prepared packets. Its combined
+coverage check requires an explicit selection of approved profiles and reports
+missing and overlapping criteria without double-counting their weights. Coverage
+is not a student score, a combined approved profile, or support for publishing a
+whole assignment from multiple generated sections. That orchestration remains a
+separate build step.
+
+Before section generation, instructors must save an independent reference via
+`POST /calibrations/{id}/examples/{example}/reference`. The reference is immutable,
+owner-scoped and never sent to OpenAI. It cannot be created after any model
+attempt, including a failed one. Post-generation corrections remain a separate
+review. Legacy whole-rubric profiles retain their previous generation path but
+can also save an independent reference first.
+
+`POST /calibrations/{id}/preflight` accepts revision and draft guidance. It uses
+the actual request serializer on each included example, with that guidance, and
+makes no provider call. Approval repeats this check server-side. Passing checks
+for calibration examples does not promise that reserved or future work fits;
+run the check in the corresponding round and retain the generation-time limit.
+Excluded examples do not block approval. An empty result never suffices to
+approve a profile without reviewed examples.
+
+Prompt v5 explicitly treats supplied starter scaffolds and unimplemented stubs
+as no relevant student work, including for code-quality criteria. These remain
+unassessable until instructor review. Model classification is not proof of source
+authorship; retain pinned instructor templates and distinguish authored changes.
+Existing profiles require recalibration for the new prompt version.
+
+Remaining acceptance work: adjudicate ambiguous historical criteria without
+retroactive new deductions, record instructor scoring anchors, attach verified
+results from isolated execution, and test held-out real-course feedback. No
+synthetic check or coverage display establishes those outcomes.
+
+Offline preparation also accepts `--guidance-file /private/guidance.txt` so a
+reserved packet can be checked without importing it or contacting a provider.
+The report retains the size without guidance, the complete size with guidance,
+and the digest of the trimmed guidance. It does not copy guidance into the
+source bundle. Source remains intact even when the check fails.
+
+### Synthetic acceptance results — October 10, 2026
+
+The browser fixture verified section creation, source-bundle import, a frozen
+pre-model reference, and a guidance-aware preflight through the dashboard/API
+and SQLite. No provider was connected and no grades or generation attempts were
+created. Automated tests cover section scope, owner isolation, immutable
+references, held-out reuse, overlap detection and guidance budget enforcement.
+
+Live synthetic checks classified the starter-only control as unassessable and
+passed the long-source controls, but exposed a citation limitation. One short
+student implementation returned an invalid location and was rejected. A later
+response passed structural validation yet cited surrounding instructor scaffold
+instead of the operation at line 4. More explicit prompt instructions still
+failed the tightened semantic check. `TestOpenAILiveStarterControl` retains that
+assertion and is currently a failing opt-in acceptance check. Source location
+existence is not proof that the citation supports feedback. This remains a
+real-course acceptance blocker; do not interpret passing offline CI as resolving
+it. No historical student source was sent in these checks.
