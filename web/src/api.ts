@@ -132,6 +132,7 @@ export interface AssessmentRubric {
   criteria: RubricCriterion[];
 }
 export interface Evidence {
+  quote?: string;
   path: string;
   sha256: string;
   location: string;

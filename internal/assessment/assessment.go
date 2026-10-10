@@ -45,6 +45,7 @@ type Artifact struct {
 	Issue     string    `json:"issue,omitempty"`
 }
 type Citation struct {
+	Quote    string `json:"quote,omitempty"`
 	Path     string `json:"path"`
 	SHA256   string `json:"sha256"`
 	Location string `json:"location"`
@@ -136,7 +137,7 @@ func ValidateJudgments(d Document, js []Judgment, approval bool) (score, max flo
 		limits[c.ID] = c.MaxPoints
 		max += c.MaxPoints
 	}
-	evidence := map[string]bool{}
+	evidence := map[string]string{}
 	for _, a := range d.Artifacts {
 		if a.Issue != "" {
 			return 0, 0, invalidJudgment("artifact_incomplete", "resolve artifact issues before assessment")
@@ -145,7 +146,7 @@ func ValidateJudgments(d Document, js []Judgment, approval bool) (score, max flo
 			return 0, 0, invalidJudgment("artifact_digest", "artifact digest mismatch")
 		}
 		for _, seg := range a.Segments {
-			evidence[a.Path+"\x00"+a.SHA256+"\x00"+seg.Location] = true
+			evidence[a.Path+"\x00"+a.SHA256+"\x00"+seg.Location] = seg.Text
 		}
 	}
 	seen := map[string]bool{}
@@ -175,8 +176,12 @@ func ValidateJudgments(d Document, js []Judgment, approval bool) (score, max flo
 			score += *j.Points
 		}
 		for _, c := range j.Citations {
-			if !evidence[c.Path+"\x00"+c.SHA256+"\x00"+c.Location] {
+			text, exists := evidence[c.Path+"\x00"+c.SHA256+"\x00"+c.Location]
+			if !exists {
 				return 0, 0, invalidJudgment("citation_location", "citation does not match captured evidence")
+			}
+			if c.Quote != "" && (len(c.Quote) > 1000 || strings.TrimSpace(c.Quote) == "" || !strings.Contains(text, c.Quote)) {
+				return 0, 0, invalidJudgment("citation_quote", "citation quote does not match its source location")
 			}
 		}
 	}

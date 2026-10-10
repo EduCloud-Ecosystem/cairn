@@ -789,6 +789,16 @@ function ExampleReview({
                 {c.citations.map((citation, j) => (
                   <li key={j}>
                     {citation.path} · {citation.location}{" "}
+                    {citation.quote ? (
+                      <blockquote
+                        style={{
+                          whiteSpace: "pre-wrap",
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        {citation.quote}
+                      </blockquote>
+                    ) : null}
                     <button
                       onClick={() =>
                         change(i, {

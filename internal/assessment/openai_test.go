@@ -28,7 +28,7 @@ func responseJSON(t *testing.T, criteria any) string {
 	return string(raw)
 }
 func providerCriteria(points float64) []providerJudgment {
-	return []providerJudgment{{CriterionID: "reason", Points: ptr(points), Feedback: "Use the evidence to support the conclusion.", UncertaintyLevel: "medium", UncertaintyReason: "Check interpretation with your instructor.", Citations: []providerCitation{{ArtifactID: "artifact_1", Location: "line:1"}}}}
+	return []providerJudgment{{CriterionID: "reason", Points: ptr(points), Feedback: "Use the evidence to support the conclusion.", UncertaintyLevel: "medium", UncertaintyReason: "Check interpretation with your instructor.", Citations: []providerCitation{{ArtifactID: "artifact_1", Quote: "Evidence and reasoning."}}}}
 }
 func TestOpenAIGenerateValidatesAndRequiresReview(t *testing.T) {
 	svc, r, _ := fixture(t)
@@ -99,7 +99,7 @@ func TestOpenAIFailuresAreBoundedAndPrivate(t *testing.T) {
 					return mockResponse(200, responseJSON(t, providerCriteria(999))), nil
 				case "invalid_citation":
 					js := providerCriteria(7)
-					js[0].Citations[0].Location = "line:999"
+					js[0].Citations[0].Quote = "fabricated evidence"
 					return mockResponse(200, responseJSON(t, js)), nil
 				case "oversize":
 					return mockResponse(200, strings.Repeat("x", maxProviderResponseBytes+1)), nil

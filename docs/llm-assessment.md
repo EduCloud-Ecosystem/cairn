@@ -10,7 +10,7 @@ It is not enabled in the production pilot or accepted for real course grading.
 ## Assessability and uncertainty policy (October 8, 2026)
 
 New captures record `policy_version: unassessable-until-review-v1`, included in
-`input_digest`. The course provider prompt (`cairn-rubric-v5`) applies this policy
+`input_digest`. The course provider prompt (`cairn-rubric-v6`) applies this policy
 before rubric scoring: entirely blank, off-topic, or instruction-only readable
 work is unassessable, with null points on every criterion. Relevant wrong or
 partial attempts receive the rubric's normal points, including zero for missing
@@ -584,7 +584,79 @@ student implementation returned an invalid location and was rejected. A later
 response passed structural validation yet cited surrounding instructor scaffold
 instead of the operation at line 4. More explicit prompt instructions still
 failed the tightened semantic check. `TestOpenAILiveStarterControl` retains that
-assertion and is currently a failing opt-in acceptance check. Source location
-existence is not proof that the citation supports feedback. This remains a
-real-course acceptance blocker; do not interpret passing offline CI as resolving
-it. No historical student source was sent in these checks.
+assertion and failed under v5. The later v6 quote-resolution run below passed
+this bounded control. Source location existence still is not proof that a
+citation supports feedback; do not interpret offline CI as establishing
+real-course quality. No historical student source was sent in these checks.
+
+## Exact-quote citations and offline execution — October 10, 2026
+
+Prompt v6 asks the provider for `artifact_id` and a verbatim `quote` instead of
+model-counted line numbers. Cairn resolves each quote to exactly one captured
+segment, adds the path/hash/location, and retains the quote for instructor
+inspection. Empty, oversized, fabricated and ambiguous excerpts fail closed;
+usage remains recorded and failed requests are not retried automatically.
+Notebook quotes resolve to cells. Imported or edited citations with a quote must
+match their source location. Older citations without quotes remain reviewable.
+A correct match establishes source correspondence, not semantic support,
+student authorship, or grading correctness. Existing approved profiles need a
+new calibration round for prompt v6.
+
+The final seven-call synthetic run passed correct/incorrect arithmetic,
+instruction-only work, two 421-line controls, starter-only work, and a student
+implementation requiring the operation at line 4. An initial v6 trial rejected
+a fabricated starter citation; the final prompt tells `no_relevant_work` cases
+to return no citations. This resolves the observed v5 line-4 acceptance failure
+in the bounded synthetic checks, not general real-course acceptance.
+
+`cairn calibration-execute --bundle /private/bundle.json --checks
+/private/checks.json --out /private/new-run` produces `execution.json` locally.
+It never opens the serving database, contacts a model, publishes a grade or
+imports results as trusted provider evidence. Its check plan is reviewed
+instructor code with this shape:
+
+```json
+{
+  "version": "cairn-calibration-checks-v1",
+  "files": {"check.py": "print('PASS')\n"},
+  "spec": {
+    "version": "1",
+    "image": "sha256:<64 hex digits from docker image inspect>",
+    "tests": [{
+      "name": "an_existing_rubric_criterion_id",
+      "run": "python3 -I -B /cairn-policy/check.py",
+      "points": 0,
+      "match": {"expected": "PASS", "trim": true}
+    }]
+  }
+}
+```
+
+The example only illustrates the format; it is not a functional test. Check
+names must be distinct rubric criterion IDs. Setup commands and per-test limit
+overrides are refused. Use an already available image containing the assignment
+dependencies. Only local Unix-socket Docker contexts and immutable image IDs are
+accepted; execution never pulls an image. Instructor files and captured source
+are copied into private temporary directories and mounted read-only. Each check
+runs as UID 65534 with no egress, a read-only root filesystem, no capabilities,
+no new privileges, 512 MiB memory, one CPU, 64 PIDs, and a 15-second timeout.
+This uses the existing shared-kernel container tier, not gVisor or a dedicated
+remote worker. Captured process output is capped at 64 KiB per stream. Matching
+stdout cannot pass when the command exits nonzero; cancellation kills the named
+container as well as its client process.
+
+Reports bind the original bundle, rubric, check plan, image and individual source
+hashes. They list unchecked criteria and preserve partial progress. `completed`
+means all examples were attempted, not that checks passed. Observations contain
+no numeric scores. Check scripts should exit 0 with their expected marker for
+success, 1 for an assertion failure, and 2 or higher for unimplemented work or
+other execution errors. Timeouts and errors remain unassessable. Distinguish
+missing dependencies from student failures. A check completing successfully is
+not proof against an adversarial submission manipulating its Python process;
+review the harness and observations before making a grading judgment.
+
+Local synthetic Docker verification distinguished correct, incorrect and stub
+implementations and exercised read-only source/policy/rootfs, denied egress,
+non-root identity, no-new-privileges, memory and PID caps. Historical execution
+is exploratory evidence, not independent held-out grading validation. Results
+are not yet automatically attached to assessment drafts or sent to a model.

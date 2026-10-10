@@ -11,7 +11,7 @@ import (
 )
 
 func TestProviderRecordsSafeValidationReasons(t *testing.T) {
-	for _, code := range []string{"criterion_coverage", "criterion_identity", "points_range", "feedback_bounds", "citation_missing", "citation_location", "citation_count"} {
+	for _, code := range []string{"criterion_coverage", "criterion_identity", "points_range", "feedback_bounds", "citation_missing", "citation_count"} {
 		t.Run(code, func(t *testing.T) {
 			svc, r, _ := fixture(t)
 			provider, _ := NewOpenAI("SECRET", "")
@@ -27,8 +27,6 @@ func TestProviderRecordsSafeValidationReasons(t *testing.T) {
 				js[0].Feedback = ""
 			case "citation_missing":
 				js[0].Citations = nil
-			case "citation_location":
-				js[0].Citations[0].Location = "SECRET"
 			case "citation_count":
 				for len(js[0].Citations) < 33 {
 					js[0].Citations = append(js[0].Citations, js[0].Citations[0])

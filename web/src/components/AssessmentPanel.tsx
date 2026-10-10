@@ -557,6 +557,16 @@ function ReviewCard({
                   {c.citations.map((e, j) => (
                     <li key={j}>
                       {e.path} · {e.location}{" "}
+                      {e.quote ? (
+                        <blockquote
+                          style={{
+                            whiteSpace: "pre-wrap",
+                            overflowWrap: "anywhere",
+                          }}
+                        >
+                          {e.quote}
+                        </blockquote>
+                      ) : null}
                       <button
                         className="btn btn-sm"
                         onClick={() =>
