@@ -17,3 +17,6 @@ _git_locks_to_delete/
 
 .playwright-cli/
 output/
+
+# Python template-maintenance caches
+__pycache__/

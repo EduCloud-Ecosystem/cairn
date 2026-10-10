@@ -1,0 +1,15 @@
+{
+  "version": "educloud-clustering-v2.0.0",
+  "files": {
+    ".gitignore": "4d971aa43c9cca8871768cdcc39a0ae11615b59bf7bff481eb98ab3097c64117",
+    "README.md": "8d0e3149558d570153abf116591670325998ffab22427d4ccf5b2a9d968e1622",
+    "clustering.ipynb": "1e3be6325b00e59c84f055dbd8d4416b50d371fefe8b5b153b229502a24ebdf7",
+    "contract.json": "a2ce63c89de0ac52297af07587cb823f812b3372096a7953854cc685c0b529d2",
+    "data/energy-synthetic.csv": "68c304acd19c760c820ee8a1e1036b32c599a13a6ba2a66cb5bdd8ad877d2116",
+    "ds.py": "b4d307b8d890059469bbc3951c29c9662196d0f0b44847aef40f67339ce9ec3b",
+    "feedback.md": "89f9bc0947f8544419771206b647c62e75fcf41082258e05b613c56b8c583b6b",
+    "requirements.txt": "b6e2e666ea17451d3013251fdd3c9b9ff5c5013a0646b25affe55a5683444733",
+    "rubric.json": "4578169728aa49aaf1c730816bc3e4ffb94a5fcdacbe920eace4ff24f3eb6f09",
+    "test_ds.py": "2963eef7387776dad2184526fd3d596bd04671a8e3d17269c0d8c26fbb0f0dfa"
+  }
+}

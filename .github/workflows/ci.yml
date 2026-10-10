@@ -1,6 +1,6 @@
 # Continuous integration: run the checks a contributor is asked to run locally.
 #
-# One file, two jobs. Go and the dashboard have no build-order dependency on
+# One file, independent jobs. Go and the dashboard have no build-order dependency on
 # each other, so they run in parallel and each reports its own status — a Go
 # failure and a frontend failure are separately legible on the PR rather than
 # hidden behind whichever tripped first. They live in one file because they are
@@ -117,3 +117,13 @@ jobs:
       # production image build, and CI is where both are required together.
       - name: build
         run: npm run build
+
+  curriculum:
+    name: Curriculum — versioned contract checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check generated materials and release digests
+        run: python3 tools/clustering_template.py --check
+      - name: Test publication drift guards
+        run: python3 -m unittest discover -s tools -v
