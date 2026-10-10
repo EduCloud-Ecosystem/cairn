@@ -10,7 +10,7 @@ It is not enabled in the production pilot or accepted for real course grading.
 ## Assessability and uncertainty policy (October 8, 2026)
 
 New captures record `policy_version: unassessable-until-review-v1`, included in
-`input_digest`. The course provider prompt (`cairn-rubric-v7`) applies this policy
+`input_digest`. The course provider prompt (`cairn-rubric-v10`) applies this policy
 before rubric scoring: entirely blank, off-topic, or instruction-only readable
 work is unassessable, with null points on every criterion. Relevant wrong or
 partial attempts receive the rubric's normal points, including zero for missing
@@ -591,6 +591,58 @@ real-course quality. No historical student source was sent in these checks.
 
 ## Exact-quote citations and offline execution — October 10, 2026
 
+### Server-selected excerpt choices (v10)
+
+The provider now selects `artifact_id` and `excerpt_id` from an artifact-scoped
+schema catalog. Cairn constructs each choice from exact captured source and
+expands repeated lines with adjacent context until the excerpt is unique.
+Notebook cells never merge. Long lines use bounded UTF-8-safe excerpts. The
+model sees the complete original source as before; the catalog is an additional
+selection aid, not a source truncation or an authorship/quality classifier.
+
+The response schema pairs each artifact with only its own excerpt IDs. Cairn
+independently rejects unknown IDs and mixed ID/quote payloads, resolves the ID
+locally, and applies the existing exact-source checks. Legacy verbatim-quote
+responses still undergo those same checks; stored proposal citations keep their
+original representation. Source text embedded in the catalog remains untrusted
+data. No filenames, roster data, previous judgments, or approvals enter it.
+
+This uses the enum and nested `anyOf` structure documented in the
+[OpenAI Structured Outputs guide](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses).
+Live testing rejected multiline enum literals, so v10 uses short IDs and puts
+the excerpt catalog in the schema description. Limits are 900 combined citation
+choice/artifact enum values, 60,000 bytes of catalog excerpts, and a 96 KiB
+serialized request. Existing limits of 16,000 input bytes, 1,000 bytes per quote,
+32 resolved citations per criterion and 4,096 output tokens remain unchanged.
+Preflight checks the additional bounds, without silently dropping choices.
+The complete request, including the catalog, contributes to the existing durable
+usage reservation. Catalogs increase input tokens; they do not provide free
+retries or a higher classroom quota.
+
+Prompt v10 also requires concrete rubric support for deductions. Fixed settings
+are judged under each instructor's rubric: the same setting may be acceptable
+in one course and prohibited by an explicit parameterization requirement in
+another. Historical course interpretations belong in that instructor's versioned
+rubric and guidance, not a global exception in Cairn.
+
+The seven synthetic controls include both interpretations, genuinely hardcoded
+answers, notebook evidence, repeated lines, and starter-only work. These remain
+development controls. Selecting real source does not establish that a citation
+supports the feedback or that the proposed deduction is justified. Recalibrate
+approved profiles for v10 before course use. See the
+[v10 evaluation record](evaluations/2026-10-10-citation-v10.json) for failed
+intermediate approaches and the bounded historical checks.
+
+All seven v10 synthetic requests and three v10 historical development requests
+produced valid citations. The final historical policy check gave the original
+quality case 5/5. A second reviewed example still received an unjustified 4/5
+deduction for previously waived constant-column handling. Its original proposal
+was retained and a separately attributed assistant adjudication recorded 5/5.
+That correction is calibration evidence, not independent instructor ground
+truth. Updated next-round guidance is drafted but has not been live tested.
+No fresh reserved work, grade publication, profile approval or production
+activation occurred. The larger catalog request cost is recorded in the report.
+
 ### Contiguous multiline excerpts (v7)
 
 Prompt v7 permits exact contiguous multiline excerpts in line-based artifacts.
@@ -618,7 +670,7 @@ unadjudicated. No grade or profile approval resulted; the original trial and
 fresh reserved samples were preserved. See the
 [evaluation record](evaluations/2026-10-10-citation-v7.json).
 
-Run only the four synthetic controls with an explicit key file and a **new,
+Run the current seven synthetic controls with an explicit key file and a **new,
 absolute** private report path whose parent already exists:
 
 ```sh
