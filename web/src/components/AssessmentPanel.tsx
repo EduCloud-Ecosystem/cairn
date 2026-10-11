@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalibrationPanel } from "./CalibrationPanel";
 import {
   api,
@@ -43,8 +43,12 @@ export function AssessmentPanel({
   const [records, setRecords] = useState<AssessmentRecord[]>([]);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [readingStarter, setReadingStarter] = useState(false);
+  const starterRead = useRef(0);
   const [calibrationID, setCalibrationID] = useState("");
   useEffect(() => {
+    setReadingStarter(false);
+    starterRead.current++;
     let live = true;
     void api
       .assessmentCapabilities()
@@ -67,6 +71,7 @@ export function AssessmentPanel({
       .catch(() => {});
     return () => {
       live = false;
+      starterRead.current++;
     };
   }, [assignmentID]);
   useEffect(() => {
@@ -133,7 +138,7 @@ export function AssessmentPanel({
           </Button>
         </div>
       )}
-      <fieldset disabled={busy}>
+      <fieldset disabled={busy || readingStarter}>
         <legend>Assessment rubric</legend>
         <label>
           Rubric title
@@ -166,9 +171,77 @@ export function AssessmentPanel({
           source are supported. All listed files are required; missing or
           unsupported files block assessment.
         </p>
+        <details>
+          <summary>Starter files for Python evidence checks</summary>
+          <p>
+            Upload the starter version supplied to students. Saving captures it
+            with this rubric. Starter contents stay private and are not sent to
+            OpenAI. A changed operation is not proof of authorship or correctness.
+          </p>
+          {[...new Set(paths.split("\n").map((p) => p.trim()))]
+            .filter((p) => p.toLowerCase().endsWith(".py"))
+            .map((path) => (
+              <div key={path}>
+                <label>
+                  Starter for {path}
+                  <input
+                    type="file"
+                    accept=".py,text/plain"
+                    onChange={async (event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      const version = ++starterRead.current;
+                      setSaved(false);
+                      setReadingStarter(true);
+                      try {
+                        if (file.size > 256 * 1024)
+                          throw Error("Starter files must total at most 256 KiB.");
+                        const source = new TextDecoder("utf-8", { fatal: true })
+                          .decode(await file.arrayBuffer());
+                        if (version !== starterRead.current) return;
+                        setRubric((current) => ({
+                          ...current,
+                          starter_files: { ...current.starter_files, [path]: source },
+                        }));
+                      } catch (error) {
+                        if (version === starterRead.current) notify(String(error), "err");
+                      } finally {
+                        if (version === starterRead.current) setReadingStarter(false);
+                      }
+                    }}
+                  />
+                </label>
+                {Object.prototype.hasOwnProperty.call(rubric.starter_files || {}, path) && (
+                  <p className="muted small">Starter captured for {path}.</p>
+                )}
+                {Object.prototype.hasOwnProperty.call(rubric.starter_files || {}, path) && (
+                  <Button small onClick={() => {
+                    setSaved(false);
+                    setRubric((current) => {
+                      const starter_files = { ...current.starter_files };
+                      delete starter_files[path];
+                      return { ...current, starter_files };
+                    });
+                  }}>Remove captured starter for {path}</Button>
+                )}
+              </div>
+            ))}
+        </details>
         {rubric.criteria.map((c, i) => (
           <fieldset key={i}>
             <legend>Criterion {i + 1}</legend>
+            <label>
+              Evidence requirement
+              <select className="input" value={c.evidence || ""} onChange={(event) => {
+                setSaved(false);
+                const evidence = event.target.value as typeof c.evidence;
+                setRubric({ ...rubric, criteria: rubric.criteria.map((v, j) => j === i ? { ...v, evidence } : v) });
+              }}>
+                <option value="">Source citations with instructor review</option>
+                <option value="python_implementation">Python implementation operation</option>
+                <option value="python_authored">Python operation changed from captured starter</option>
+              </select>
+            </label>
             <label>
               Identifier
               <input
@@ -264,6 +337,7 @@ export function AssessmentPanel({
                   .split("\n")
                   .map((v) => v.trim())
                   .filter(Boolean),
+                starter_files: Object.fromEntries(Object.entries(rubric.starter_files || {}).filter(([p]) => paths.split("\n").map((v) => v.trim()).includes(p))),
               });
               setSaved(true);
               notify(

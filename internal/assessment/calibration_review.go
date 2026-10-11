@@ -24,6 +24,11 @@ func validateSectionRubric(parent, section Rubric) error {
 		if !paths[p] {
 			return errors.New("section paths must belong to the parent rubric")
 		}
+		value, exists := section.StarterFiles[p]
+		want, captured := parent.StarterFiles[p]
+		if exists != captured || value != want {
+			return errors.New("section starter files must preserve the captured parent starter")
+		}
 	}
 	criteria := map[string]Criterion{}
 	for _, c := range parent.Criteria {
@@ -31,7 +36,7 @@ func validateSectionRubric(parent, section Rubric) error {
 	}
 	for _, c := range section.Criteria {
 		if want, ok := criteria[c.ID]; !ok || want != c {
-			return errors.New("section criteria must preserve the parent descriptions and points")
+			return errors.New("section criteria must preserve the parent descriptions, points and evidence requirements")
 		}
 	}
 	return nil

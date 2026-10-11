@@ -24,11 +24,13 @@ type Criterion struct {
 	ID          string  `json:"id"`
 	Description string  `json:"description"`
 	MaxPoints   float64 `json:"max_points"`
+	Evidence    string  `json:"evidence,omitempty"`
 }
 type Rubric struct {
-	Title    string      `json:"title"`
-	Paths    []string    `json:"paths"`
-	Criteria []Criterion `json:"criteria"`
+	Title        string            `json:"title"`
+	Paths        []string          `json:"paths"`
+	Criteria     []Criterion       `json:"criteria"`
+	StarterFiles map[string]string `json:"starter_files,omitempty"`
 }
 type Segment struct {
 	Location string `json:"location"`
@@ -125,10 +127,13 @@ func ValidateRubric(r Rubric) error {
 	if total > 10000 {
 		return fmt.Errorf("rubric maximum exceeds 10000 points")
 	}
-	return nil
+	return validateEvidenceRules(r)
 }
 func finite(n float64) bool { return !math.IsNaN(n) && !math.IsInf(n, 0) }
 func ValidateJudgments(d Document, js []Judgment, approval bool) (score, max float64, err error) {
+	if err := validateEvidenceRules(d.Rubric); err != nil {
+		return 0, 0, invalidJudgment("evidence_policy", "invalid captured rubric or evidence requirements")
+	}
 	if len(js) != len(d.Rubric.Criteria) {
 		return 0, 0, invalidJudgment("criterion_coverage", "every rubric criterion must appear exactly once")
 	}
@@ -150,6 +155,7 @@ func ValidateJudgments(d Document, js []Judgment, approval bool) (score, max flo
 		}
 	}
 	seen := map[string]bool{}
+	support := implementationSupport(d)
 	for _, j := range js {
 		limit, ok := limits[j.CriterionID]
 		if !ok || seen[j.CriterionID] {
@@ -183,6 +189,9 @@ func ValidateJudgments(d Document, js []Judgment, approval bool) (score, max flo
 			if c.Quote != "" && (len(c.Quote) > 1000 || strings.TrimSpace(c.Quote) == "" || !strings.Contains(text, c.Quote)) {
 				return 0, 0, invalidJudgment("citation_quote", "citation quote does not match its source location")
 			}
+		}
+		if j.Points != nil && !supportsImplementation(d.Rubric, j, support) {
+			return 0, 0, invalidJudgment("citation_implementation", "scored Python implementation criteria need a complete cited operation; authored mode also requires a change from the captured starter")
 		}
 	}
 	return score, max, nil
