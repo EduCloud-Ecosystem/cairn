@@ -968,3 +968,19 @@ foundations input exceeded the limit with the first draft; shortening guidance
 preserved its decisions and brought every input below 16000 bytes (maximum
 15987). Source, rubric, references and completed provider requests were unchanged.
 This preflight does not approve or apply the guidance.
+
+### Instructor decision: repeated report invocation
+
+After reviewing the v11 result, the instructor authorized the recommended
+**8/10** quality score: invoking the same test/report function twice at module
+level is one localized duplication defect under this rubric's explicit
+minimal-duplication obligation. Recommend keeping one invocation; do not add a
+separate correctness deduction for the same issue.
+
+A separate private continuation records one instructor-authorized assisted
+post-model calibration review and updates the draft guidance. The original
+10/10 model result, frozen 8/10 baseline and entire completed calibration run
+remain unchanged. This is not an independent reference or a general two-point
+penalty for every repeated call. All 12 guidance inputs still pass preflight;
+six profiles remain drafts, with no additional model requests or course grades.
+See `evaluations/2026-10-10-calibration-duplication-decision.json`.
