@@ -273,8 +273,8 @@
     if (busy || !preview) return;
     lock(true);
     try {
-      const receipt = await request(endpoint() + "/submission-previews/" + encodeURIComponent(preview.id) + "/confirm", {});
-      status(descriptions[receipt.status] || receipt.status);
+      await request(endpoint() + "/submission-previews/" + encodeURIComponent(preview.id) + "/confirm", {});
+      status("Confirmation received. Check the receipt below for the current submission status.");
       $("preview-section").hidden = true;
       preview = null; selectedFiles = []; $("files").value = ""; $("preview").disabled = true;
       $("file-summary").textContent = "Submission confirmed. Check the receipt below before submitting again.";
