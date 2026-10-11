@@ -20,3 +20,9 @@ output/
 
 # Python template-maintenance caches
 __pycache__/
+
+# Deterministic CI evidence (uploaded by workflows, not source)
+coverage.out
+ci-analysis/
+baseline-bench.txt
+head-bench.txt

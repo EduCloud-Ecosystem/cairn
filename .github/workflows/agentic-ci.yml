@@ -1,0 +1,172 @@
+name: Agentic CI
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: CI run ID for the current labelled same-repository PR head
+        required: true
+      mode:
+        type: choice
+        options: [review, regression, performance, repair]
+        default: review
+permissions:
+  contents: read
+concurrency:
+  group: agentic-${{ github.event.workflow_run.head_branch || inputs.run_id }}
+  cancel-in-progress: false
+jobs:
+  propose:
+    if: >-
+      vars.AGENTIC_CI_ENABLED == 'true' &&
+      (github.event_name == 'workflow_dispatch' || contains(fromJSON('["success","failure"]'), github.event.workflow_run.conclusion))
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      head: ${{ steps.plan.outputs.head }}
+      mode: ${{ steps.plan.outputs.mode }}
+      branch: ${{ steps.plan.outputs.branch }}
+      pr: ${{ steps.plan.outputs.pr }}
+    steps:
+      # Privileged workflow always loads its controller from the default branch.
+      # It never runs scripts, dependencies, or instructions from the candidate.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: controller
+          persist-credentials: false
+      - name: Freeze and authorize target
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_RUN_ID: ${{ inputs.run_id }}
+          INPUT_MODE: ${{ inputs.mode }}
+        run: python3 controller/tools/ci/agentic.py plan
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.plan.outputs.head }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Collect deterministic evidence if available
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(python3 -c 'import json; print(json.load(open("evidence/plan.json"))["run_id"])')
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name ci-coverage --dir evidence/coverage || true
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name ci-performance --dir evidence/performance || true
+          if test -f evidence/coverage/ci-analysis/coverage-summary.json; then
+            cp evidence/coverage/ci-analysis/coverage-summary.json evidence/coverage-summary.json
+          fi
+          if test -f evidence/performance/ci-analysis/performance.json; then
+            cp evidence/performance/ci-analysis/performance.json evidence/performance.json
+          fi
+      - name: Generate a structured suggestion without executing repository code
+        env:
+          OPENAI_API_KEY: ${{ secrets.EDUCLOUD_CI_OPENAI_API_KEY }}
+          AGENTIC_MODEL: ${{ vars.AGENTIC_MODEL }}
+        run: python3 controller/tools/ci/agentic.py propose
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agentic-proposal
+          path: evidence/
+          retention-days: 7
+
+  verify:
+    needs: propose
+    if: needs.propose.outputs.mode == 'repair' || needs.propose.outputs.mode == 'regression'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: synthetic-ci-only
+          POSTGRES_DB: cairn_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d cairn_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: controller
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.propose.outputs.head }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: agentic-proposal
+          path: evidence
+      - name: Enforce immutable target and patch allowlist
+        run: python3 controller/tools/ci/agentic.py validate
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: candidate/go.mod
+          cache: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      # No API key, App token, write permission, or persisted Git credentials in this job.
+      - name: Verify candidate through deterministic checks
+        working-directory: candidate
+        env:
+          CAIRN_TEST_DATABASE_URL: postgres://postgres:synthetic-ci-only@localhost:5432/cairn_test?sslmode=disable
+        run: |
+          test -z "$(gofmt -l internal pkg cmd)"
+          go test -race ./... -count=1
+          go test -race -tags postgres ./internal/store/postgres -count=1
+          go vet ./...
+          go build ./...
+          python3 tools/clustering_template.py --check
+          python3 -m unittest discover -s tools -v
+          cd web
+          npm ci --ignore-scripts
+          npm run typecheck
+          npm test
+          npm run build
+
+  publish:
+    needs: [propose, verify]
+    if: needs.propose.outputs.mode == 'repair' && vars.AGENTIC_CI_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: controller
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.propose.outputs.head }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: agentic-proposal
+          path: evidence
+      - name: Revalidate patch independently
+        run: python3 controller/tools/ci/agentic.py validate
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ vars.EDUCLOUD_CI_APP_ID }}
+          private-key: ${{ secrets.EDUCLOUD_CI_APP_PRIVATE_KEY }}
+          permission-actions: read
+          permission-contents: write
+          permission-pull-requests: read
+      - name: Recheck live PR and push a normal signed-off commit
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: python3 controller/tools/ci/publish.py

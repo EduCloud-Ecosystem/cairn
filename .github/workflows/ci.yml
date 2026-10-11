@@ -74,7 +74,23 @@ jobs:
       # the provisioning queue, and the session store are all concurrent, and a
       # data race there is exactly the class of bug a non-race run misses.
       - name: go test (race)
-        run: go test ./... -race -count=1
+        run: go test ./... -race -count=1 -coverprofile=coverage.out
+
+      - name: Changed-statement coverage evidence
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --no-tags origin "$BASE_SHA"
+          python3 tools/ci/analysis.py coverage --base "$BASE_SHA"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-coverage
+          path: |
+            coverage.out
+            ci-analysis/coverage-summary.json
+          retention-days: 7
 
       - name: PostgreSQL conformance and atomic assessment publication
         env:
@@ -127,3 +143,68 @@ jobs:
         run: python3 tools/clustering_template.py --check
       - name: Test publication drift guards
         run: python3 -m unittest discover -s tools -v
+
+  security:
+    name: Security — vulnerabilities, workflow policy, property checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Known reachable Go vulnerabilities
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          govulncheck ./...
+      - name: Dashboard dependency vulnerabilities
+        working-directory: web
+        run: npm audit --audit-level=high
+      - name: Workflow static analysis
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          actionlint -shellcheck=
+      - name: Automation boundary tests
+        run: python3 -m unittest discover -s tools/ci -p 'test_*.py' -v
+      - name: Fuzz evidence path confinement and grade bounds
+        run: |
+          go test ./tools/ci/bench -run '^$' -fuzz '^FuzzArtifactPathConfinement$' -fuzztime=15s -parallel=2
+          go test ./tools/ci/bench -run '^$' -fuzz '^FuzzGradeBounds$' -fuzztime=15s -parallel=2
+          go test ./internal/lti -run '^$' -fuzz '^FuzzServiceURL$' -fuzztime=15s -parallel=2
+
+  performance:
+    name: Performance — matched baseline and profiling
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Compare identical harness on base and proposed source
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git worktree add --detach /tmp/cairn-base "$BASE_SHA"
+          mkdir -p /tmp/cairn-base/tools/ci/bench
+          cp tools/ci/bench/assessment_test.go /tmp/cairn-base/tools/ci/bench/assessment_test.go
+          (cd /tmp/cairn-base && go test ./tools/ci/bench -run '^$' -bench . -benchtime=250ms -count=6 -benchmem) > baseline-bench.txt
+          go test ./tools/ci/bench -run '^$' -bench . -benchtime=250ms -count=6 -benchmem > head-bench.txt
+          python3 tools/ci/analysis.py benchmark --base "$BASE_SHA"
+          go test ./tools/ci/bench -run '^$' -bench . -benchtime=1s -cpuprofile=ci-analysis/cpu.pprof -memprofile=ci-analysis/memory.pprof
+          go tool pprof -top ci-analysis/cpu.pprof > ci-analysis/cpu-top.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-performance
+          path: |
+            ci-analysis/
+            baseline-bench.txt
+            head-bench.txt
+          retention-days: 7
