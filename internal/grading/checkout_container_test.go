@@ -6,10 +6,16 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net"
+	"net/http"
+	"net/http/cgi"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -221,5 +227,108 @@ func TestCheckoutPreservesPrivateCallerDirectory(t *testing.T) {
 	info, err := os.Stat(dir)
 	if err != nil || info.Mode().Perm() != 0700 {
 		t.Fatalf("caller privacy changed: %v %v", info, err)
+	}
+}
+
+// Real smart HTTP authentication is essential here: a file:// clone never
+// invokes Git's credential path and cannot detect a broken password helper.
+func TestCheckoutDockerAuthenticatedHTTP(t *testing.T) {
+	if os.Getenv("CAIRN_CHECKOUT_DOCKER_TEST") != "1" {
+		t.Skip("set CAIRN_CHECKOUT_DOCKER_TEST=1 after building Dockerfile.checkout")
+	}
+	git := func(args ...string) string {
+		t.Helper()
+		out, err := exec.Command("git", args...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("fixture git: %v: %s", err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	root := t.TempDir()
+	working := filepath.Join(root, "working")
+	git("init", working)
+	git("-C", working, "config", "user.name", "Synthetic fixture")
+	git("-C", working, "config", "user.email", "fixture@example.invalid")
+	write := func(content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(working, "answer.txt"), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+		git("-C", working, "add", "answer.txt")
+		git("-C", working, "commit", "-m", "Synthetic source")
+	}
+	write("pinned private source\n")
+	pin := git("-C", working, "rev-parse", "HEAD")
+	write("newer private source\n")
+	project := filepath.Join(root, "http")
+	if err := os.MkdirAll(filepath.Join(project, "course"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	git("clone", "--bare", working, filepath.Join(project, "course", "private.git"))
+	backend := &cgi.Handler{Path: filepath.Join(git("--exec-path"), "git-http-backend"), Root: "/",
+		Env: []string{"GIT_PROJECT_ROOT=" + project, "GIT_HTTP_EXPORT_ALL=1", "REMOTE_USER=fixture"}}
+	// Include shell metacharacters: credentials are data, never shell source.
+	const password = "synthetic-'$;`-password"
+	var accepted, rejected atomic.Int32
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, token, ok := r.BasicAuth()
+		if !ok || user != "fixture" || token != password {
+			rejected.Add(1)
+			w.Header().Set("WWW-Authenticate", `Basic realm="synthetic-private-repository"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		accepted.Add(1)
+		backend.ServeHTTP(w, r)
+	}))
+	listener, err := net.Listen("tcp", "0.0.0.0:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.Listener.Close()
+	server.Listener = listener
+	server.Start()
+	defer server.Close()
+	host := "host.docker.internal"
+	if runtime.GOOS == "linux" {
+		out, err := exec.Command("docker", "network", "inspect", "bridge", "--format", "{{(index .IPAM.Config 0).Gateway}}").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		host = strings.TrimSpace(string(out))
+	}
+	_, port, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, valid := range []bool{false, true} {
+		token := password
+		if !valid {
+			token = "incorrect-synthetic-password"
+		}
+		checkout := makeCheckout(adapter.HostForgejo, CloneCreds{Scheme: "http", Hostname: net.JoinHostPort(host, port), Username: "fixture", Token: token})
+		checkout.Container = &CheckoutContainer{Image: "cairn-checkout:local"}
+		checkout.Timeout = 30 * time.Second
+		destination := t.TempDir()
+		err := checkout.FetchRevision(context.Background(), adapter.RepoRef{Host: adapter.HostForgejo, Namespace: "course", Name: "private"}, pin, destination)
+		if !valid {
+			if err == nil || strings.Contains(err.Error(), token) {
+				t.Fatal("wrong password must fail without disclosing it")
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(filepath.Join(destination, "answer.txt"))
+		if err != nil || string(data) != "pinned private source\n" {
+			t.Fatalf("private pinned source mismatch: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(destination, ".git")); !os.IsNotExist(err) {
+			t.Fatal("credential-bearing Git metadata exported")
+		}
+	}
+	if accepted.Load() < 2 || rejected.Load() == 0 {
+		t.Fatal("fixture did not exercise both authentication and rejection")
 	}
 }
