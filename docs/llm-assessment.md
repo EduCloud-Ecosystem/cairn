@@ -662,6 +662,39 @@ sources are now consumed evaluation data. The next stage is broader instructor
 course rehearsal with fixed policy and explicit instructor review, not automatic
 grade publication.
 
+### Broader course rehearsal (v10)
+
+The [broader rehearsal record](evaluations/2026-10-10-broader-rehearsal-v10.json)
+covers two archived examples from each of six additional assignment components
+across INFO-511, INFO-523 and INFO-557. Scoring anchors were frozen before source
+inspection and assistant references before provider responses. All twelve
+requests produced accepted proposals: 10/12 scored criteria matched the
+references, and all eight expected unassessable criteria stayed null. These are
+component scores from one instructor's coursework, not full-assignment grades,
+cross-instructor validation, or fresh holdout results.
+
+The evidence review failed more often than the score comparison. All six scored
+quality judgments cited signatures or scaffold rather than the implementation
+claims; two functional judgments omitted credited operations. One quality
+deduction also crossed into an explicitly excluded functional component. A
+malformed authored attempt correctly stayed null but was inaccurately described
+as untouched scaffold. Separately attributed assistant reviews repair the
+supporting evidence and explanations while preserving all original proposals.
+They do not establish independent instructor ground truth.
+
+Before transmission, a prior privacy redaction that broke four model-name
+string literals was repaired after checking the original source hash and AST.
+Only neutral quoted names changed; the student algorithm was not repaired.
+Genuine invalid student syntax remained intact. The preparation transformations
+are recorded privately, and the scoring rubrics did not change after inspection.
+
+All six profiles remain drafts with zero grades and no production activation.
+Unreviewed feedback is not ready: the next build must strengthen authored-source
+evidence review using pinned starter provenance, flag scaffold-only support,
+preserve functional/quality component boundaries, and validate privacy
+transformations before sending. Do not treat exact quotation checks or score
+agreement as proof of semantic feedback quality.
+
 ### Contiguous multiline excerpts (v7)
 
 Prompt v7 permits exact contiguous multiline excerpts in line-based artifacts.
