@@ -158,13 +158,39 @@ func TestJWKSRedirectAndMalformedKeysFailClosed(t *testing.T) {
 	}
 }
 func FuzzServiceURL(f *testing.F) {
-	for _, s := range []string{"https://lms.example/ags/1", "https://lms.example.evil/ags/1", "https://lms.example@evil/ags", "https://lms.example/../secret", "https://lms.example/%2fsecret", "http://127.0.0.1:80/", "https://lms.example/ags?token=1"} {
+	for _, s := range []string{"https://lms.example/ags/1", "htTps://lms.example/", "HTTPS://lms.example/ags/1", "https://lms.example.evil/ags/1", "https://lms.example@evil/ags", "https://lms.example/../secret", "https://lms.example/%2fsecret", "http://127.0.0.1:80/", "https://lms.example/ags?token=1"} {
 		f.Add(s)
 	}
 	c := &lti.Client{Config: lti.Config{ServiceOrigin: "https://lms.example"}}
 	f.Fuzz(func(t *testing.T, s string) {
-		if c.ServiceURL(s) && (!strings.HasPrefix(s, "https://lms.example/") || strings.ContainsAny(s, "?#\r\n")) {
+		if !c.ServiceURL(s) {
+			return
+		}
+		// Verify the actual HTTP request destination. A raw lowercase prefix
+		// incorrectly rejects mixed-case schemes normalized by the URL parser.
+		req, err := http.NewRequest(http.MethodGet, s, nil)
+		if err != nil || req.URL.Scheme != "https" || req.URL.Host != "lms.example" ||
+			req.URL.User != nil || req.URL.Opaque != "" || !strings.HasPrefix(req.URL.Path, "/") ||
+			strings.ContainsAny(s, "?#\r\n") {
 			t.Fatalf("unsafe endpoint accepted: %q", s)
 		}
 	})
+}
+
+func TestServiceURLSchemeCasePreservesRequestOrigin(t *testing.T) {
+	c := &lti.Client{Config: lti.Config{ServiceOrigin: "https://lms.example"}}
+	for _, raw := range []string{"https://lms.example/", "htTps://lms.example/", "HTTPS://lms.example/ags/1"} {
+		if !c.ServiceURL(raw) {
+			t.Fatalf("valid HTTPS origin rejected: %q", raw)
+		}
+		req, err := http.NewRequest(http.MethodGet, raw, nil)
+		if err != nil || req.URL.Scheme != "https" || req.URL.Host != "lms.example" {
+			t.Fatalf("request origin changed for %q: %v", raw, err)
+		}
+	}
+	for _, raw := range []string{"htTp://lms.example/", "htTps://lms.example.evil/", "htTps://lms.example@evil/", "htTps://lms.example/?token=1", "htTps://lms.example/#", "htTps://lms.example/%2fsecret"} {
+		if c.ServiceURL(raw) {
+			t.Fatalf("unsafe origin accepted: %q", raw)
+		}
+	}
 }
