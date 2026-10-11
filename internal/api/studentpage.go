@@ -25,7 +25,6 @@ const studentPageHTML = `<!doctype html>
 <style>
   :root { color-scheme: light dark; }
   body { font-family: system-ui, sans-serif; max-width: 820px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #111; background: #fff; }
-  @media (prefers-color-scheme: dark) { body { color: #eee; background: #161616; } a { color: #6ab0ff; } .card, details { border-color: #444; } .muted { color: #aaa; } }
   h1 { font-size: 1.5rem; }
   .muted { color: #555; }
   .card { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
@@ -33,7 +32,7 @@ const studentPageHTML = `<!doctype html>
   .title { font-weight: 600; font-size: 1.1rem; }
   .score { font-variant-numeric: tabular-nums; font-weight: 600; }
   .pill { display: inline-block; padding: .1em .5em; border-radius: 999px; font-size: .8rem; border: 1px solid currentColor; }
-  .running { color: #b06a00; }
+  .running { color: #8a5200; }
   .pass { color: #1a7f37; }
   .fail { color: #b3261e; }
   details { border: 1px solid #ccc; border-radius: 6px; padding: .25rem .5rem; margin-top: .5rem; }
@@ -42,13 +41,21 @@ const studentPageHTML = `<!doctype html>
   th, td { text-align: left; padding: .25rem .5rem; border-bottom: 1px solid #ddd; font-size: .95rem; }
   ul.tests { list-style: none; padding: 0; }
   ul.tests li { padding: .25rem 0; border-bottom: 1px solid #eee; }
-  code { background: rgba(127,127,127,.15); padding: .05em .3em; border-radius: 3px; }
+  code { overflow-wrap: anywhere; background: rgba(127,127,127,.15); padding: .05em .3em; border-radius: 3px; }
+  @media (prefers-color-scheme: dark) {
+    body { color: #eee; background: #161616; } a { color: #6ab0ff; }
+    .card, details { border-color: #666; } .muted { color: #aaa; }
+    .running { color: #ffc46b; } .pass { color: #74d98d; } .fail { color: #ff9990; }
+  }
+  :focus-visible { outline: 3px solid #347ec4; outline-offset: 3px; }
 </style>
 </head>
 <body>
+<main>
 <h1>My work</h1>
 <p id="status" class="muted" aria-live="polite">Loading…</p>
 <div id="list"></div>
+</main>
 
 <script>
 "use strict";

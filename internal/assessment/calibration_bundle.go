@@ -126,3 +126,17 @@ func (s Service) ImportCalibrationBundle(ctx context.Context, cid, owner string,
 	d.SamplePurpose = b.Purpose
 	return s.saveCalibration(ctx, c, d)
 }
+
+// CalibrationBundleDocument extracts one source-only example for offline review.
+// It never imports a profile, executes coursework, or contacts a provider.
+func CalibrationBundleDocument(b CalibrationBundle, sampleID string) (Document, error) {
+	if err := ValidateCalibrationBundle(b); err != nil {
+		return Document{}, err
+	}
+	for _, e := range b.Examples {
+		if e.ID == sampleID {
+			return uploadedCalibrationDocument(b.Rubric, nil, "offline-readiness", e.Files)
+		}
+	}
+	return Document{}, errors.New("sample not found in source bundle")
+}

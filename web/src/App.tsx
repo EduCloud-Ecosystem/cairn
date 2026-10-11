@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { api, type Classroom, type Operator } from "./api";
 import { Sidebar } from "./components/Sidebar";
 import { ClassroomDetail } from "./components/ClassroomDetail";
@@ -65,13 +66,13 @@ export default function App() {
   }
   if (operator === null) {
     return (
-      <div className="login">
+      <main className="login">
         <div className="login-card">
           <span className="brand-mark">cairn</span>
           <h1>Instructor console</h1>
           <p className="muted">Sign in with your Git host account to continue.</p>
           <Button variant="primary" onClick={() => (window.location.href = api.loginUrl())}>
-            Sign in with GitHub
+            Sign in with Git host
           </Button>
           <p className="small muted login-note">
             Access is limited to operators allowlisted on this instance.
@@ -80,12 +81,13 @@ export default function App() {
             Returning student? <a href="/student/login">Sign in here</a>.
           </p>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
     <div className="app">
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       <Sidebar
         classrooms={classrooms}
         selectedId={selectedId}
@@ -95,7 +97,7 @@ export default function App() {
         onLogout={handleLogout}
       />
 
-      <main className="main">
+      <main id="main-content" className="main" tabIndex={-1}>
         {selected ? (
           <ClassroomDetail key={selected.id} classroom={selected} notify={notify} />
         ) : (
@@ -123,13 +125,14 @@ export default function App() {
         />
       )}
 
-      {toast && (
-        <div className={"toast" + (toast.kind === "err" ? " is-err" : "")}>
+      {toast && createPortal(
+        <div role={toast.kind === "err" ? "alert" : "status"} className={"toast" + (toast.kind === "err" ? " is-err" : "")}>
           <div>
             <div className="mono">{toast.kind === "err" ? "error" : "ok"}</div>
             {toast.msg}
           </div>
-        </div>
+        </div>,
+        document.querySelector("dialog[open]") ?? document.body,
       )}
     </div>
   );

@@ -1,9 +1,9 @@
 # Roadmap
 
-Timeline context: GitHub Classroom sign-ups are already disabled; full shutdown
-is **August 28, 2026**, with final data deletion September 4. The differentiator
-(host-agnosticism + privacy) should land early enough to matter to educators
-migrating now.
+Current testing entry point: [testing readiness](docs/testing-readiness.md).
+The July–August sections below preserve delivery history; they are not the current
+pilot schedule. The October component pilot uses synthetic fixtures first, followed
+by independent instructor review and separately accepted hosted/LMS testing.
 
 ## Phase 1 — MVP (GitHub only)
 The full vertical slice on one host, with the adapter interface and data model in
@@ -198,8 +198,10 @@ supported Brightspace), so the manual fallback ships first and independently.
 - [ ] Accept a real course against the Waypoint Python/R workspace pilot:
   institutional OIDC, wildcard HTTPS, resource capacity, off-host restore, and
   roster revocation. A local synthetic acceptance is not a production launch.
-- [ ] Close the audit's instructor-owned grading manifest and operator resource
-  ceiling findings before using learner submissions for authoritative grades.
+- [x] Instructor-owned grading manifests and operator resource ceilings were
+  implemented October 7; bounded acquisition and aggregate deadlines followed
+  October 11. Checkbox reconciled here with the implementation history below.
+  Course-specific harness acceptance remains separate.
 
 ## Instructor grading authority (October 7, 2026)
 
@@ -237,8 +239,9 @@ supported Brightspace), so the manual fallback ships first and independently.
 - [x] Frozen transfer suite across new tasks and Python/R formats: 17/18 valid
   proposals, 34/34 provisional matches, one rejected citation-location failure.
   Human ratings remain 0/34; see `docs/evaluations/2026-10-08-transfer-v1.json`.
-- [ ] Investigate the rejected multi-file citation before course acceptance;
-  the successful second trial does not resolve the first failure.
+- [x] The rejected multi-file citation was investigated in the subsequent v7/v10
+  evaluation series (`docs/evaluations/2026-10-10-citation-v10.json`). The original
+  failed trial remains evidence; semantic feedback acceptance still needs review.
 - [x] Per-instructor calibration projects: uploads and pinned existing Cairn
   submissions, explicit model transmission, reviewed scores/feedback, frozen
   owner/rubric/model profiles and fresh-sample follow-up rounds. Only approved
@@ -291,3 +294,19 @@ supported Brightspace), so the manual fallback ships first and independently.
   acceptance remain deployment gates; component drills do not establish them.
 - [ ] Uncertain repository adoption and provider collaborator/invitation repair
   require manual ownership investigation. A path alone cannot authorize adoption.
+
+## Repeatable testing preparation (October 11, 2026)
+
+- [x] Combined Cairn–Waypoint synthetic rehearsal: real disposable Git host/OAuth,
+  pinned grading, webhook replay, reviewed feedback, simulated LMS conflicts,
+  persistence, and 5/15 learner request workloads. Waypoint PR #9 is the original
+  implementation; its Linux run also exercises Python/R, quotas and revocation.
+- [x] Keyboard dialog semantics, focus containment/return, Escape, skip navigation,
+  visible focus and reduced-motion support; automated accessibility checks are
+  exercised by Waypoint's reviewed-assessment browser rehearsal.
+- [ ] Independent instructor scoring and semantic judgment for each course's
+  frozen calibration packet. Agent-prepared references cannot satisfy this gate.
+- [ ] Human assistive-technology and mobile/zoom usability acceptance, using the
+  testing checklist; automated browser checks provide narrower regression evidence.
+- [ ] Actual hosted worker, off-host restore, institution-approved identity/roster,
+  and Brightspace tenant acceptance. Local simulation does not close these gates.

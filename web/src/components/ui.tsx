@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 
 export type Notify = (msg: string, kind?: "ok" | "err") => void;
 
@@ -69,14 +69,50 @@ export function Modal({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const subtitleId = useId();
+  useLayoutEffect(() => {
+    const element = dialog.current;
+    element?.showModal();
+    return () => element?.close();
+  }, []);
+
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>{title}</h2>
-        {subtitle && <p className="modal-sub">{subtitle}</p>}
+    <dialog
+      ref={dialog}
+      className="modal"
+      tabIndex={-1}
+      aria-labelledby={titleId}
+      onKeyDown={(event) => {
+        if (event.key !== "Tab") return;
+        const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, summary, [tabindex]',
+        )).filter((element) => element.tabIndex >= 0 &&
+          !element.matches(':disabled, [hidden]') && element.getClientRects().length > 0);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (!first) { event.preventDefault(); event.currentTarget.focus(); }
+        else if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) {
+          event.preventDefault(); last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault(); first.focus();
+        }
+      }}
+      aria-describedby={subtitle ? subtitleId : undefined}
+      onCancel={(event) => { event.preventDefault(); onClose(); }}
+      onClick={(event) => {
+        if (event.target !== event.currentTarget) return;
+        const box = event.currentTarget.getBoundingClientRect();
+        if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) onClose();
+      }}
+    >
+      <div>
+        <h2 id={titleId}>{title}</h2>
+        {subtitle && <p id={subtitleId} className="modal-sub">{subtitle}</p>}
         {children}
       </div>
-    </div>
+    </dialog>
   );
 }
 

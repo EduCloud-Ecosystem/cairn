@@ -9,17 +9,17 @@
   --paper-3: #efe9dc;
   --ink: #1c1a16;
   --ink-2: #514c42;
-  --muted: #908978;
+  --muted: #6c6556;
   --line: #ddd5c5;
   --line-2: #c8bfab;
 
-  --accent: #d24a22;
+  --accent: #b83d18;
   --accent-ink: #ad3a16;
   --accent-wash: #f6e3d8;
 
-  --ok: #2f7d4f;
+  --ok: #25683e;
   --ok-wash: #e2efe4;
-  --warn: #9c6b12;
+  --warn: #80560b;
   --warn-wash: #f4e9d2;
   --info: #2a6a8a;
   --info-wash: #dcebf1;
@@ -622,19 +622,14 @@ a {
 
 /* ---- modal ---- */
 
-.overlay {
-  position: fixed;
-  inset: 0;
+.modal::backdrop {
   background: rgba(28, 26, 22, 0.32);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 12vh;
-  z-index: 40;
-  animation: fadeIn 0.16s ease both;
 }
 .modal {
+  margin: 12vh auto auto;
+  max-height: 80vh;
+  overflow-y: auto;
+  color: var(--ink);
   width: min(520px, calc(100vw - 32px));
   background: var(--paper-2);
   border: 1px solid var(--line-2);
@@ -751,3 +746,16 @@ a {
 .assessment-panel article { margin-block: 1rem; }
 .assessment-panel code { overflow-wrap: anywhere; }
 .assessment-panel summary { cursor: pointer; margin-block: .6rem; }
+
+/* Keep keyboard focus visible, and respect the operating system motion setting. */
+:focus-visible { outline: 3px solid var(--accent-ink); outline-offset: 3px; }
+.input:focus-visible, .select:focus-visible { outline: 3px solid var(--accent-ink); }
+.skip-link { position: fixed; left: 12px; top: -100px; z-index: 100; padding: 12px;
+  background: var(--paper-2); color: var(--ink); }
+.skip-link:focus { top: 12px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* Modal notifications remain in the top layer without covering form actions. */
+.modal > .toast { position: static; max-width: none; margin-top: 16px; }
