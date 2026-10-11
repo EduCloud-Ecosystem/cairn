@@ -125,11 +125,13 @@ export interface RubricCriterion {
   id: string;
   description: string;
   max_points: number;
+  evidence?: "" | "python_implementation" | "python_authored";
 }
 export interface AssessmentRubric {
   title: string;
   paths: string[];
   criteria: RubricCriterion[];
+  starter_files?: Record<string, string>;
 }
 export interface Evidence {
   quote?: string;

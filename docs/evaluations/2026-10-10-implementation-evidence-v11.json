@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-10",
+  "prompt_version": "cairn-rubric-v11",
+  "scope": "Opt-in Python implementation evidence checks; no production activation",
+  "historical_replay": {
+    "source_report": "2026-10-10-broader-rehearsal-v10.json",
+    "quality_criteria_samples": 8,
+    "pinned_starter_snapshots": 4,
+    "counts": {
+      "python_authored_null": 2,
+      "python_authored_null_preserved": 2,
+      "python_authored_original_rejected": 6,
+      "python_authored_review_passed": 6,
+      "python_authored_scored": 6,
+      "python_implementation_null": 2,
+      "python_implementation_null_preserved": 2,
+      "python_implementation_original_rejected": 6,
+      "python_implementation_review_passed": 6,
+      "python_implementation_scored": 6
+    },
+    "provider_calls": 0,
+    "original_proposals_modified": 0,
+    "independent_instructor_reviews": 0,
+    "grades_published": 0
+  },
+  "synthetic_live_controls": {
+    "requests": 3,
+    "attempts_per_case": 1,
+    "passed": 3,
+    "cases": [
+      "changed implementation scored 4/4",
+      "inherited implementation retained null",
+      "signature and stub retained null"
+    ],
+    "private_report_sha256": "d3490c642abaef13cddeb3d3823346f7a52d1dbe790057448cb8bb234412d4cc"
+  },
+  "browser": {
+    "synthetic_loopback": true,
+    "missing_starter_save_rejected": true,
+    "uploaded_starter_and_mode_persisted_after_reload": true,
+    "exact_starter_bytes_verified_in_database": true,
+    "grades_published": 0
+  },
+  "limits": [
+    "Lexical operation-line check; no full Python AST or execution",
+    "No correctness, semantic claim coverage or independent authorship proof",
+    "Instructor-provided starter provenance is not attested by Cairn",
+    "R, notebook and prose criteria retain default source-citation mode",
+    "Profiles need fresh calibration after rubric or prompt changes"
+  ],
+  "private_evidence_manifest_sha256": "c69bb212f15c7317860abc3a029d2a7f038714291b6463a8326cab43f6a3d0fb"
+}

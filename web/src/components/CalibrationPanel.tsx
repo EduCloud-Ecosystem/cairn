@@ -1007,7 +1007,8 @@ function SectionStart({
       <p>
         Save the complete assignment rubric first. Choose the section rubric
         from a prepared packet. Section criteria must keep the assignment’s
-        descriptions and points. Each section stays attached to the same parent
+        descriptions, points, evidence requirements and starter files for its paths.
+        Each section stays attached to the same parent
         assignment.
       </p>
       <label>
@@ -1022,8 +1023,8 @@ function SectionStart({
             const file = e.target.files?.[0];
             if (!file) return;
             try {
-              if (file.size > 65536)
-                throw Error("Section rubric must be at most 64 KiB.");
+              if (file.size > 900 * 1024)
+                throw Error("Section rubric must be at most 900 KiB.");
               const value = JSON.parse(await file.text()) as AssessmentRubric;
               if (version === readVersion.current) setSection(value);
             } catch (err) {

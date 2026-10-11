@@ -871,3 +871,66 @@ source-quote inspection, explicit copying and review, and persistence after
 reload. Both profiles remained drafts with no independent references; the
 fixture recorded zero grades and zero provider requests. Real-course instructor
 acceptance and authorized source transmission remain separate steps.
+
+## Python implementation evidence requirements (v11)
+
+In **Assessment rubric**, set a criterion's **Evidence requirement** to
+**Python implementation operation** to reject scores supported only by function
+signatures, comments, docstrings, imports or unimplemented stubs. For assignments
+with supplied code, choose **Python operation changed from captured starter**
+and upload the starter for each `.py` path under **Starter files for Python
+evidence checks**. Save the rubric before capturing new work or calibrating.
+An empty starter file is an explicit empty baseline; a missing upload is not.
+
+The JSON equivalents are criterion `evidence: "python_implementation"` or
+`evidence: "python_authored"`, plus rubric `starter_files`, a path-to-source map.
+Starter files must match `.py` rubric paths, contain UTF-8 text without NULs,
+and fit 4096 lines each and 256 KiB combined. The starter is instructor-supplied;
+Cairn does not attest that it matches a remote template. Keep its repository and
+commit provenance in the private calibration record.
+
+These optional requirements apply to model proposals, imports, calibration
+judgments, supporting reviews and final approval. An eligible citation must
+include the full detected operation text on its source line. Empty or partial
+quotes cannot use an operation elsewhere on that line. Null remains
+unassessable and cannot be published as a grade. A rejected provider response is
+recorded as a failed attempt; it is not silently scored or automatically retried.
+
+The check is deliberately narrow: it recognizes operation-like Python source
+lines lexically, without executing student code or parsing a full Python AST.
+It does not prove syntax validity, correctness, independent authorship, or that
+every feedback claim is supported. Multiline expressions still need additional
+citations for the claimed behavior. Unsupported lexical forms may require
+manual review. For changed-from-starter mode, a line must be absent from the
+starter after whitespace/comment normalization; matching is independent of
+position and scope, and whitespace inside strings is also normalized. Unchanged
+shared lines therefore cannot establish changed implementation. This is a
+minimum evidence check, not a plagiarism detector or semantic grading test.
+
+Starter snapshots remain in the private rubric and captured records. They are
+not added to OpenAI requests; submitted source may naturally contain overlapping
+starter text. The provider receives the criterion's requirement and eligible
+excerpt IDs computed by Cairn. Existing source, request and citation size limits
+still apply. The optional fields preserve legacy rubric digests when absent.
+Changing an evidence rule or starter changes the rubric/input digest, and section
+rubrics must preserve the parent's requirement and corresponding starter.
+Prompt version `cairn-rubric-v11` requires fresh calibration for subsequent
+provider use. Existing historical proposals remain unchanged. R, notebooks and
+prose retain the default source-citation mode in this first version.
+
+The October 10 offline replay rejected all six previously identified
+signature/scaffold-only quality judgments in both modes, accepted their six
+corrected supporting reviews, and preserved two null quality judgments. Four
+starter snapshots were fetched at their recorded template commits. Three
+single-attempt synthetic OpenAI controls passed: changed implementation scored;
+inherited implementation and an unimplemented stub remained null. This is
+bounded implementation evidence, not independent instructor acceptance or
+production validation. See `evaluations/2026-10-10-implementation-evidence-v11.json`.
+
+To repeat only the synthetic live checks, choose a new private output filename:
+
+```sh
+CAIRN_OPENAI_LIVE_KEY_FILE=/private/cairn-openai.env \
+CAIRN_IMPLEMENTATION_EVAL_OUTPUT=/private/new-implementation-controls.json \
+go test ./internal/assessment -run '^TestOpenAILiveImplementationControls$' -v -count=1
+```
