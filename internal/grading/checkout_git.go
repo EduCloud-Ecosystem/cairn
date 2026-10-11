@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/EduCloud-Ecosystem/cairn/pkg/adapter"
 )
@@ -35,8 +36,10 @@ type CloneCreds struct {
 // the clone URL, or .git/config, so it cannot be read by untrusted student code
 // in the grading container (which mounts the checkout read-write as /work).
 type GitCheckout struct {
-	Hosts  map[adapter.Host]CloneCreds
-	GitBin string // default "git"
+	Hosts     map[adapter.Host]CloneCreds
+	GitBin    string             // default "git"; host mode is for trusted local development only
+	Container *CheckoutContainer // nil permits unsafe host acquisition
+	Timeout   time.Duration      // entire clone/fetch/export; default 2 minutes
 }
 
 // NewGitCheckout returns a GitCheckout configured with the provided per-host
@@ -97,11 +100,20 @@ func (g *GitCheckout) FetchRevision(ctx context.Context, repo adapter.RepoRef, r
 }
 
 func (g *GitCheckout) fetch(ctx context.Context, repo adapter.RepoRef, dir, revision string) error {
+	timeout := g.Timeout
+	if timeout <= 0 {
+		timeout = 2 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	cloneURL, token, err := g.cloneRequest(repo)
 	if err != nil {
 		return err
 	}
 
+	if g.Container != nil {
+		return g.fetchContainer(ctx, cloneURL, token, dir, revision)
+	}
 	args := []string{"clone", "--depth", "1"}
 	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 
@@ -130,9 +142,9 @@ func (g *GitCheckout) fetch(ctx context.Context, repo adapter.RepoRef, dir, revi
 	args = append(args, cloneURL, dir)
 	cmd := exec.CommandContext(ctx, g.bin(), args...)
 	cmd.Env = env
-	out, err := cmd.CombinedOutput()
+	out, err := gitOutput(cmd)
 	if err != nil {
-		return fmt.Errorf("git clone: %v: %s", err, truncate(string(out)))
+		return fmt.Errorf("git clone: %v: %s", err, truncate(strings.ReplaceAll(string(out), tokenPlaceholder(token), "[redacted]")))
 	}
 	if revision != "" {
 		for _, args := range [][]string{
@@ -141,14 +153,29 @@ func (g *GitCheckout) fetch(ctx context.Context, repo adapter.RepoRef, dir, revi
 		} {
 			cmd := exec.CommandContext(ctx, g.bin(), args...)
 			cmd.Env = env
-			if out, err := cmd.CombinedOutput(); err != nil {
-				return fmt.Errorf("checkout policy revision: %v: %s", err, truncate(string(out)))
+			if out, err := gitOutput(cmd); err != nil {
+				return fmt.Errorf("checkout policy revision: %v: %s", err, truncate(strings.ReplaceAll(string(out), tokenPlaceholder(token), "[redacted]")))
 			}
 		}
-		out, err := exec.CommandContext(ctx, g.bin(), "-C", dir, "rev-parse", "HEAD").Output()
+		out, err := gitOutput(exec.CommandContext(ctx, g.bin(), "-C", dir, "rev-parse", "HEAD"))
 		if err != nil || strings.TrimSpace(string(out)) != revision {
 			return fmt.Errorf("checked-out policy revision differs from requested commit")
 		}
 	}
 	return nil
+}
+
+// gitOutput drains arbitrary diagnostics without accumulating them in memory.
+func gitOutput(cmd *exec.Cmd) ([]byte, error) {
+	var out boundedOutput
+	cmd.Stdout, cmd.Stderr = &out, &out
+	cmd.WaitDelay = time.Second
+	err := cmd.Run()
+	return []byte(out.String()), err
+}
+func tokenPlaceholder(token string) string {
+	if token == "" {
+		return "\x00"
+	}
+	return token
 }

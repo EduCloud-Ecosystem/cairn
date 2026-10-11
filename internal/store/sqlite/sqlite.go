@@ -65,7 +65,12 @@ func Open(path string) (*Store, error) {
 
 // schema is the SQLite-adapted version of the Postgres 0001_init schema plus
 // the last_error column added in migration 0002.
-const schema = `CREATE TABLE IF NOT EXISTS lti_records (
+const schema = `CREATE TABLE IF NOT EXISTS reconciliation_audit (
+ plan_id TEXT PRIMARY KEY,
+ roster_id TEXT NOT NULL REFERENCES roster_entries(id) ON DELETE CASCADE,
+ document TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS lti_records (
  id TEXT PRIMARY KEY,
  kind TEXT NOT NULL CHECK(kind IN ('link','binding','delivery')),
  unique_key TEXT NOT NULL UNIQUE,
@@ -230,22 +235,41 @@ CREATE INDEX IF NOT EXISTS idx_jobs_status_scheduled ON provisioning_jobs (statu
 `
 
 func (s *Store) migrate(ctx context.Context) error {
+	// SQLite DDL is transactional. A failed upgrade must leave the old schema
+	// and coursework intact so an operator can correct the cause and retry.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
 	for _, stmt := range splitStmts(schema) {
-		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
+		if _, err := tx.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("statement %q: %w", stmt[:min(len(stmt), 60)], err)
 		}
 	}
-	// Existing databases retain unbound identities; never infer IDs from usernames.
-	var count int
-	if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM pragma_table_info('roster_entries') WHERE name='host_user_id'").Scan(&count); err != nil {
-		return err
-	}
-	if count == 0 {
-		if _, err := s.db.ExecContext(ctx, "ALTER TABLE roster_entries ADD COLUMN host_user_id TEXT NOT NULL DEFAULT ''"); err != nil {
+	// CREATE TABLE IF NOT EXISTS cannot evolve existing tables. Keep these
+	// additive changes explicit, including the original pre-export schema.
+	// Legacy identities stay unbound; never infer IDs from usernames. A missing
+	// export receipt stays NULL, preventing accidental eligibility for purging.
+	for _, column := range []struct{ table, name, declaration string }{
+		{"grades", "export_confirmed_at", "TEXT"},
+		{"roster_entries", "host_user_id", "TEXT NOT NULL DEFAULT ''"},
+	} {
+		var count int
+		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM pragma_table_info(?) WHERE name=?", column.table, column.name).Scan(&count); err != nil {
 			return err
 		}
+		if count == 0 {
+			// Identifiers/declarations are fixed constants above, never user input.
+			if _, err := tx.ExecContext(ctx, "ALTER TABLE "+column.table+" ADD COLUMN "+column.name+" "+column.declaration); err != nil {
+				return err
+			}
+		}
 	}
-	return nil
+	if _, err := tx.ExecContext(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS idx_roster_bound_identity ON roster_entries(classroom_id, host, host_user_id) WHERE host_user_id <> ''`); err != nil {
+		return fmt.Errorf("bound identity uniqueness: inspect duplicate historical bindings before upgrading; no identities were changed: %w", err)
+	}
+	return tx.Commit()
 }
 
 func splitStmts(sql string) []string {
@@ -551,6 +575,9 @@ func (s *Store) CreateRosterEntry(ctx context.Context, e *store.RosterEntry) err
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO roster_entries (`+rosterCols+`) VALUES (?,?,?,?,?,?,?,?)`,
 		e.ID, e.ClassroomID, string(e.Host), e.HostUsername, emailHash, string(e.Status), encodeTimePtr(e.ClaimedAt), e.HostUserID)
+	if isUnique(err) {
+		return store.ErrConflict
+	}
 	return err
 }
 
@@ -580,6 +607,9 @@ func (s *Store) UpdateRosterEntry(ctx context.Context, e *store.RosterEntry) err
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE roster_entries SET host=?, host_username=?, email_hash=?, status=?, claimed_at=?, host_user_id=? WHERE id=? AND host=? AND (host_user_id=? OR (host_user_id='' AND claimed_at IS NULL))`,
 		string(e.Host), e.HostUsername, emailHash, string(e.Status), encodeTimePtr(e.ClaimedAt), e.HostUserID, e.ID, string(e.Host), e.HostUserID)
+	if isUnique(err) {
+		return store.ErrConflict
+	}
 	err = affected(res, err)
 	if errors.Is(err, store.ErrNotFound) {
 		if _, found := s.GetRosterEntry(ctx, e.ID); found == nil {

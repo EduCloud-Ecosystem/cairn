@@ -372,7 +372,16 @@ func checkoutFromEnv() *grading.GitCheckout {
 			}
 		}
 	}
-	return grading.NewGitCheckout(hosts)
+	checkout := grading.NewGitCheckout(hosts)
+	var err error
+	checkout.Timeout, err = time.ParseDuration(getenvDefault("CAIRN_CHECKOUT_TIMEOUT", "2m"))
+	if err != nil || checkout.Timeout <= 0 {
+		log.Fatal("CAIRN_CHECKOUT_TIMEOUT must be a positive duration")
+	}
+	if os.Getenv("CAIRN_GRADER") != "local-exec-unsafe" && (os.Getenv("CAIRN_GRADER") == "container" || os.Getenv("CAIRN_ENABLE_LOCAL_GRADER") != "1") {
+		checkout.Container = &grading.CheckoutContainer{Runtime: getenvDefault("CAIRN_GRADER_RUNTIME", "docker"), Image: getenvDefault("CAIRN_CHECKOUT_IMAGE", "cairn-checkout:local")}
+	}
+	return checkout
 }
 
 func graderFromEnv(st store.Store) provisioning.Grader {
@@ -413,21 +422,31 @@ func graderFromEnv(st store.Store) provisioning.Grader {
 		if cr.DefaultImage == "" {
 			log.Printf("note: CAIRN_GRADER_IMAGE is unset; grading requires each spec to set its own image")
 		}
-		return grading.NewService(st, cr, checkout)
+		return gradingServiceFromEnv(st, cr, checkout)
 
 	case "local-exec-unsafe":
 		log.Printf("WARNING: local-exec grader runs untrusted code with NO sandbox; use only for trusted/local material")
-		return grading.NewService(st, grading.NewExecRunner(), checkout)
+		return gradingServiceFromEnv(st, grading.NewExecRunner(), checkout)
 
 	default:
 		// Back-compat: the original opt-in flag maps to the unsafe exec runner.
 		if os.Getenv("CAIRN_ENABLE_LOCAL_GRADER") == "1" {
 			log.Printf("DEPRECATED: CAIRN_ENABLE_LOCAL_GRADER is deprecated; use CAIRN_GRADER=local-exec-unsafe instead")
 			log.Printf("WARNING: local-exec grader runs untrusted code with NO sandbox; use only for trusted/local material")
-			return grading.NewService(st, grading.NewExecRunner(), checkout)
+			return gradingServiceFromEnv(st, grading.NewExecRunner(), checkout)
 		}
 		return nil
 	}
+}
+
+func gradingServiceFromEnv(st store.Store, runner grading.Runner, checkout grading.Checkout) *grading.Service {
+	service := grading.NewService(st, runner, checkout)
+	timeout, err := time.ParseDuration(getenvDefault("CAIRN_GRADER_TOTAL_TIMEOUT", "15m"))
+	if err != nil || timeout <= 0 {
+		log.Fatal("CAIRN_GRADER_TOTAL_TIMEOUT must be a positive duration")
+	}
+	service.TotalTimeout = timeout
+	return service
 }
 
 // gradeRetentionDaysFromEnv reads CAIRN_GRADE_RETENTION_DAYS. Unset means
@@ -536,6 +555,7 @@ func githubAdapterFromEnv() (*githubadapter.Adapter, error) {
 	}
 	return githubadapter.New(githubadapter.Config{
 		AppID:          appID,
+		BaseURL:        os.Getenv("CAIRN_GITHUB_BASE_URL"),
 		InstallationID: instID,
 		PrivateKeyPEM:  keyPEM,
 	})
