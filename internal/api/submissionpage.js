@@ -152,6 +152,17 @@
       const content = document.createElement("p");
       content.textContent = "Receipt " + receipt.id + " · " + new Date(receipt.created_at).toLocaleString();
       article.append(heading, content);
+      if (receipt.status === "preview" && Date.parse(receipt.expires_at) > Date.now()) {
+        const resume = document.createElement("button");
+        resume.type = "button";
+        resume.textContent = "Review this preview";
+        resume.addEventListener("click", () => {
+          if (busy) return;
+          renderPreview(receipt);
+          status("Recovered the saved preview. Review its exact files before confirming.");
+        });
+        article.append(resume);
+      }
       if (receipt.commit_revision) {
         const commit = document.createElement("p");
         commit.textContent = "Commit: " + receipt.commit_revision;
@@ -175,6 +186,9 @@
   async function chooseAssignment() {
     generation++;
     active = $("assignment").value;
+    const locationQuery = new URLSearchParams();
+    if (active) locationQuery.set("submission", active);
+    history.replaceState(null, "", location.pathname + (active ? "?" + locationQuery : ""));
     selectedFiles = [];
     awaitingBridge = false;
     resetPreview();
