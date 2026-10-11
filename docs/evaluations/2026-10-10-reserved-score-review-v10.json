@@ -1,0 +1,120 @@
+{
+  "date": "2026-10-10",
+  "code_commit": "2276fe1506cae92d656defe825a1cbde10ac4a46",
+  "model": "gpt-5.4-mini-2026-03-17",
+  "prompt": "cairn-rubric-v10",
+  "scope": "Four criterion checks on two reserved historical submissions; assistant source-only references fixed before provider responses.",
+  "selection": "First two distinct-source candidates in fixed ID order reserved before prior development trials; prior intake could have inspected metadata. Not independently blinded.",
+  "policy": "Historical quality v5 frozen before source review carries prior constant-column waiver into the quality rubric. Functional criterion copied unchanged from archived parent rubric. No approved calibration guidance binding used.",
+  "protocol": "Two bounded two-request diagnostics with no retries or result-driven retuning. Provider receives rubric and source, not assistant references.",
+  "request_attempts": 4,
+  "accepted": 4,
+  "score_agreements": 4,
+  "rows": [
+    {
+      "sample_alias": "fresh-reserved-01",
+      "criterion": "quality",
+      "model_points": 5,
+      "pre_call_assistant_points": 5,
+      "max_points": 5,
+      "exact_citations": 15,
+      "input_tokens": 13473,
+      "output_tokens": 562,
+      "reserved_units": 55401
+    },
+    {
+      "sample_alias": "fresh-reserved-02",
+      "criterion": "quality",
+      "model_points": 5,
+      "pre_call_assistant_points": 5,
+      "max_points": 5,
+      "exact_citations": 10,
+      "input_tokens": 13352,
+      "output_tokens": 644,
+      "reserved_units": 55014
+    },
+    {
+      "sample_alias": "fresh-reserved-01",
+      "criterion": "functional_11",
+      "model_points": 2,
+      "pre_call_assistant_points": 2,
+      "max_points": 10,
+      "exact_citations": 3,
+      "input_tokens": 13409,
+      "output_tokens": 626,
+      "reserved_units": 54989
+    },
+    {
+      "sample_alias": "fresh-reserved-02",
+      "criterion": "functional_11",
+      "model_points": 10,
+      "pre_call_assistant_points": 10,
+      "max_points": 10,
+      "exact_citations": 2,
+      "input_tokens": 13288,
+      "output_tokens": 530,
+      "reserved_units": 54602
+    }
+  ],
+  "feedback_corrections": [
+    {
+      "sample_alias": "fresh-reserved-02",
+      "criterion": "functional_11",
+      "change": "Supporting assistant review adds the actual score_samples citation omitted by the model and makes log-density threshold units explicit. Original proposal preserved.",
+      "score_changed": false
+    }
+  ],
+  "semantic_review": "Scores and required functional correction supported. Quality wording describes source structure, not verified correctness. Some exact citations include adjacent scaffold context; those lines are not authorship credit.",
+  "private_database_audits": [
+    {
+      "run": "quality",
+      "grades": 0,
+      "calibration_states": [
+        [
+          "draft",
+          1
+        ]
+      ],
+      "generation_states": [
+        [
+          "succeeded",
+          2
+        ]
+      ],
+      "independent_instructor_reviews": 0,
+      "assistant_evidence_records_per_example": 2
+    },
+    {
+      "run": "functional_11",
+      "grades": 0,
+      "calibration_states": [
+        [
+          "draft",
+          1
+        ]
+      ],
+      "generation_states": [
+        [
+          "succeeded",
+          2
+        ]
+      ],
+      "independent_instructor_reviews": 0,
+      "assistant_evidence_records_per_example": 2
+    }
+  ],
+  "frozen_files_verified_unchanged": 14,
+  "assistant_review_only": true,
+  "independent_instructor_validation": false,
+  "formal_approved_profile_holdout": false,
+  "automatic_retries": 0,
+  "grade_publication": false,
+  "production_activation": false,
+  "next_step": "Keep the quality policy and functional scoring examples fixed; run broader per-instructor course rehearsal with explicit instructor review. These two sources are now consumed evaluation data and must not be reused as fresh validation.",
+  "limitations": [
+    "Two sources and four criterion checks do not establish general scoring accuracy.",
+    "No student code executed in this round.",
+    "Historical density interpretation is assistant-adjudicated and not a universal or prospective rubric policy.",
+    "Exact citation validity does not prove semantic coverage; one evidence presentation required correction."
+  ]
+}
