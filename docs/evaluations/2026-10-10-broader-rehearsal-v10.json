@@ -1,0 +1,129 @@
+{
+  "date": "2026-10-10",
+  "code_commit": "398264dd6decd22a7b6813fca75ca4bd5588ffb7",
+  "model": "gpt-5.4-mini-2026-03-17",
+  "prompt": "cairn-rubric-v10",
+  "scope": "Six additional assignment components across INFO-511, INFO-523 and INFO-557. Two archived calibration examples each, selected before inspection. Not fresh holdouts or independent instructor validation.",
+  "protocol": "Rubric anchors fixed before inspection; source references frozen before all calls. Privacy preparation revisions recorded before reference freeze. One attempt per input, no retries or post-result tuning. No student code executed.",
+  "request_attempts": 12,
+  "accepted_proposals": 12,
+  "criterion_count": 20,
+  "exact_citations_verified": 59,
+  "score_agreements": 18,
+  "scored_criteria": 12,
+  "scored_agreements": 10,
+  "expected_unassessable": 8,
+  "preserved_unassessable": 8,
+  "group_counts": {
+    "511-intro": {
+      "requests": 2,
+      "criteria": 2,
+      "score_agreements": 1,
+      "unassessable": 1
+    },
+    "511-eda": {
+      "requests": 2,
+      "criteria": 2,
+      "score_agreements": 2,
+      "unassessable": 0
+    },
+    "511-midterm": {
+      "requests": 2,
+      "criteria": 8,
+      "score_agreements": 8,
+      "unassessable": 4
+    },
+    "523-foundations": {
+      "requests": 2,
+      "criteria": 2,
+      "score_agreements": 1,
+      "unassessable": 0
+    },
+    "557-logistic": {
+      "requests": 2,
+      "criteria": 4,
+      "score_agreements": 4,
+      "unassessable": 2
+    },
+    "557-cnn-rnn": {
+      "requests": 2,
+      "criteria": 2,
+      "score_agreements": 2,
+      "unassessable": 1
+    }
+  },
+  "semantic_citation_findings": {
+    "scored_quality_criteria": 6,
+    "quality_citations_not_supporting_implementation_claims": 6,
+    "additional_functional_criteria_with_incomplete_citations": 2,
+    "note": "Exact byte matches are not evidence of authorship or claim support. Five quality proposals selected signatures/delimiters only; another selected an unrelated signature and a nearby comment. Two functional proposals omitted operations explicitly credited in feedback."
+  },
+  "score_disagreements": [
+    {
+      "scope": "Python fundamentals quality",
+      "model_points": 10,
+      "pre_call_assistant_points": 8,
+      "adjudicated_points": 8,
+      "basis": "Duplicate module-level reporting invocation; the materiality of this quality deduction remains an instructor-calibration judgment."
+    },
+    {
+      "scope": "NumPy/Pandas quality",
+      "model_points": 8,
+      "pre_call_assistant_points": 10,
+      "adjudicated_points": 10,
+      "basis": "Return-schema functional concerns were penalized again under quality despite an explicit frozen anchor excluding separate functional mistakes."
+    }
+  ],
+  "other_feedback_corrections": [
+    "Malformed authored Python attempt was inaccurately described as untouched scaffold; null retained, explanation repaired.",
+    "Head operation preserves columns, not row count; feedback wording corrected."
+  ],
+  "criteria_needing_feedback_or_evidence_correction": 10,
+  "preprocessing": {
+    "model_name_redaction_repaired": 1,
+    "affected_model_name_literals": 4,
+    "original_syntax_verified": true,
+    "additional_example_name_minimization_sources": 2,
+    "rubrics_changed_after_source_inspection": false,
+    "note": "An archived privacy replacement had stripped quote syntax. Original AST and hash were verified before replacing only those redacted model names with neutral quoted strings. No student algorithm was repaired."
+  },
+  "verification": {
+    "frozen_artifacts_unchanged": 24,
+    "all_original_proposals_preserved": true,
+    "profiles": [
+      [
+        "draft",
+        6
+      ]
+    ],
+    "generations": [
+      [
+        "succeeded",
+        12
+      ]
+    ],
+    "grades": 0,
+    "assistant_reviews_attached": 12,
+    "independent_instructor_reviews": 0
+  },
+  "usage": {
+    "input_tokens": 77307,
+    "output_tokens": 4938,
+    "reserved_units": 355818,
+    "limit_units": 650000
+  },
+  "production_activation": false,
+  "automatic_retries": 0,
+  "readiness": "Not ready for unreviewed feedback or grade publication. Supporting reviews are repaired, but provider semantic citation failures remain unresolved.",
+  "next_build_priorities": [
+    "Bind implementation claims to authored source evidence using pinned starter provenance; reject or flag scaffold-only support.",
+    "Enforce rubric-component boundaries in instructor review so correctness defects are not deducted again under quality.",
+    "Add syntax-preserving privacy preparation validation against original source before any model send."
+  ],
+  "limitations": [
+    "Twelve previously prepared examples with assistant references do not estimate general grading accuracy.",
+    "One instructor across three courses is not cross-instructor calibration validation.",
+    "Only scoped components were assessed; no full-assignment or convergence claims.",
+    "References are delegated assistant judgments; quality-deduction materiality still needs instructor calibration."
+  ]
+}
