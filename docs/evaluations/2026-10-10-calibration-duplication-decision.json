@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-10",
+  "follows": "2026-10-10-calibration-v11.json",
+  "component": "Python fundamentals code quality",
+  "decision_points": 8,
+  "maximum_points": 10,
+  "basis": "Repeated module-level test/report invocation is one localized duplication defect under the explicit minimal-duplication rubric obligation. Keep one invocation; no additional functional-correctness deduction.",
+  "authorization": "Instructor instructed adoption of the assistant recommendation",
+  "review_kind": "Instructor-authorized assisted post-model review; not an independent reference",
+  "original_model_points": 10,
+  "frozen_assisted_baseline_points": 8,
+  "original_calibration_evidence_unchanged": true,
+  "original_model_proposals_preserved": true,
+  "new_assisted_calibration_reviews": 1,
+  "independent_references": 0,
+  "profile_status": "Six drafts; none approved",
+  "provider_requests": 0,
+  "guidance_preflight": {
+    "passed": 12,
+    "maximum_input_bytes": 15987
+  },
+  "grades_published": 0,
+  "production_activation": false,
+  "private_decision_manifest_sha256": "20a8c46870e7e6cd147b152e206608e82b1c428ec2192e3560053b1179e2bb14"
+}
