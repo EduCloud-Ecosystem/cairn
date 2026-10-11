@@ -984,3 +984,42 @@ remain unchanged. This is not an independent reference or a general two-point
 penalty for every repeated call. All 12 guidance inputs still pass preflight;
 six profiles remain drafts, with no additional model requests or course grades.
 See `evaluations/2026-10-10-calibration-duplication-decision.json`.
+
+### Unassessable criteria in the provider schema (v12)
+
+For opt-in Python evidence criteria, the provider schema now permits only null
+points when the bounded citation catalog contains no selectable quote covering
+a complete eligible operation. Each criterion has its own schema branch and
+shares one citation catalog. An unsupported code criterion does not prevent a
+separate explanation criterion from receiving points, and an eligible but
+incorrect implementation can still receive zero. Server-side citation, criterion
+coverage and score validation remain mandatory even if a provider ignores the
+schema. The proposal format, database and approval flow are unchanged.
+
+This addresses the v11 malformed-attempt failure before generation rather than
+relying only on rejection afterward. Lack of an eligible citation means limited
+evidence for that criterion; it does not prove syntax validity, establish
+correctness, or classify the entire submission as missing work. Eligibility is
+computed across captured artifacts for each evidence mode, not for individual
+functions. The existing lexical and semantic limitations still apply.
+
+Six single-attempt synthetic OpenAI controls passed: changed implementation
+received 4/4; inherited implementation, an injected stub and a malformed attempt
+remained null; an assessable incorrect implementation received zero; and a mixed
+submission received null for code but 4/4 for its separate written explanation.
+The live-check command above now runs all six controls.
+
+One additional, single-attempt historical confirmation reused the exact source,
+rubric and starter from the previously rejected v11 case. It returned an accepted
+null judgment with high uncertainty and correctly classified the attempt as
+relevant work. The new profile remains draft with its existing assisted baseline;
+no post-call review, approval or grade was added. Checksums confirm the completed
+v11 run and instructor-authorized 8/10 decision remain unchanged. All 12 archived
+inputs with draft guidance pass the v12 request preflight (maximum 15987 input
+bytes). Guidance was not approved or applied.
+
+Prompt version `cairn-rubric-v12` requires fresh calibration for subsequent
+provider use. This bounded confirmation is not a full v12 calibration, independent
+instructor acceptance or production validation. Semantic claim coverage and
+documentation attribution remain the next feedback-quality work. See
+`evaluations/2026-10-10-assessability-schema-v12.json` for aggregate evidence.

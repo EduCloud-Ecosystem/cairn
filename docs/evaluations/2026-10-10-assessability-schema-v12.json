@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-10",
+  "prompt_version": "cairn-rubric-v12",
+  "scope": "Criterion-specific null-only provider schema when no complete eligible implementation citation is selectable; no production activation",
+  "synthetic_live_controls": {
+    "requests": 6,
+    "attempts_per_case": 1,
+    "passed": 6,
+    "cases": [
+      {
+        "case": "changed-implementation",
+        "expected_quality_points": 4
+      },
+      {
+        "case": "inherited-implementation",
+        "expected_quality_points": null
+      },
+      {
+        "case": "signature-and-stub",
+        "expected_quality_points": null
+      },
+      {
+        "case": "malformed-attempt",
+        "expected_quality_points": null
+      },
+      {
+        "case": "incorrect-implementation",
+        "expected_quality_points": 0
+      },
+      {
+        "case": "mixed-criteria",
+        "expected_quality_points": null
+      }
+    ],
+    "mixed_criteria_explanation_points": 4
+  },
+  "historical_confirmation": {
+    "examples": 1,
+    "requests": 1,
+    "attempts_per_case": 1,
+    "source_rubric_and_starter_unchanged": true,
+    "previous_outcome": "Invalid zero rejected by server validation",
+    "current_outcome": "Accepted null points with high uncertainty; relevant attempted work",
+    "status": "draft",
+    "new_post_call_reviews": 0,
+    "independent_instructor_reviews": 0,
+    "profile_approvals": 0,
+    "grades_published": 0,
+    "usage": {
+      "input_tokens": 4765,
+      "output_tokens": 551
+    }
+  },
+  "guidance_preflight": {
+    "archived_examples": 12,
+    "passed": 12,
+    "max_input_bytes": 15987,
+    "guidance_applied": false
+  },
+  "preservation": {
+    "completed_v11_artifact_hashes_verified": 93,
+    "instructor_decision_artifact_hashes_verified": 13,
+    "historical_pre_call_hashes_verified": 7,
+    "adopted_duplication_score": 8,
+    "original_records_modified": false
+  },
+  "validation": [
+    "Go race suite",
+    "go vet",
+    "go build",
+    "Six live synthetic OpenAI controls",
+    "One bounded historical live confirmation",
+    "Twelve full-request guidance preflights"
+  ],
+  "limits": [
+    "Lexical operation eligibility is not Python syntax validation, correctness or authorship proof",
+    "Eligible operations elsewhere in the captured artifacts can allow scoring; no per-function semantic scope is inferred",
+    "Semantic claim coverage and documentation attribution remain follow-up work",
+    "The historical example is reused with an assisted baseline, not a new holdout or independent instructor acceptance",
+    "Only the affected historical case was regenerated; this is not a full v12 calibration or production readiness assessment",
+    "No production activation or grade publication"
+  ],
+  "private_evidence_manifest_sha256": "564ef77265c5e9886a552f3af0ab9d63c97928d3574dfec0b50ec2e08b013f29"
+}

@@ -15,7 +15,7 @@ import (
 )
 
 const DefaultOpenAIModel = "gpt-5.4-mini-2026-03-17"
-const PromptVersion = "cairn-rubric-v11"
+const PromptVersion = "cairn-rubric-v12"
 const MaxProviderInputBytes = 16000
 const MaxProviderOutputTokens = 4096
 const maxProviderResponseBytes = 256 << 10
@@ -107,12 +107,34 @@ func schemaObject(properties map[string]any) map[string]any {
 }
 func proposalSchema(d Document) (map[string]any, error) {
 	text := map[string]any{"type": "string"}
-	citations, err := citationChoiceSchema(d)
+	citations, eligible, err := citationSchemaPlan(d)
 	if err != nil {
 		return nil, err
 	}
-	judgment := schemaObject(map[string]any{"criterion_id": text, "points": map[string]any{"type": []string{"number", "null"}}, "feedback": text, "uncertainty_level": map[string]any{"type": "string", "enum": []string{"low", "medium", "high"}}, "uncertainty_reason": text, "citations": citations})
-	return schemaObject(map[string]any{"submission_status": map[string]any{"type": "string", "enum": []string{"relevant_work", "no_relevant_work"}}, "criteria": map[string]any{"type": "array", "items": judgment}}), nil
+	judgment := func(id, mode string, citationSchema map[string]any) map[string]any {
+		identity := text
+		if id != "" {
+			identity = map[string]any{"type": "string", "enum": []string{id}}
+		}
+		points := map[string]any{"type": []string{"number", "null"}}
+		if mode != "" && !eligible[mode] {
+			points = map[string]any{"type": "null", "description": "No eligible implementation citation is selectable for this evidence requirement. Leave unassessable for instructor review; do not assign zero. This is an evidence limitation, not a correctness or relevance judgment."}
+		}
+		return schemaObject(map[string]any{"criterion_id": identity, "points": points, "feedback": text, "uncertainty_level": map[string]any{"type": "string", "enum": []string{"low", "medium", "high"}}, "uncertainty_reason": text, "citations": citationSchema})
+	}
+	items := judgment("", "", citations)
+	if hasImplementationRule(d.Rubric) {
+		branches := []any{}
+		for _, c := range d.Rubric.Criteria {
+			branches = append(branches, judgment(c.ID, c.Evidence, map[string]any{"$ref": "#/$defs/citations"}))
+		}
+		items = map[string]any{"anyOf": branches}
+	}
+	schema := schemaObject(map[string]any{"submission_status": map[string]any{"type": "string", "enum": []string{"relevant_work", "no_relevant_work"}}, "criteria": map[string]any{"type": "array", "items": items}})
+	if hasImplementationRule(d.Rubric) {
+		schema["$defs"] = map[string]any{"citations": citations}
+	}
+	return schema, nil
 }
 
 // providerInput is shared by offline preflight and live requests. It never uses
