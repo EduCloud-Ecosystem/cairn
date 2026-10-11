@@ -57,15 +57,35 @@ func runCalibrationReviewPacket(args []string) error {
 	if err != nil {
 		return err
 	}
-	if err = os.Mkdir(*out, 0700); err != nil {
-		return fmt.Errorf("output must be a new directory: %w", err)
+	var auditJSON []byte
+	if len(p.Judgments) > 0 {
+		document, err := assessment.CalibrationBundleDocument(b, p.SampleID)
+		if err != nil {
+			return err
+		}
+		audit, err := assessment.AuditFeedbackEvidence(document, p.Judgments)
+		if err != nil {
+			return err
+		}
+		auditJSON, err = json.MarshalIndent(audit, "", "  ")
+		if err != nil {
+			return err
+		}
 	}
 	raw, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return err
 	}
+	if err = os.Mkdir(*out, 0700); err != nil {
+		return fmt.Errorf("output must be a new directory: %w", err)
+	}
 	if err = writeEvaluationFile(*out, "review-packet.json", raw); err != nil {
 		return err
+	}
+	if auditJSON != nil {
+		if err = writeEvaluationFile(*out, "feedback-audit.json", auditJSON); err != nil {
+			return err
+		}
 	}
 	fmt.Println("Saved private supporting material. No reference, grade, profile approval or model request was created.")
 	return nil

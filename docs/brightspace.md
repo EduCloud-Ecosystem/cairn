@@ -133,3 +133,72 @@ learner grades, zero and pending/unassessable work, dropped response recovery,
 changed grade rejection, remote instructor-edit conflict, and confirmed
 readback. Confirm the displayed gradebook result in Brightspace itself. Passing
 local simulation does not substitute for those acceptance checks.
+
+## Administrator handoff and acceptance worksheet
+
+Testing package `educloud-testing-v1` (2026-10-11). Copy this section into a
+private change ticket. It is an uncompleted setup request, not a claim that a
+Brightspace tenant has been configured. Cairn operator and LMS administrator
+should complete the test together with an instructor.
+
+D2L currently documents Standard registration under **Manage Extensibility →
+LTI Advantage**, followed by a deployment under **External Learning Tools →
+LTI Advantage**. The administrator needs organization-level Manage LTI Tools
+permission. Restrict deployment sharing to the sandbox course. Brightspace also
+supports an Apps management workflow; use the workflow available in the tenant.
+See [D2L registration, deployment and links](https://community.d2l.com/brightspace/kb/articles/23662-tool-registration-deployment-and-links)
+(checked 2026-10-11).
+
+For Cairn, select **Standard** registration and a **Basic Launch** link, configure
+the exact login/launch/JWKS URLs above, and use a top-level external-resource
+launch. Enable Assignment and Grade Services for registration/deployment; do not
+rely on default Deep Linking behavior because Cairn does not implement that flow.
+Have the administrator associate a numeric sandbox grade item with the link and
+verify the launch contains its line-item endpoint. D2L's automatic grade-item
+creation is a deployment option, not an assumption this integration makes.
+See [D2L Assignment and Grades Services](https://community.d2l.com/brightspace/kb/articles/23752-assignment-and-grades-services-extension-with-lti-1-3).
+
+Cairn's launch validation requires AGS `score`, `result.readonly` and
+`lineitem.readonly` scopes (also accepting `lineitem` for that last capability).
+It requests the read-only line-item scope when offered. It needs context and
+role claims plus a stable subject; learner names/email and NRPS roster access
+are not required by this implementation. Confirm the actual signed sandbox
+launch against the configured issuer, client and deployment; do not paste launch
+JWTs into the ticket.
+
+| Record privately before testing | Value / owner |
+| --- | --- |
+| LMS administrator, Cairn operator, instructor; test window | |
+| Brightspace tenant and sandbox course; deployment sharing scope | |
+| Cairn full candidate revision, binary/dashboard hashes, public origin | |
+| Issuer, client ID, deployment ID | |
+| Authentication, token, token-audience and platform JWKS endpoints | |
+| Exact AGS service origin; required scopes confirmed | |
+| Tool login/launch/JWKS URLs and signing key ID | |
+| Private configuration/key file locations and rotation owner | Paths only; no private key material |
+| Explicit Cairn classroom allowlist; assignment and numeric grade item | |
+| Instructor and two synthetic learner accounts with immutable bindings | Private references |
+| Incident owner, rollback window and retained evidence location | |
+
+- [ ] Administrator registration/deployment and top-level instructor/learner
+  launches work with production-mode HTTPS settings (`simulation=false`).
+- [ ] Two independent learner bindings are correct; replay/expired/tampered
+  launch and unrelated course fail. No learner can adopt another's account.
+- [ ] Reviewed positive score and numeric zero appear on the correct grade item
+  and learner in the **actual Brightspace UI**, and Cairn readback verifies them.
+- [ ] Pending/unassessable work and proposals without instructor approval never
+  send. Changed source/rubric/grade version prevents stale delivery.
+- [ ] A controlled lost-response scenario is reconciled by readback before retry;
+  an instructor's conflicting Brightspace edit is preserved and escalated.
+  Inject failures only in this sandbox with administrator coordination.
+- [ ] Restart retains binding/delivery state. Instructor and administrator record
+  exact result, issues, candidate, date and explicit GO/NO-GO decision.
+
+Missing administrator setup means **pending**, not a test failure or implicit
+approval. Until the worksheet is complete, keep claims limited to simulated LMS
+passback. For rollback, stop grade sends, disable the sandbox deployment/link as
+agreed with its administrator, remove `CAIRN_LTI_CONFIG` from the service's active
+configuration and restart Cairn. Preserve binding/delivery records; verify any
+uncertain score directly in Brightspace before recovery. This disables new
+integration use but cannot retract an already delivered grade. Do not delete
+identities or force an overwrite to clear an error.
