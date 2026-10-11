@@ -271,3 +271,23 @@ supported Brightspace), so the manual fallback ships first and independently.
   owner isolation, persistence, and no automatic model request or grade.
 - [ ] Verify a real instructor/course adoption of the new assignment version.
   Local synthetic validation does not publish or accept it for a live class.
+
+## Operational component acceptance (October 11, 2026)
+
+- [x] Bounded container acquisition before grading/assessment: hard tmpfs byte/inode
+  limits, bounded host export and diagnostics, acquisition and aggregate grading
+  deadlines, and explicit preloaded-image diagnostics. See `docs/bounded-checkout.md`.
+- [x] Scoped offline crash recovery: shared active-work leases, persistent ownership,
+  private reviewed plans, stale-inventory rejection and stop-on-failure cleanup.
+  Legacy unmarked resources remain manual. See `docs/runtime-recovery.md`.
+- [x] Populated SQLite/PostgreSQL old-schema upgrade and fresh backup restore drills,
+  preserving grade/calibration/identity/LTI state. Fixed the initial SQLite
+  export-receipt column migration and made SQLite upgrade transactional.
+  See `docs/recovery-drill.md`.
+- [x] Operator reconciliation inventory and evidence-bound legacy identity plans;
+  live provider verification, immutable-ID refusal, atomic compare-and-set/audit,
+  and erasure linkage. See `docs/reconciliation.md`.
+- [ ] Hosted aggregate capacity, off-host complete artifact recovery and real-host
+  acceptance remain deployment gates; component drills do not establish them.
+- [ ] Uncertain repository adoption and provider collaborator/invitation repair
+  require manual ownership investigation. A path alone cannot authorize adoption.

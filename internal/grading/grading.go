@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/EduCloud-Ecosystem/cairn/internal/id"
+	"github.com/EduCloud-Ecosystem/cairn/internal/runtimeguard"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/adapter"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/gradingspec"
@@ -74,10 +75,11 @@ type Checkout interface {
 // Service orchestrates a grading run: check out the repo, load the spec, run it,
 // and persist a GradingRun plus a Grade.
 type Service struct {
-	Store    store.Store
-	Runner   Runner
-	Checkout Checkout
-	Now      func() time.Time // injectable for tests; defaults to time.Now
+	Store        store.Store
+	Runner       Runner
+	Checkout     Checkout
+	Now          func() time.Time // injectable for tests; defaults to time.Now
+	TotalTimeout time.Duration    // whole execution, including both acquisitions; default 15 minutes
 }
 
 // NewService wires a grading Service.
@@ -131,14 +133,28 @@ func (s *Service) grade(ctx context.Context, submissionID, revision string) erro
 		return fmt.Errorf("create grading run: %w", err)
 	}
 
-	res, gradeErr := s.execute(ctx, sub.Repo, asg, revision)
+	timeout := s.TotalTimeout
+	if timeout <= 0 {
+		timeout = 15 * time.Minute
+	}
+	runCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	res, gradeErr := s.execute(runCtx, sub.Repo, asg, revision)
+	if gradeErr == nil && runCtx.Err() != nil {
+		gradeErr = runCtx.Err()
+	}
+	// Persist the failed state even when a job deadline or worker cancellation fired.
+	persistCtx, persistCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer persistCancel()
 	finished := s.now()
 	run.FinishedAt = &finished
 
 	if gradeErr != nil {
 		run.Status = "failed"
 		run.Result, _ = json.Marshal(map[string]string{"error": gradeErr.Error()})
-		_ = s.Store.UpdateGradingRun(ctx, run)
+		if err := s.Store.UpdateGradingRun(persistCtx, run); err != nil {
+			return errors.Join(gradeErr, fmt.Errorf("persist failed grading run: %w", err))
+		}
 		return gradeErr
 	}
 
@@ -189,11 +205,24 @@ func (s *Service) execute(ctx context.Context, repo adapter.RepoRef, asg *store.
 	if !ok {
 		return Result{}, errors.New("runner does not support separate instructor policy files")
 	}
-	policyDir, err := os.MkdirTemp("", "cairn-policy-*")
+	lease, err := runtimeguard.Acquire("", false)
 	if err != nil {
 		return Result{}, err
 	}
-	defer os.RemoveAll(policyDir)
+	defer lease.Close()
+	jobDir, err := runtimeguard.NewJobDir()
+	if err != nil {
+		return Result{}, err
+	}
+	defer os.RemoveAll(jobDir)
+	policyDir := filepath.Join(jobDir, "policy")
+	err = os.Mkdir(policyDir, 0755)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := os.Chmod(policyDir, 0755); err != nil {
+		return Result{}, err
+	}
 	template := adapter.RepoRef{Host: asg.TemplateRef.Host, Namespace: asg.TemplateRef.Namespace, Name: asg.TemplateRef.Name}
 	if err := checkout.FetchRevision(ctx, template, asg.TemplateRef.Ref, policyDir); err != nil {
 		return Result{}, fmt.Errorf("instructor policy checkout: %w", err)
@@ -223,11 +252,14 @@ func (s *Service) execute(ctx context.Context, repo adapter.RepoRef, asg *store.
 	if err != nil {
 		return Result{}, err
 	}
-	dir, err := os.MkdirTemp("", "cairn-grade-*")
+	dir := filepath.Join(jobDir, "source")
+	err = os.Mkdir(dir, 0755)
 	if err != nil {
 		return Result{}, err
 	}
-	defer os.RemoveAll(dir)
+	if err := os.Chmod(dir, 0755); err != nil {
+		return Result{}, err
+	}
 	var fetchErr error
 	if revision != "" {
 		fetchErr = checkout.FetchRevision(ctx, repo, revision, dir)

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/EduCloud-Ecosystem/cairn/internal/id"
+	"github.com/EduCloud-Ecosystem/cairn/internal/runtimeguard"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/gradingspec"
 )
 
@@ -48,7 +49,7 @@ func (r *ContainerRunner) prepareWorkspace(ctx context.Context, cr commandRunner
 	fail := func(cause error) (string, func() error, error) {
 		return "", nil, errors.Join(cause, cleanup())
 	}
-	create := []string{"volume", "create", "--driver", "local", "--opt", "type=tmpfs", "--opt", "device=tmpfs", "--opt", "o=" + workspaceMountOptions, volume}
+	create := []string{"volume", "create", "--label", runtimeguard.ScopeLabel + "=" + r.recoveryScope, "--label", runtimeguard.KindLabel + "=workspace", "--driver", "local", "--opt", "type=tmpfs", "--opt", "device=tmpfs", "--opt", "o=" + workspaceMountOptions, volume}
 	out, err := cr.run(ctx, rt, create, 15*time.Second)
 	if err != nil || out.timedOut || out.exitCode != 0 {
 		return fail(errors.New("runtime cannot create bounded tmpfs grading workspace"))

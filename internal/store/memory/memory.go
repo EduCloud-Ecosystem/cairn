@@ -16,6 +16,8 @@ import (
 
 // Store is a goroutine-safe in-memory store.Store.
 type Store struct {
+	reconciliationAudit map[string]store.IdentityReconciliation
+
 	ltiRecords         map[string]store.LTIRecord
 	calibrationSources map[string]map[string]bool
 	calibrations       map[string]store.Calibration
@@ -39,6 +41,8 @@ type Store struct {
 // New returns an empty in-memory store.
 func New() *Store {
 	return &Store{
+		reconciliationAudit: map[string]store.IdentityReconciliation{},
+
 		ltiRecords:         map[string]store.LTIRecord{},
 		calibrationSources: map[string]map[string]bool{},
 		calibrations:       map[string]store.Calibration{},
@@ -193,6 +197,12 @@ func (m *Store) ListAssignmentsDueBy(_ context.Context, t time.Time) ([]*store.A
 func (m *Store) CreateRosterEntry(_ context.Context, r *store.RosterEntry) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if _, exists := m.roster[r.ID]; exists {
+		return store.ErrConflict
+	}
+	if m.boundIdentityConflict(*r) {
+		return store.ErrConflict
+	}
 	m.roster[r.ID] = *r
 	return nil
 }
@@ -226,7 +236,10 @@ func (m *Store) UpdateRosterEntry(_ context.Context, r *store.RosterEntry) error
 	if !ok {
 		return store.ErrNotFound
 	}
-	if old.Host != r.Host || (old.HostUserID != r.HostUserID && (old.HostUserID != "" || old.ClaimedAt != nil)) {
+	if old.ClassroomID != r.ClassroomID || old.Host != r.Host || (old.HostUserID != r.HostUserID && (old.HostUserID != "" || old.ClaimedAt != nil)) {
+		return store.ErrConflict
+	}
+	if m.boundIdentityConflict(*r) {
 		return store.ErrConflict
 	}
 	m.roster[r.ID] = *r
@@ -288,6 +301,11 @@ func (m *Store) DeleteRosterEntry(_ context.Context, id string) error {
 		}
 	}
 	delete(m.roster, id)
+	for key, audit := range m.reconciliationAudit {
+		if audit.RosterID == id {
+			delete(m.reconciliationAudit, key)
+		}
+	}
 	return nil
 }
 

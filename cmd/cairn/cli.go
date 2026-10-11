@@ -22,6 +22,8 @@ Usage:
   cairn assessment-eval run [flags]    evaluate bundled synthetic submissions
   cairn assessment-eval packet [flags] rebuild an offline review packet
   cairn assessment-eval review [flags] validate a human review worksheet
+  cairn recover-runtime [flags]  inspect or recover stopped-worker resources
+  cairn reconcile [flags]    inventory and reconcile legacy identities
   cairn help                 show this message
 
 Run "cairn doctor --help", "cairn import ghc --help", or
@@ -88,6 +90,18 @@ func main() {
 	case "assessment-eval":
 		if err := runAssessmentEval(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "cairn assessment-eval: %v\n", err)
+			os.Exit(1)
+		}
+
+	case "recover-runtime":
+		if err := runRecoverRuntime(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "cairn recover-runtime: %v\n", err)
+			os.Exit(1)
+		}
+
+	case "reconcile":
+		if err := runReconcile(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "cairn reconcile: %v\n", err)
 			os.Exit(1)
 		}
 

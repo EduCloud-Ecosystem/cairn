@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/EduCloud-Ecosystem/cairn/internal/runtimeguard"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/gradingspec"
 )
 
@@ -17,8 +18,13 @@ func oneTest() gradingspec.Spec {
 }
 
 // Tier selection must preserve every hardening flag and the bounded workspace
-// mount. Only container/volume names vary between runs.
+// mount. Recovery labels remain present in every tier. Only container/volume names vary between runs.
 func defaultArgsBefore(name, mount string) []string {
+	lease, err := runtimeguard.Acquire("", false)
+	if err != nil {
+		panic(err)
+	}
+	defer lease.Close()
 	return []string{
 		"run", "--rm", "--name", name,
 		"--cap-drop", "ALL",
@@ -34,6 +40,7 @@ func defaultArgsBefore(name, mount string) []string {
 		"--workdir", "/work",
 		"--user", "65534:65534",
 		"--network", "none",
+		"--label", runtimeguard.ScopeLabel + "=" + lease.Scope, "--label", runtimeguard.KindLabel + "=grading",
 		"grader:1", "sh", "-c", "true",
 	}
 }

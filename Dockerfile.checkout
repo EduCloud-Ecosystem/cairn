@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Build/pull this operator-owned acquisition image before starting the worker.
+FROM alpine:3.21
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates git tar
+USER 65534:65534
+CMD ["/bin/sh"]

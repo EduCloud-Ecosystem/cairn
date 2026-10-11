@@ -363,6 +363,9 @@ func (s *Store) CreateRosterEntry(ctx context.Context, e *store.RosterEntry) err
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO roster_entries (`+rosterCols+`) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
 		e.ID, e.ClassroomID, string(e.Host), e.HostUsername, ns(e.EmailHash), string(e.Status), nt(e.ClaimedAt), e.HostUserID)
+	if isUniqueViolation(err) {
+		return store.ErrConflict
+	}
 	return err
 }
 
@@ -388,6 +391,9 @@ func (s *Store) UpdateRosterEntry(ctx context.Context, e *store.RosterEntry) err
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE roster_entries SET host=$2, host_username=$3, email_hash=$4, status=$5, claimed_at=$6, host_user_id=$7 WHERE id=$1 AND host=$2 AND (host_user_id=$7 OR (host_user_id='' AND claimed_at IS NULL))`,
 		e.ID, string(e.Host), e.HostUsername, ns(e.EmailHash), string(e.Status), nt(e.ClaimedAt), e.HostUserID)
+	if isUniqueViolation(err) {
+		return store.ErrConflict
+	}
 	err = affected(res, err)
 	if errors.Is(err, store.ErrNotFound) {
 		if _, found := s.GetRosterEntry(ctx, e.ID); found == nil {

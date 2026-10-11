@@ -54,6 +54,7 @@ var knownEnvVars = []string{
 	"CAIRN_OAUTH_REDIRECT_URL", "CAIRN_OPERATOR_HOST",
 	"CAIRN_ADMIN_USERS", "CAIRN_AUTH_DISABLED", "CAIRN_COOKIE_SECURE",
 	"CAIRN_GRADER", "CAIRN_GRADER_RUNTIME", "CAIRN_GRADER_IMAGE",
+	"CAIRN_CHECKOUT_IMAGE", "CAIRN_CHECKOUT_TIMEOUT", "CAIRN_GRADER_TOTAL_TIMEOUT",
 	"CAIRN_GRADER_RESTRICTED_NETWORK", "CAIRN_GRADER_USER",
 	"CAIRN_GRADER_ISOLATION", "CAIRN_GRADER_MAX_TIMEOUT", "CAIRN_GRADER_MAX_MEMORY_MB", "CAIRN_GRADER_MAX_CPUS",
 	"CAIRN_WORKSPACE_URLS", "CAIRN_LTI_CONFIG",
@@ -177,6 +178,17 @@ func buildDoctorReport(ctx context.Context, verifyHosts bool) doctor.Report {
 	}))
 
 	rep.Add(doctor.CheckRetention(os.Getenv("CAIRN_GRADE_RETENTION_DAYS")))
+
+	mode := os.Getenv("CAIRN_GRADER")
+	unsafeCheckout := mode == "local-exec-unsafe" || (mode != "container" && os.Getenv("CAIRN_ENABLE_LOCAL_GRADER") == "1")
+	rep.AddAll(doctor.CheckCheckout(ctx, doctor.CheckoutConfig{
+		Enabled:      mode == "container" || unsafeCheckout || os.Getenv("CAIRN_ASSESSMENT_REVIEW") == "1",
+		Unsafe:       unsafeCheckout,
+		Runtime:      getenvDefault("CAIRN_GRADER_RUNTIME", "docker"),
+		Image:        getenvDefault("CAIRN_CHECKOUT_IMAGE", "cairn-checkout:local"),
+		Timeout:      getenvDefault("CAIRN_CHECKOUT_TIMEOUT", "2m"),
+		TotalTimeout: getenvDefault("CAIRN_GRADER_TOTAL_TIMEOUT", "15m"),
+	}, execCommander{})...)
 
 	rep.AddAll(doctor.CheckGrading(ctx, doctor.GradingConfig{
 		Mode:      os.Getenv("CAIRN_GRADER"),

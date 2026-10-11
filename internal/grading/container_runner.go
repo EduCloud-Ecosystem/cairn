@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/EduCloud-Ecosystem/cairn/internal/id"
+	"github.com/EduCloud-Ecosystem/cairn/internal/runtimeguard"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/gradingspec"
 )
 
@@ -41,6 +42,7 @@ import (
 // Setup-level changes persist between steps only within the bounded workspace, so
 // the toolchain belongs in the image; setup should build into the working tree.
 type ContainerRunner struct {
+	recoveryScope string // set only while a shared runtime lease is held
 	// ReadOnlyWork keeps captured source immutable during evidence-only checks.
 	ReadOnlyWork bool
 
@@ -428,6 +430,9 @@ func (r *ContainerRunner) buildRunArgs(image, command string, lim resolvedLimits
 	default:
 		args = append(args, "--network", "none")
 	}
+	if r.recoveryScope != "" {
+		args = append(args, "--label", runtimeguard.ScopeLabel+"="+r.recoveryScope, "--label", runtimeguard.KindLabel+"=grading")
+	}
 	args = append(args, r.ExtraArgs...)
 	args = append(args, image, "sh", "-c", command)
 	return args
@@ -446,6 +451,14 @@ func (r *ContainerRunner) RunWithPolicy(ctx context.Context, spec gradingspec.Sp
 
 // Run executes the spec inside containers, one invocation per step.
 func (r *ContainerRunner) Run(ctx context.Context, spec gradingspec.Spec, dir string) (result Result, runErr error) {
+	lease, err := runtimeguard.Acquire("", false)
+	if err != nil {
+		return Result{}, err
+	}
+	defer lease.Close()
+	scoped := *r
+	scoped.recoveryScope = lease.Scope
+	r = &scoped
 	if err := r.ValidateIsolation(); err != nil {
 		return Result{}, err
 	}

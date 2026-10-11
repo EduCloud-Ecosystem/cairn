@@ -1,0 +1,37 @@
+name: Recovery rehearsal
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recovery-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  recovery:
+    name: Populated upgrade and fresh restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: SQLite and disposable PostgreSQL recovery
+        env:
+          CAIRN_RECOVERY_POSTGRES: '1'
+        run: go test -race ./tools/recovery -count=1 -v
+      - name: Build bounded acquisition image
+        run: docker build -f Dockerfile.checkout -t cairn-checkout:local .
+      - name: Acquisition, execution and offline crash recovery
+        env:
+          CAIRN_CHECKOUT_DOCKER_TEST: '1'
+          CAIRN_RECOVERY_INTEGRATION_IMAGE: cairn-checkout:local
+          CAIRN_WORKSPACE_INTEGRATION_IMAGE: cairn-checkout:local
+        run: go test -race ./internal/grading ./internal/runtimeguard -count=1 -v

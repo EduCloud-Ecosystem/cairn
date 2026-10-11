@@ -22,6 +22,8 @@ import (
 // open is called once per sub-test so each sub-test gets a clean store.
 func Run(t *testing.T, open func(t *testing.T) store.Store) {
 	t.Helper()
+	t.Run("ReconciliationClaimRace", func(t *testing.T) { testReconciliationClaimRace(t, open(t)) })
+	t.Run("Reconciliation", func(t *testing.T) { testReconciliation(t, open(t)) })
 	t.Run("RosterIdentity", func(t *testing.T) { testRosterIdentity(t, open(t)) })
 	t.Run("LTI", func(t *testing.T) { testLTI(t, open(t)) })
 	t.Run("Calibrations", func(t *testing.T) { testCalibrations(t, open(t)) })

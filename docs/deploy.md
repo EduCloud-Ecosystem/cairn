@@ -55,10 +55,22 @@ git clone https://github.com/EduCloud-Ecosystem/cairn.git
 cd cairn
 ```
 
+Before starting assessment or container grading, build the bounded Git acquisition
+image on the same Docker daemon used by Cairn:
+
+```sh
+docker build --pull -f Dockerfile.checkout -t cairn-checkout:local .
+```
+
+Set `CAIRN_CHECKOUT_IMAGE` if using a different accepted tag/digest. Checkout jobs
+never pull images or fall back to host Git. See [runtime recovery](runtime-recovery.md),
+[database recovery drills](recovery-drill.md), and [identity reconciliation](reconciliation.md)
+for the pre-pilot operator procedures.
+
 ## 3. Create the grading work directory
 
-Grading clones each submission into this directory and bind-mounts it into a
-sandboxed container. It is mounted at the **same path** inside the Cairn
+Bounded acquisition exports each submission into this directory. Grading copies
+it read-only into its bounded execution workspace. It is mounted at the **same path** inside the Cairn
 container, because the Docker daemon resolves mount paths on the host — a
 directory that existed only inside the container would be mounted empty and every
 grading run would fail. `cairn doctor` verifies this round trip.
@@ -253,11 +265,11 @@ other runtime/tier combinations need their own deployment acceptance.
 On normal completion, failure or canceled grading, Cairn removes the keeper
 and volume using a separate cleanup context. A process/host crash can still
 leave `cairn-work-*` volumes or `cairn-work-keeper-*` containers for operator
-recovery. **These workspace limits do not bound Git clone/fetch disk usage**:
-submission and instructor-policy acquisition still writes to `CAIRN_WORK_DIR`
-before the container runs. Put that host directory on a capacity-limited
-filesystem and monitor it; the source checkout, runtime image storage and any
-crash leftovers remain deployment resource responsibilities.
+recovery. **Git acquisition is separately bounded** by a 512 MiB/65,536-inode tmpfs
+and byte/entry-limited host export. Put `CAIRN_WORK_DIR` on a capacity-limited
+filesystem and monitor aggregate usage: concurrent exports, retained captures,
+images and crash leftovers remain deployment resource responsibilities. Use the
+[reviewed offline recovery procedure](runtime-recovery.md) for scoped leftovers.
 
 > **Security note, stated plainly.** Cairn mounts `/var/run/docker.sock` so it can
 > start grading containers. Access to that socket is equivalent to root on this
