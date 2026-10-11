@@ -49,16 +49,17 @@ type testView struct {
 // workItem is one submission as the student sees it. It carries only the student's
 // own coursework — no other student's data, and no names/emails/SIS ids.
 type workItem struct {
-	SubmissionID    string     `json:"submission_id"`
-	AssignmentTitle string     `json:"assignment_title"`
-	AssignmentSlug  string     `json:"assignment_slug"`
-	ClassroomName   string     `json:"classroom_name"`
-	WorkspaceURL    string     `json:"workspace_url,omitempty"`
-	RepoWebURL      string     `json:"repo_web_url,omitempty"`
-	Deadline        *time.Time `json:"deadline,omitempty"`
-	Status          string     `json:"status"`                   // submission lifecycle
-	GradingStatus   string     `json:"grading_status,omitempty"` // latest run: running/completed/failed
-	LatestGrade     *gradeView `json:"latest_grade,omitempty"`
+	SubmissionID       string     `json:"submission_id"`
+	AssignmentTitle    string     `json:"assignment_title"`
+	AssignmentSlug     string     `json:"assignment_slug"`
+	ClassroomName      string     `json:"classroom_name"`
+	WorkspaceURL       string     `json:"workspace_url,omitempty"`
+	SubmissionsEnabled bool       `json:"submissions_enabled"`
+	RepoWebURL         string     `json:"repo_web_url,omitempty"`
+	Deadline           *time.Time `json:"deadline,omitempty"`
+	Status             string     `json:"status"`                   // submission lifecycle
+	GradingStatus      string     `json:"grading_status,omitempty"` // latest run: running/completed/failed
+	LatestGrade        *gradeView `json:"latest_grade,omitempty"`
 }
 
 // workDetail adds the per-test breakdown and attempt history to a workItem.
@@ -97,7 +98,7 @@ func (s *Server) handleMyWork(w http.ResponseWriter, r *http.Request) {
 		}
 		items = append(items, enr.item(r.Context(), sub))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"work": items})
+	writeJSON(w, http.StatusOK, map[string]any{"work": items, "username": username})
 }
 
 // handleMyWorkDetail returns one submission owned by the caller, with the per-test
@@ -200,6 +201,8 @@ func (e *enricher) item(ctx context.Context, sub *store.Submission) workItem {
 	if a := e.assignment(ctx, sub.AssignmentID); a != nil {
 		if roster, err := e.s.store.GetRosterEntry(ctx, sub.RosterEntryID); err == nil && roster.Status == store.RosterActive {
 			it.WorkspaceURL = e.s.workspaceURLs[a.ClassroomID]
+			it.SubmissionsEnabled = e.s.handoff != nil && sub.Status == "active" &&
+				(e.s.handoff.Classrooms == nil || e.s.handoff.Classrooms[a.ClassroomID])
 		}
 		it.AssignmentTitle = a.Title
 		it.AssignmentSlug = a.Slug

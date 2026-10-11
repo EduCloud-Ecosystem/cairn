@@ -35,6 +35,10 @@ type RevisionGrader interface {
 // for the job's classroom. It is the rate-limited choke point in front of every
 // host write; jobs are retried with backoff and marked failed after MaxAttempts.
 type Worker struct {
+	Handoff interface {
+		Process(context.Context, string) error
+		Exhausted(context.Context, string) error
+	}
 	Store    store.Store
 	Adapters map[adapter.Host]adapter.Adapter
 	Grader   Grader // optional; nil means grade jobs fail with a clear error
@@ -119,6 +123,11 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 			w.clearSubmissionError(ctx, job.TargetRef)
 		}
 	case job.Attempts >= w.maxAttempts():
+		if JobType(job.Type) == JobSubmissionHandoff && w.Handoff != nil {
+			if err := w.Handoff.Exhausted(ctx, job.TargetRef); err != nil {
+				return true, errors.New("handoff reconciliation state could not be persisted")
+			}
+		}
 		job.Status = store.JobFailed
 		job.LastError = execErr.Error()
 		if JobType(job.Type) == JobCreateRepo {
@@ -137,6 +146,11 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 
 func (w *Worker) execute(ctx context.Context, job *store.ProvisioningJob) error {
 	switch JobType(job.Type) {
+	case JobSubmissionHandoff:
+		if w.Handoff == nil {
+			return errors.New("submission handoff writer is unavailable")
+		}
+		return w.Handoff.Process(ctx, job.TargetRef)
 	case JobCreateRepo:
 		return w.createRepo(ctx, job.TargetRef)
 	case JobLockRepo:

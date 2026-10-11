@@ -14,13 +14,14 @@ import "context"
 type JobType string
 
 const (
-	JobCreateRepo      JobType = "create_repo"
-	JobAddCollaborator JobType = "add_collaborator"
-	JobLockRepo        JobType = "lock_repo"
-	JobUnlockRepo      JobType = "unlock_repo"
-	JobEnsureWebhook   JobType = "ensure_webhook"
-	JobGrade           JobType = "grade"
-	JobGradeRevision   JobType = "grade_revision"
+	JobSubmissionHandoff JobType = "submission_handoff"
+	JobCreateRepo        JobType = "create_repo"
+	JobAddCollaborator   JobType = "add_collaborator"
+	JobLockRepo          JobType = "lock_repo"
+	JobUnlockRepo        JobType = "unlock_repo"
+	JobEnsureWebhook     JobType = "ensure_webhook"
+	JobGrade             JobType = "grade"
+	JobGradeRevision     JobType = "grade_revision"
 )
 
 // Queue accepts provisioning jobs for asynchronous, rate-limited execution.

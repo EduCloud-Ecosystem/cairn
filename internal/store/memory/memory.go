@@ -16,6 +16,7 @@ import (
 
 // Store is a goroutine-safe in-memory store.Store.
 type Store struct {
+	handoffs            map[string]store.SubmissionHandoff
 	reconciliationAudit map[string]store.IdentityReconciliation
 
 	ltiRecords         map[string]store.LTIRecord
@@ -41,6 +42,7 @@ type Store struct {
 // New returns an empty in-memory store.
 func New() *Store {
 	return &Store{
+		handoffs:            map[string]store.SubmissionHandoff{},
 		reconciliationAudit: map[string]store.IdentityReconciliation{},
 
 		ltiRecords:         map[string]store.LTIRecord{},
@@ -294,6 +296,11 @@ func (m *Store) DeleteRosterEntry(_ context.Context, id string) error {
 			}
 		}
 		delete(m.submissions, subID)
+		for hid, h := range m.handoffs {
+			if h.SubmissionID == subID {
+				delete(m.handoffs, hid)
+			}
+		}
 	}
 	for key, r := range m.ltiRecords {
 		if r.RosterEntryID == id {
@@ -624,7 +631,7 @@ func (m *Store) ClaimNextJob(_ context.Context) (*store.ProvisioningJob, error) 
 	now := time.Now()
 	var pick *store.ProvisioningJob
 	for id, j := range m.jobs {
-		if j.Status != store.JobPending || j.ScheduledAt.After(now) {
+		if !(j.Status == store.JobPending && !j.ScheduledAt.After(now)) && !(j.Type == "submission_handoff" && j.Status == store.JobInProgress && !j.ScheduledAt.After(now.Add(-10*time.Minute))) {
 			continue
 		}
 		if pick == nil || j.ScheduledAt.Before(pick.ScheduledAt) {
@@ -637,6 +644,9 @@ func (m *Store) ClaimNextJob(_ context.Context) (*store.ProvisioningJob, error) 
 		return nil, store.ErrNotFound
 	}
 	pick.Status = store.JobInProgress
+	if pick.Type == "submission_handoff" {
+		pick.ScheduledAt = now
+	}
 	m.jobs[pick.ID] = *pick
 	return pick, nil
 }
