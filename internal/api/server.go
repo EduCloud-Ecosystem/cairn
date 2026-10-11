@@ -23,6 +23,7 @@ import (
 	"github.com/EduCloud-Ecosystem/cairn/internal/grading"
 	"github.com/EduCloud-Ecosystem/cairn/internal/id"
 	"github.com/EduCloud-Ecosystem/cairn/internal/identity"
+	"github.com/EduCloud-Ecosystem/cairn/internal/lti"
 	"github.com/EduCloud-Ecosystem/cairn/internal/provisioning"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/adapter"
@@ -30,6 +31,7 @@ import (
 
 // Options holds the Server's dependencies.
 type Options struct {
+	LTIClient          *lti.Client
 	OpenAIProvider     *assessment.OpenAI
 	OpenAIClassrooms   []string
 	AssessmentCheckout grading.RevisionCheckout // nil disables assessment review routes
@@ -76,6 +78,8 @@ type Options struct {
 
 // Server routes and serves the control-plane API.
 type Server struct {
+	ltiService          *lti.Service
+	ltiState            ltiState
 	assessmentGenerator *assessment.Generator
 	assessment          *assessment.Service
 	assessmentCapture   chan struct{}
@@ -112,6 +116,7 @@ type authFlow struct {
 	assignmentID string       // set for "claim"
 	host         adapter.Host // which resolver to use at callback time
 	created      time.Time
+	browser      string // random browser cookie bound to this OAuth attempt
 }
 
 // session is an authenticated session (kept in memory; users re-authenticate
@@ -120,7 +125,8 @@ type authFlow struct {
 // student session would satisfy operator routes (privilege escalation).
 type session struct {
 	userID     string       // operator User.ID; empty for students (not Users)
-	username   string       // host username (the identity anchor)
+	username   string       // current host username for roster lookup/display
+	hostUserID string       // stable provider identity; usernames may be reassigned
 	host       adapter.Host // the host this identity belongs to
 	created    time.Time
 	isOperator bool // true only for allowlisted operator logins
@@ -162,6 +168,10 @@ func New(opts Options) *Server {
 		if opts.OpenAIProvider != nil {
 			s.assessmentGenerator = assessment.NewGenerator(*s.assessment, opts.OpenAIProvider, opts.OpenAIClassrooms)
 		}
+	}
+	if opts.LTIClient != nil && opts.AuthEnabled && (opts.CookieSecure || opts.LTIClient.Config.Simulation) {
+		s.ltiService = &lti.Service{Store: opts.Store, Client: opts.LTIClient}
+		s.ltiState = ltiState{flows: map[string]ltiFlow{}, pending: map[string]ltiPending{}}
 	}
 	s.routes()
 	return s
@@ -205,6 +215,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /assignments/{id}/grade", protect(s.handleGrade))
 
 	s.assessmentRoutes(protect)
+	s.ltiRoutes(protect)
 
 	// Serve the built dashboard last and only if configured. Because Go 1.22's
 	// ServeMux gives more specific patterns precedence, every API route above
@@ -311,22 +322,43 @@ func (s *Server) sessionFromCookie(r *http.Request) (session, bool) {
 	return sess, ok
 }
 
-// currentIdentity returns the host + username of any authenticated session
-// (operator or student). It is the basis for student-scoped, own-data-only routes.
-func (s *Server) currentIdentity(r *http.Request) (host adapter.Host, username string, ok bool) {
+// currentIdentity returns the host, current username and stable account ID
+// of a provider-verified operator or student session. It is the basis for
+// student-scoped, own-data-only routes.
+func (s *Server) currentIdentity(r *http.Request) (host adapter.Host, username, hostUserID string, ok bool) {
 	sess, ok := s.sessionFromCookie(r)
-	if !ok {
-		return "", "", false
+	if !ok || sess.hostUserID == "" {
+		return "", "", "", false
 	}
-	return sess.host, sess.username, true
+	return sess.host, sess.username, sess.hostUserID, true
 }
 
 const sessionCookie = "cairn_session"
+const oauthBrowserCookie = "cairn_oauth_browser"
 
 func newSessionToken() string {
 	b := make([]byte, 32)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// beginOAuth binds each pending flow to the browser that initiated it. A state
+// URL alone must never be enough to install a session in a different browser.
+func (s *Server) beginOAuth(w http.ResponseWriter, r *http.Request, resolver identity.Resolver, flow authFlow) {
+	state := id.New()
+	flow.created = time.Now()
+	flow.browser = newSessionToken()
+	s.stMu.Lock()
+	s.pruneStatesLocked(flow.created)
+	s.states[state] = flow
+	s.stMu.Unlock()
+	http.SetCookie(w, &http.Cookie{
+		Name: oauthBrowserCookie, Value: flow.browser, Path: "/auth/callback",
+		HttpOnly: true, Secure: s.cookieSecure, SameSite: http.SameSiteLaxMode,
+		MaxAge: int(authFlowTTL.Seconds()),
+	})
+	w.Header().Set("Cache-Control", "no-store")
+	http.Redirect(w, r, resolver.AuthorizeURL(state), http.StatusFound)
 }
 
 // handleLogin begins operator OAuth (no-op redirect when auth is disabled).
@@ -340,13 +372,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusInternalServerError, "operator login is not configured")
 		return
 	}
-	state := id.New()
-	now := time.Now()
-	s.stMu.Lock()
-	s.pruneStatesLocked(now)
-	s.states[state] = authFlow{kind: "login", host: s.loginHost, created: now}
-	s.stMu.Unlock()
-	http.Redirect(w, r, resolver.AuthorizeURL(state), http.StatusFound)
+	s.beginOAuth(w, r, resolver, authFlow{kind: "login", host: s.loginHost})
 }
 
 // handleStudentLogin begins OAuth for a returning student. Unlike operator login
@@ -360,13 +386,7 @@ func (s *Server) handleStudentLogin(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusInternalServerError, "student login is not configured")
 		return
 	}
-	state := id.New()
-	now := time.Now()
-	s.stMu.Lock()
-	s.pruneStatesLocked(now)
-	s.states[state] = authFlow{kind: "student_login", host: s.loginHost, created: now}
-	s.stMu.Unlock()
-	http.Redirect(w, r, resolver.AuthorizeURL(state), http.StatusFound)
+	s.beginOAuth(w, r, resolver, authFlow{kind: "student_login", host: s.loginHost})
 }
 
 // handleAuthMe reports the current operator. With auth disabled it returns a
@@ -1005,32 +1025,34 @@ func (s *Server) handleAccept(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusInternalServerError, "self-enrollment is not configured for this host")
 		return
 	}
-	state := id.New()
-	now := time.Now()
-	s.stMu.Lock()
-	s.pruneStatesLocked(now)
-	s.states[state] = authFlow{kind: "claim", assignmentID: assignmentID, host: cls.Host, created: now}
-	s.stMu.Unlock()
-	http.Redirect(w, r, resolver.AuthorizeURL(state), http.StatusFound)
+	s.beginOAuth(w, r, resolver, authFlow{kind: "claim", assignmentID: assignmentID, host: cls.Host})
 }
 
 func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
+	browser, browserErr := r.Cookie(oauthBrowserCookie)
 
 	s.stMu.Lock()
+	s.pruneStatesLocked(time.Now())
 	flow, ok := s.states[state]
+	if ok && (browserErr != nil || flow.browser == "" || browser.Value != flow.browser) {
+		// A transferred callback cannot consume the initiating browser's flow.
+		ok = false
+	}
 	if ok {
-		delete(s.states, state) // one-time use regardless of TTL outcome
-		if time.Since(flow.created) > authFlowTTL {
-			ok = false
-		}
+		delete(s.states, state) // consume only a correctly bound, live flow
 	}
 	s.stMu.Unlock()
 	if !ok {
-		httpError(w, http.StatusBadRequest, "unknown or expired state")
+		httpError(w, http.StatusBadRequest, "unknown, expired or unbound state")
 		return
 	}
+	http.SetCookie(w, &http.Cookie{
+		Name: oauthBrowserCookie, Value: "", Path: "/auth/callback",
+		HttpOnly: true, Secure: s.cookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: -1,
+	})
+	w.Header().Set("Cache-Control", "no-store")
 
 	resolver, ok := s.resolvers[flow.host]
 	if !ok {
@@ -1042,16 +1064,20 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadGateway, "could not resolve identity: "+err.Error())
 		return
 	}
+	if hostUserID == "" {
+		httpError(w, http.StatusBadGateway, "identity provider returned no stable account identifier")
+		return
+	}
 
 	switch flow.kind {
 	case "login":
 		s.completeOperatorLogin(w, r, flow.host, username, hostUserID)
 	case "student_login":
 		// Returning student: no admin check, no provisioning — just a session.
-		s.startStudentSession(w, flow.host, username)
+		s.startStudentSession(w, flow.host, username, hostUserID)
 		http.Redirect(w, r, "/me", http.StatusFound)
 	default: // "claim"
-		s.completeStudentClaim(w, r, flow.assignmentID, username)
+		s.completeStudentClaim(w, r, flow.assignmentID, username, hostUserID)
 	}
 }
 
@@ -1061,6 +1087,19 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 func (s *Server) completeOperatorLogin(w http.ResponseWriter, r *http.Request, host adapter.Host, username, hostUserID string) {
 	if !s.admins[username] {
 		httpError(w, http.StatusForbidden, "this account is not authorized to operate this instance")
+		return
+	}
+	if hostUserID == "" {
+		httpError(w, http.StatusForbidden, "stable operator identity required")
+		return
+	}
+	previous, err := s.store.FindUserByHostUsername(r.Context(), host, username)
+	if err == nil && previous.HostUserID != hostUserID {
+		httpError(w, http.StatusForbidden, "operator identity requires administrator reconciliation")
+		return
+	}
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		httpError(w, http.StatusInternalServerError, "could not verify operator identity")
 		return
 	}
 	u, err := s.store.FindUserByHostUserID(r.Context(), host, hostUserID)
@@ -1080,7 +1119,7 @@ func (s *Server) completeOperatorLogin(w http.ResponseWriter, r *http.Request, h
 	now := time.Now()
 	s.sessMu.Lock()
 	s.pruneSessionsLocked(now)
-	s.sessions[token] = session{userID: u.ID, username: u.HostUsername, host: host, created: now, isOperator: true}
+	s.sessions[token] = session{userID: u.ID, username: username, hostUserID: hostUserID, host: host, created: now, isOperator: true}
 	s.sessMu.Unlock()
 	s.setSessionCookie(w, token)
 	http.Redirect(w, r, "/", http.StatusFound)
@@ -1096,20 +1135,24 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, token string) {
 }
 
 // startStudentSession mints a student session (no User row, not an operator) and
-// sets the cookie. Students are identified solely by their (host, username).
-func (s *Server) startStudentSession(w http.ResponseWriter, host adapter.Host, username string) {
+// sets the cookie. Authorization requires the stable provider account identifier.
+func (s *Server) startStudentSession(w http.ResponseWriter, host adapter.Host, username, hostUserID string) {
 	token := newSessionToken()
 	now := time.Now()
 	s.sessMu.Lock()
 	s.pruneSessionsLocked(now)
-	s.sessions[token] = session{username: username, host: host, created: now, isOperator: false}
+	s.sessions[token] = session{username: username, hostUserID: hostUserID, host: host, created: now, isOperator: false}
 	s.sessMu.Unlock()
 	s.setSessionCookie(w, token)
 }
 
-// completeStudentClaim binds a student's username to a roster entry and
-// provisions their repo. Only the username is ever stored.
-func (s *Server) completeStudentClaim(w http.ResponseWriter, r *http.Request, assignmentID, username string) {
+// completeStudentClaim binds an unclaimed roster entry to the provider account.
+// A reused username must not inherit an existing learner's work or LMS binding.
+func (s *Server) completeStudentClaim(w http.ResponseWriter, r *http.Request, assignmentID, username, hostUserID string) {
+	if hostUserID == "" {
+		httpError(w, http.StatusForbidden, "stable account identity required")
+		return
+	}
 	asg, err := s.store.GetAssignment(r.Context(), assignmentID)
 	if err != nil {
 		s.notFoundOr500(w, err, "assignment")
@@ -1133,12 +1176,13 @@ func (s *Server) completeStudentClaim(w http.ResponseWriter, r *http.Request, as
 			})
 			return
 		}
-		// Open self-enrollment: bind a new active roster entry. Only the username is stored.
+		// Open self-enrollment: bind a new active roster entry to this account.
 		re = &store.RosterEntry{
 			ID:           id.New(),
 			ClassroomID:  cls.ID,
 			Host:         cls.Host,
 			HostUsername: username,
+			HostUserID:   hostUserID,
 			Status:       store.RosterActive,
 			ClaimedAt:    &now,
 		}
@@ -1150,6 +1194,25 @@ func (s *Server) completeStudentClaim(w http.ResponseWriter, r *http.Request, as
 		httpError(w, http.StatusInternalServerError, err.Error())
 		return
 	default:
+		if re.Host != cls.Host || (re.HostUserID != "" && re.HostUserID != hostUserID) || (re.HostUserID == "" && re.ClaimedAt != nil) {
+			httpError(w, http.StatusForbidden, "roster identity requires instructor reconciliation")
+			return
+		}
+		if re.HostUserID == "" {
+			// Imported/legacy rows can already hold work without ClaimedAt.
+			prior, err := s.store.ListSubmissionsByRosterUsername(r.Context(), cls.Host, username)
+			if err != nil {
+				httpError(w, http.StatusInternalServerError, "could not verify roster identity")
+				return
+			}
+			for _, sub := range prior {
+				if sub.RosterEntryID == re.ID {
+					httpError(w, http.StatusForbidden, "existing coursework requires instructor identity reconciliation")
+					return
+				}
+			}
+		}
+		re.HostUserID = hostUserID
 		re.Status = store.RosterActive
 		re.ClaimedAt = &now
 		if err := s.store.UpdateRosterEntry(r.Context(), re); err != nil {
@@ -1183,8 +1246,8 @@ func (s *Server) completeStudentClaim(w http.ResponseWriter, r *http.Request, as
 	}
 
 	// The accept flow is browser-driven: give the student a session keyed to their
-	// (host, username) and land them on their own-work page.
-	s.startStudentSession(w, cls.Host, username)
+	// stable provider account and land them on their own-work page.
+	s.startStudentSession(w, cls.Host, username, hostUserID)
 	http.Redirect(w, r, "/me", http.StatusFound)
 }
 

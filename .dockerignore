@@ -29,3 +29,12 @@ DCO
 *.sql.gz
 output/
 .playwright-cli/
+
+# Local and CI reports/archives are not release inputs.
+*.test
+coverage.out
+ci-analysis/
+baseline-bench.txt
+head-bench.txt
+cairn-image.tar
+image-vulnerabilities.json

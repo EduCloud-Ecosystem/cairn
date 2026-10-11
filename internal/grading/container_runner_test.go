@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,21 +15,28 @@ import (
 )
 
 type fakeCall struct {
-	name    string
-	args    []string
-	timeout time.Duration
+	name     string
+	args     []string
+	timeout  time.Duration
+	canceled bool
 }
 
 // fakeRunner records invocations and returns results keyed by the command (the
 // final argument of a `run ... sh -c <command>` invocation).
 type fakeRunner struct {
 	calls     []fakeCall
+	allCalls  []fakeCall // includes workspace lifecycle and initialization
 	byCommand map[string]cmdResult
 	startErr  error
 }
 
-func (f *fakeRunner) run(_ context.Context, name string, args []string, timeout time.Duration) (cmdResult, error) {
-	f.calls = append(f.calls, fakeCall{name: name, args: args, timeout: timeout})
+func (f *fakeRunner) run(ctx context.Context, name string, args []string, timeout time.Duration) (cmdResult, error) {
+	call := fakeCall{name: name, args: args, timeout: timeout, canceled: ctx.Err() != nil}
+	f.allCalls = append(f.allCalls, call)
+	last := args[len(args)-1]
+	if args[0] != "volume" && last != workspaceHoldCommand && last != workspaceCopyCommand && !strings.HasPrefix(last, "cairn-work-keeper-") {
+		f.calls = append(f.calls, call)
+	}
 	if f.startErr != nil {
 		return cmdResult{}, f.startErr
 	}
@@ -102,7 +110,7 @@ func TestContainerArgsAreHardened(t *testing.T) {
 			t.Errorf("%s = %q, want %q", flag, got, val)
 		}
 	}
-	if got := flagValue(a, "-v"); got != "/host/checkout:/work" {
+	if got := flagValue(a, "-v"); !strings.HasPrefix(got, "cairn-work-") || !strings.HasSuffix(got, ":/work:nocopy") {
 		t.Errorf("mount = %q", got)
 	}
 	// command tail
@@ -152,8 +160,8 @@ func TestContainerScoring(t *testing.T) {
 	if len(fr.calls) != 6 {
 		t.Fatalf("expected 6 invocations (5 steps + 1 kill), got %d", len(fr.calls))
 	}
-	if last := fr.calls[5].args; last[0] != "kill" {
-		t.Errorf("expected a kill invocation, got %v", last)
+	if last := fr.calls[5].args; last[0] != "rm" || last[1] != "--force" {
+		t.Errorf("expected a forced cleanup invocation, got %v", last)
 	}
 }
 

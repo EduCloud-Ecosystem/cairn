@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -131,8 +132,9 @@ func TestAcceptThenCallbackSelfClaim(t *testing.T) {
 
 	// 2) callback -> binds the username, enqueues provisioning, and (browser-driven)
 	// redirects the student to their own-work page with a session cookie.
+	callback := oauthCallbackRequest("/auth/callback?code=xyz&state="+state, rec)
 	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/auth/callback?code=xyz&state="+state, nil))
+	srv.ServeHTTP(rec, callback)
 	if rec.Code != http.StatusFound {
 		t.Fatalf("callback status = %d, want 302; body=%s", rec.Code, rec.Body.String())
 	}
@@ -363,7 +365,7 @@ func login(t *testing.T, srv *Server) *http.Cookie {
 		t.Fatal("no state in authorize redirect")
 	}
 	cb := httptest.NewRecorder()
-	srv.ServeHTTP(cb, httptest.NewRequest(http.MethodGet, "/auth/callback?code=x&state="+state, nil))
+	srv.ServeHTTP(cb, oauthCallbackRequest("/auth/callback?code=x&state="+state, rec))
 	if cb.Code != http.StatusFound {
 		t.Fatalf("callback = %d, want 302; body=%s", cb.Code, cb.Body.String())
 	}
@@ -439,12 +441,14 @@ func TestLoginRejectsNonAdmin(t *testing.T) {
 	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/auth/login", nil))
 	loc, _ := url.Parse(rec.Header().Get("Location"))
 	cb := httptest.NewRecorder()
-	srv.ServeHTTP(cb, httptest.NewRequest(http.MethodGet, "/auth/callback?code=x&state="+loc.Query().Get("state"), nil))
+	srv.ServeHTTP(cb, oauthCallbackRequest("/auth/callback?code=x&state="+loc.Query().Get("state"), rec))
 	if cb.Code != http.StatusForbidden {
 		t.Fatalf("non-admin login = %d, want 403", cb.Code)
 	}
-	if len(cb.Result().Cookies()) != 0 {
-		t.Fatal("no session cookie should be set for a rejected login")
+	for _, cookie := range cb.Result().Cookies() {
+		if cookie.Name == sessionCookie && cookie.Value != "" {
+			t.Fatal("no session cookie should be set for a rejected login")
+		}
 	}
 }
 
@@ -525,16 +529,19 @@ func TestExpiredStateIsRejected(t *testing.T) {
 	srv.states[expiredKey] = authFlow{
 		kind:    "login",
 		created: time.Now().Add(-(authFlowTTL + time.Minute)),
+		browser: "matching-expired-browser",
 	}
 	srv.stMu.Unlock()
 
 	rec := httptest.NewRecorder()
-	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/auth/callback?code=x&state="+expiredKey, nil))
+	request := httptest.NewRequest(http.MethodGet, "/auth/callback?code=x&state="+expiredKey, nil)
+	request.AddCookie(&http.Cookie{Name: oauthBrowserCookie, Value: "matching-expired-browser"})
+	srv.ServeHTTP(rec, request)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expired state callback = %d, want 400", rec.Code)
 	}
 
-	// The expired entry must have been removed (delete always fires on found states).
+	// Expired entries are pruned even when the browser binding matches.
 	srv.stMu.Lock()
 	_, still := srv.states[expiredKey]
 	srv.stMu.Unlock()
@@ -611,31 +618,19 @@ func TestOperatorRenameKeepsSameUser(t *testing.T) {
 	}
 }
 
-// TestRecycledUsernameGetsNewIdentity (H2): logging in as username "alice" with a
-// different numeric host user id must produce a distinct user row, not reuse the one
-// from the original alice.
-func TestRecycledUsernameGetsNewIdentity(t *testing.T) {
+// A recycled allowlisted operator username cannot acquire installation authority.
+func TestRecycledOperatorUsernameIsRejected(t *testing.T) {
 	st := memory.New()
-	ctx := context.Background()
-
-	// First: alice / id 100.
 	srv1 := newServerWithStore(st, fakeResolver{username: "alice", hostUserID: "100"}, "alice")
 	login(t, srv1)
-	u1, err := st.FindUserByHostUserID(ctx, adapter.HostGitHub, "100")
-	if err != nil {
-		t.Fatalf("user 1 not found: %v", err)
-	}
-
-	// Second: alice / id 200 — the original alice deleted their account and someone
-	// else claimed the username.
 	srv2 := newServerWithStore(st, fakeResolver{username: "alice", hostUserID: "200"}, "alice")
-	login(t, srv2)
-	u2, err := st.FindUserByHostUserID(ctx, adapter.HostGitHub, "200")
-	if err != nil {
-		t.Fatalf("user 2 not found: %v", err)
+	response := httptest.NewRecorder()
+	srv2.completeOperatorLogin(response, httptest.NewRequest(http.MethodGet, "/auth/callback", nil), adapter.HostGitHub, "alice", "200")
+	if response.Code != http.StatusForbidden || len(srv2.sessions) != 0 {
+		t.Fatal("recycled operator authorized", response.Code)
 	}
-	if u2.ID == u1.ID {
-		t.Fatal("recycled username reused the original user row; expected a distinct identity")
+	if _, err := st.FindUserByHostUserID(context.Background(), adapter.HostGitHub, "200"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("recycled identity persisted", err)
 	}
 }
 
@@ -686,7 +681,7 @@ func TestMultiHostClaimUsesCorrectResolver(t *testing.T) {
 	// Step 2: /callback with the state → should use the Forgejo resolver, then
 	// redirect the student to /me.
 	cb := httptest.NewRecorder()
-	srv.ServeHTTP(cb, httptest.NewRequest(http.MethodGet, "/auth/callback?code=x&state="+state, nil))
+	srv.ServeHTTP(cb, oauthCallbackRequest("/auth/callback?code=x&state="+state, rec))
 	if cb.Code != http.StatusFound {
 		t.Fatalf("callback = %d, want 302; body=%s", cb.Code, cb.Body.String())
 	}
@@ -857,7 +852,7 @@ func TestWorkerSubmissionTerminalFailure(t *testing.T) {
 		ID: "a1", ClassroomID: "c1", Slug: "hw1",
 		TemplateRef: adapter.TemplateRef{Host: adapter.HostGitHub, Namespace: "org", Name: "tmpl"},
 	})
-	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", Host: adapter.HostGitHub, HostUsername: "bob"})
+	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", Host: adapter.HostGitHub, HostUsername: "bob", HostUserID: "42"})
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1", RosterEntryID: "r1", Status: "provisioning"})
 
 	queue := provisioning.NewService(st)
@@ -913,6 +908,9 @@ func (f *fakeWorkerAdapter) RepoExists(context.Context, adapter.RepoRef) (bool, 
 func (f *fakeWorkerAdapter) SetCollaborator(context.Context, adapter.RepoRef, string, adapter.Role) error {
 	return nil
 }
+func (f *fakeWorkerAdapter) SetVerifiedCollaborator(context.Context, adapter.RepoRef, string, string, adapter.Role) error {
+	return nil
+}
 func (f *fakeWorkerAdapter) RemoveCollaborator(context.Context, adapter.RepoRef, string) error {
 	return nil
 }
@@ -960,7 +958,7 @@ func doAcceptCallback(srv *Server, assignmentID string) *httptest.ResponseRecord
 
 	// Step 2: callback → completeStudentClaim.
 	rec2 := httptest.NewRecorder()
-	srv.ServeHTTP(rec2, httptest.NewRequest(http.MethodGet, "/auth/callback?code=xyz&state="+state, nil))
+	srv.ServeHTTP(rec2, oauthCallbackRequest("/auth/callback?code=xyz&state="+state, rec))
 	return rec2
 }
 

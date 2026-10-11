@@ -4,6 +4,7 @@ package provisioning
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -188,16 +189,51 @@ func (w *Worker) createRepo(ctx context.Context, submissionID string) error {
 		return fmt.Errorf("no adapter configured for host %q", cls.Host)
 	}
 
+	verified, ok := ad.(adapter.VerifiedCollaborator)
+	if !ok {
+		return errors.New("adapter cannot verify collaborator identity")
+	}
+	if re.HostUserID == "" {
+		return errors.New("roster entry has no verified provider identity")
+	}
+
 	ns, err := ad.EnsureNamespace(ctx, cls.HostNamespace)
 	if err != nil {
 		return fmt.Errorf("ensure namespace %q: %w", cls.HostNamespace, err)
 	}
-	repoName := asg.Slug + "-" + re.HostUsername
-	repo, err := ad.CreateRepoFromTemplate(ctx, asg.TemplateRef, ns, repoName, adapter.CreateRepoOptions{Private: true})
-	if err != nil {
-		return fmt.Errorf("create repo: %w", err)
+	// Assignment slugs and usernames can contain the same separators. Bind the
+	// host name to the opaque submission identity instead of joining user labels.
+	repo := adapter.RepoRef{Host: cls.Host, Namespace: ns.Slug, Name: submissionRepoName(sub.ID)}
+	if sub.Repo != (adapter.RepoRef{}) {
+		// Only a previously persisted, matching binding authorizes a retry.
+		// Legacy or inconsistent bindings require operator reconciliation.
+		if sub.Repo != repo {
+			return errors.New("submission repository binding does not match provisioning target")
+		}
+		exists, err := ad.RepoExists(ctx, repo)
+		if err != nil {
+			return fmt.Errorf("verify bound repo: %w", err)
+		}
+		if !exists {
+			return errors.New("bound submission repository is missing; reconciliation required")
+		}
+	} else {
+		created, err := ad.CreateRepoFromTemplate(ctx, asg.TemplateRef, ns, repo.Name, adapter.CreateRepoOptions{Private: true, RequireNew: true})
+		if err != nil {
+			return fmt.Errorf("create repo: %w", err)
+		}
+		if created != repo {
+			return errors.New("created repository does not match provisioning target")
+		}
+		// Persist ownership before granting access. If creation succeeds but this
+		// write fails (or the process crashes), the orphan must be reconciled by
+		// an operator: an existing name alone never proves ownership.
+		sub.Repo = repo
+		if err := w.Store.UpdateSubmission(ctx, sub); err != nil {
+			return fmt.Errorf("persist repository binding: %w", err)
+		}
 	}
-	if err := ad.SetCollaborator(ctx, repo, re.HostUsername, adapter.RoleWrite); err != nil {
+	if err := verified.SetVerifiedCollaborator(ctx, repo, re.HostUsername, re.HostUserID, adapter.RoleWrite); err != nil {
 		return fmt.Errorf("add collaborator: %w", err)
 	}
 	if w.WebhookBaseURL != "" {
@@ -219,6 +255,11 @@ func (w *Worker) createRepo(ctx context.Context, submissionID string) error {
 	sub.Repo = repo
 	sub.Status = "active"
 	return w.Store.UpdateSubmission(ctx, sub)
+}
+
+// submissionRepoName is stable across retries and independent of mutable labels.
+func submissionRepoName(submissionID string) string {
+	return fmt.Sprintf("cairn-%x", sha256.Sum256([]byte(submissionID)))
 }
 
 // recordSubmissionFailure marks the submission as "failed" with a truncated

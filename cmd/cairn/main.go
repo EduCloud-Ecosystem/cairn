@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"github.com/EduCloud-Ecosystem/cairn/internal/config"
 	"github.com/EduCloud-Ecosystem/cairn/internal/grading"
 	"github.com/EduCloud-Ecosystem/cairn/internal/identity"
+	"github.com/EduCloud-Ecosystem/cairn/internal/lti"
 	"github.com/EduCloud-Ecosystem/cairn/internal/provisioning"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/adapter"
@@ -251,7 +253,26 @@ func serve() {
 			log.Fatal(err)
 		}
 	}
-	srv := api.New(api.Options{
+	var ltiClient *lti.Client
+	if path := os.Getenv("CAIRN_LTI_CONFIG"); path != "" {
+		if !authEnabled {
+			log.Fatal("LTI requires operator authentication")
+		}
+		ltiClient, err = lti.Load(path)
+		if err != nil {
+			log.Fatal("invalid LTI configuration")
+		}
+		if ltiClient.Config.Simulation {
+			host, _, listenErr := net.SplitHostPort(cfg.ListenAddr)
+			if listenErr != nil || host != "127.0.0.1" {
+				log.Fatal("LTI simulation requires CAIRN_LISTEN_ADDR=127.0.0.1:PORT")
+			}
+		}
+		if !ltiClient.Config.Simulation && os.Getenv("CAIRN_COOKIE_SECURE") != "1" {
+			log.Fatal("LTI requires secure cookies")
+		}
+	}
+	srv := api.New(api.Options{LTIClient: ltiClient,
 		OpenAIProvider: provider, OpenAIClassrooms: openAIClassrooms,
 		AssessmentCheckout: assessmentCheckout,
 		WorkspaceURLs:      workspaceURLs,

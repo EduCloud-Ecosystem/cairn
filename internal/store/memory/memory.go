@@ -16,6 +16,7 @@ import (
 
 // Store is a goroutine-safe in-memory store.Store.
 type Store struct {
+	ltiRecords         map[string]store.LTIRecord
 	calibrationSources map[string]map[string]bool
 	calibrations       map[string]store.Calibration
 	generations        map[string]store.Generation
@@ -38,6 +39,7 @@ type Store struct {
 // New returns an empty in-memory store.
 func New() *Store {
 	return &Store{
+		ltiRecords:         map[string]store.LTIRecord{},
 		calibrationSources: map[string]map[string]bool{},
 		calibrations:       map[string]store.Calibration{},
 		generations:        map[string]store.Generation{}, generationLearners: map[string]string{},
@@ -220,8 +222,12 @@ func (m *Store) FindRosterEntryByUsername(_ context.Context, classroomID, userna
 func (m *Store) UpdateRosterEntry(_ context.Context, r *store.RosterEntry) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.roster[r.ID]; !ok {
+	old, ok := m.roster[r.ID]
+	if !ok {
 		return store.ErrNotFound
+	}
+	if old.Host != r.Host || (old.HostUserID != r.HostUserID && (old.HostUserID != "" || old.ClaimedAt != nil)) {
+		return store.ErrConflict
 	}
 	m.roster[r.ID] = *r
 	return nil
@@ -275,6 +281,11 @@ func (m *Store) DeleteRosterEntry(_ context.Context, id string) error {
 			}
 		}
 		delete(m.submissions, subID)
+	}
+	for key, r := range m.ltiRecords {
+		if r.RosterEntryID == id {
+			delete(m.ltiRecords, key)
+		}
 	}
 	delete(m.roster, id)
 	return nil
@@ -504,6 +515,11 @@ func (m *Store) PurgeExportedGrades(_ context.Context, cutoff time.Time) (int, i
 	for id, g := range m.grades {
 		if g.ExportConfirmedAt == nil || !g.ExportConfirmedAt.Before(cutoff) {
 			continue
+		}
+		for key, r := range m.ltiRecords {
+			if r.GradeID == id {
+				delete(m.ltiRecords, key)
+			}
 		}
 		delete(m.grades, id)
 		for aid, a := range m.assessments {

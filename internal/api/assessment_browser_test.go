@@ -34,7 +34,7 @@ func TestAssessmentBrowserFixture(t *testing.T) {
 	}
 	defer st.Close()
 	ctx := context.Background()
-	for _, err := range []error{st.CreateClassroom(ctx, &store.Classroom{ID: "c", Name: "Synthetic assessment course", Host: adapter.HostGitHub, HostNamespace: "fixture"}), st.CreateAssignment(ctx, &store.Assignment{ID: "a", ClassroomID: "c", Title: "Explain your reasoning", Slug: "reasoning"}), st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r", ClassroomID: "c", Host: adapter.HostGitHub, HostUsername: "synthetic-student", Status: store.RosterActive}), st.CreateSubmission(ctx, &store.Submission{ID: "s", AssignmentID: "a", RosterEntryID: "r", Status: "active", LatestCommit: strings.Repeat("a", 40)})} {
+	for _, err := range []error{st.CreateClassroom(ctx, &store.Classroom{ID: "c", Name: "Synthetic assessment course", Host: adapter.HostGitHub, HostNamespace: "fixture"}), st.CreateAssignment(ctx, &store.Assignment{ID: "a", ClassroomID: "c", Title: "Explain your reasoning", Slug: "reasoning"}), st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r", ClassroomID: "c", Host: adapter.HostGitHub, HostUsername: "synthetic-student", HostUserID: "fixture-synthetic-student", Status: store.RosterActive}), st.CreateSubmission(ctx, &store.Submission{ID: "s", AssignmentID: "a", RosterEntryID: "r", Status: "active", LatestCommit: strings.Repeat("a", 40)})} {
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -63,7 +63,7 @@ func TestAssessmentBrowserFixture(t *testing.T) {
 	// Session cookies are random, synthetic, and expire when this fixture ends.
 	teacherToken, studentToken := newSessionToken(), newSessionToken()
 	srv.sessions[teacherToken] = session{userID: "fixture-instructor", username: "synthetic-instructor", host: adapter.HostGitHub, isOperator: true, created: time.Now()}
-	srv.sessions[studentToken] = session{username: "synthetic-student", host: adapter.HostGitHub, created: time.Now()}
+	srv.sessions[studentToken] = session{username: "synthetic-student", hostUserID: "fixture-synthetic-student", host: adapter.HostGitHub, created: time.Now()}
 	server := httptest.NewServer(srv)
 	defer server.Close()
 	u, _ := url.Parse(server.URL)

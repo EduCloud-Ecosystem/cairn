@@ -1,3 +1,4 @@
+import { PassbackPanel } from "./PassbackPanel";
 import { AssessmentPanel } from "./AssessmentPanel";
 import { useState } from "react";
 import { api, type Assignment, type SubmissionView } from "../api";
@@ -184,6 +185,8 @@ export function AssignmentCard({
           </fieldset>
 
           <AssessmentPanel classroomID={assignment.classroom_id} assignmentID={assignment.id} submissions={subs || []} notify={notify} refreshSubmissions={loadSubs} />
+
+          <PassbackPanel submissions={subs || []} notify={notify} />
 
           <div className="deadline-row">
             <label htmlFor={`dl-${assignment.id}`}>Deadline</label>

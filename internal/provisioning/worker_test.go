@@ -15,18 +15,28 @@ import (
 
 // fakeAdapter records the calls the worker makes. Unused methods are no-ops.
 type fakeAdapter struct {
-	callOrder    []string // ordered list of method names called
-	ensuredSlug  string
-	createdRepo  string
-	collaborator string
-	role         adapter.Role
-	webhookURL   string
-	webhookErr   error
-	lockedRepo   string
-	unlockedRepo string
+	verifiedIDs       map[string]string
+	host              adapter.Host
+	repos             map[adapter.RepoRef]bool
+	createCalls       int
+	collaboratorCalls int
+	callOrder         []string // ordered list of method names called
+	ensuredSlug       string
+	createdRepo       string
+	collaborator      string
+	role              adapter.Role
+	webhookURL        string
+	webhookErr        error
+	lockedRepo        string
+	unlockedRepo      string
 }
 
-func (f *fakeAdapter) Host() adapter.Host { return adapter.HostGitHub }
+func (f *fakeAdapter) Host() adapter.Host {
+	if f.host != "" {
+		return f.host
+	}
+	return adapter.HostGitHub
+}
 func (f *fakeAdapter) RepoWebURL(repo adapter.RepoRef) string {
 	return "https://github.test/" + repo.Namespace + "/" + repo.Name
 }
@@ -34,21 +44,40 @@ func (f *fakeAdapter) RepoWebURL(repo adapter.RepoRef) string {
 func (f *fakeAdapter) EnsureNamespace(_ context.Context, slug string) (adapter.NamespaceRef, error) {
 	f.callOrder = append(f.callOrder, "EnsureNamespace")
 	f.ensuredSlug = slug
-	return adapter.NamespaceRef{Host: adapter.HostGitHub, Slug: slug}, nil
+	return adapter.NamespaceRef{Host: f.Host(), Slug: slug}, nil
 }
 
-func (f *fakeAdapter) CreateRepoFromTemplate(_ context.Context, _ adapter.TemplateRef, ns adapter.NamespaceRef, name string, _ adapter.CreateRepoOptions) (adapter.RepoRef, error) {
+func (f *fakeAdapter) CreateRepoFromTemplate(_ context.Context, _ adapter.TemplateRef, ns adapter.NamespaceRef, name string, opts adapter.CreateRepoOptions) (adapter.RepoRef, error) {
 	f.callOrder = append(f.callOrder, "CreateRepoFromTemplate")
 	f.createdRepo = name
-	return adapter.RepoRef{Host: adapter.HostGitHub, Namespace: ns.Slug, Name: name}, nil
+	f.createCalls++
+	ref := adapter.RepoRef{Host: f.Host(), Namespace: ns.Slug, Name: name}
+	if f.repos[ref] && opts.RequireNew {
+		return adapter.RepoRef{}, adapter.ErrRepoExists
+	}
+	if f.repos == nil {
+		f.repos = make(map[adapter.RepoRef]bool)
+	}
+	f.repos[ref] = true
+	return ref, nil
 }
 
-func (f *fakeAdapter) RepoExists(context.Context, adapter.RepoRef) (bool, error) { return false, nil }
+func (f *fakeAdapter) RepoExists(_ context.Context, ref adapter.RepoRef) (bool, error) {
+	return f.repos[ref], nil
+}
 
 func (f *fakeAdapter) SetCollaborator(_ context.Context, _ adapter.RepoRef, username string, role adapter.Role) error {
+	f.collaboratorCalls++
 	f.collaborator = username
 	f.role = role
 	return nil
+}
+
+func (f *fakeAdapter) SetVerifiedCollaborator(ctx context.Context, repo adapter.RepoRef, username, hostUserID string, role adapter.Role) error {
+	if hostUserID == "" || f.verifiedIDs[username] != hostUserID {
+		return adapter.ErrIdentityMismatch
+	}
+	return f.SetCollaborator(ctx, repo, username, role)
 }
 
 func (f *fakeAdapter) RemoveCollaborator(context.Context, adapter.RepoRef, string) error { return nil }
@@ -86,7 +115,7 @@ func TestWorkerCreateRepo(t *testing.T) {
 		ID: "a1", ClassroomID: "c1", Slug: "hw1",
 		TemplateRef: adapter.TemplateRef{Host: adapter.HostGitHub, Namespace: "cs101-org", Name: "hw1-template"},
 	})
-	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", Host: adapter.HostGitHub, HostUsername: "bob"})
+	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", Host: adapter.HostGitHub, HostUsername: "bob", HostUserID: "1"})
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1", RosterEntryID: "r1", Status: "provisioning"})
 
 	queue := NewService(st)
@@ -94,7 +123,7 @@ func TestWorkerCreateRepo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fa := &fakeAdapter{}
+	fa := &fakeAdapter{verifiedIDs: map[string]string{"bob": "1", "alice": "1", "1-alice": "1"}}
 	w := &Worker{
 		Store:          st,
 		Adapters:       map[adapter.Host]adapter.Adapter{adapter.HostGitHub: fa},
@@ -109,8 +138,8 @@ func TestWorkerCreateRepo(t *testing.T) {
 		t.Fatal("expected a job to be claimed")
 	}
 
-	if fa.createdRepo != "hw1-bob" {
-		t.Fatalf("createdRepo = %q, want hw1-bob", fa.createdRepo)
+	if fa.createdRepo != submissionRepoName("s1") {
+		t.Fatalf("createdRepo = %q, want submission-derived name", fa.createdRepo)
 	}
 	if fa.collaborator != "bob" || fa.role != adapter.RoleWrite {
 		t.Fatalf("collaborator = %q role = %q, want bob/write", fa.collaborator, fa.role)
@@ -121,8 +150,8 @@ func TestWorkerCreateRepo(t *testing.T) {
 	}
 
 	sub, _ := st.GetSubmission(ctx, "s1")
-	if sub.Repo.Name != "hw1-bob" || sub.Status != "active" {
-		t.Fatalf("submission = %+v, want repo hw1-bob and status active", sub)
+	if sub.Repo.Name != submissionRepoName("s1") || sub.Status != "active" {
+		t.Fatalf("submission = %+v, want submission-derived repo and status active", sub)
 	}
 
 	// Queue should now be drained.
@@ -150,13 +179,13 @@ func TestWorkerWebhookURLPerHost(t *testing.T) {
 			st := memory.New()
 			_ = st.CreateClassroom(ctx, &store.Classroom{ID: "c1", Host: tc.host, HostNamespace: "org"})
 			_ = st.CreateAssignment(ctx, &store.Assignment{ID: "a1", ClassroomID: "c1", Slug: "hw1", TemplateRef: adapter.TemplateRef{Host: tc.host, Namespace: "org", Name: "tmpl"}})
-			_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", Host: tc.host, HostUsername: "bob"})
+			_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", Host: tc.host, HostUsername: "bob", HostUserID: "1"})
 			_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1", RosterEntryID: "r1", Status: "provisioning"})
 
 			queue := NewService(st)
 			_ = queue.Enqueue(ctx, JobCreateRepo, "s1", "repo:s1")
 
-			fa := &fakeAdapter{}
+			fa := &fakeAdapter{verifiedIDs: map[string]string{"bob": "1", "alice": "1", "1-alice": "1"}, host: tc.host}
 			// Trailing slash on the base also exercises the TrimRight.
 			w := &Worker{Store: st, Adapters: map[adapter.Host]adapter.Adapter{tc.host: fa}, WebhookBaseURL: "https://cairn.example/", WebhookSecrets: map[adapter.Host]string{tc.host: "fixture-secret"}}
 			if _, err := w.RunOnce(ctx); err != nil {
@@ -178,7 +207,7 @@ func TestWorkerLockUnlock(t *testing.T) {
 		Status:       "active",
 		Repo:         adapter.RepoRef{Host: adapter.HostGitHub, Namespace: "org", Name: "hw1-bob"},
 	})
-	fa := &fakeAdapter{}
+	fa := &fakeAdapter{verifiedIDs: map[string]string{"bob": "1", "alice": "1", "1-alice": "1"}}
 	w := &Worker{Store: st, Adapters: map[adapter.Host]adapter.Adapter{adapter.HostGitHub: fa}}
 	queue := NewService(st)
 
@@ -215,7 +244,7 @@ func TestSetLockNoRepoIsNoop(t *testing.T) {
 	ctx := context.Background()
 	st := memory.New()
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1", Status: "provisioning"})
-	fa := &fakeAdapter{}
+	fa := &fakeAdapter{verifiedIDs: map[string]string{"bob": "1", "alice": "1", "1-alice": "1"}}
 	w := &Worker{Store: st, Adapters: map[adapter.Host]adapter.Adapter{adapter.HostGitHub: fa}}
 	if err := w.setLock(ctx, "s1", true); err != nil {
 		t.Fatalf("setLock on unprovisioned submission should be a no-op, got %v", err)
@@ -230,7 +259,7 @@ func TestWorkerNoAdapterFailsJob(t *testing.T) {
 	st := memory.New()
 	_ = st.CreateClassroom(ctx, &store.Classroom{ID: "c1", Host: adapter.HostGitHub, HostNamespace: "org"})
 	_ = st.CreateAssignment(ctx, &store.Assignment{ID: "a1", ClassroomID: "c1", Slug: "hw1"})
-	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", HostUsername: "bob"})
+	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", HostUsername: "bob", HostUserID: "1"})
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1", RosterEntryID: "r1"})
 
 	queue := NewService(st)
@@ -298,13 +327,13 @@ func TestWorkerEnsureNamespaceCalledFirst(t *testing.T) {
 		ID: "a1", ClassroomID: "c1", Slug: "hw1",
 		TemplateRef: adapter.TemplateRef{Host: adapter.HostGitHub, Namespace: "cs101-org", Name: "hw1-template"},
 	})
-	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", Host: adapter.HostGitHub, HostUsername: "alice"})
+	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", Host: adapter.HostGitHub, HostUsername: "alice", HostUserID: "1"})
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1", RosterEntryID: "r1", Status: "provisioning"})
 
 	queue := NewService(st)
 	_ = queue.Enqueue(ctx, JobCreateRepo, "s1", "repo:s1")
 
-	fa := &fakeAdapter{}
+	fa := &fakeAdapter{verifiedIDs: map[string]string{"bob": "1", "alice": "1", "1-alice": "1"}}
 	w := &Worker{Store: st, Adapters: map[adapter.Host]adapter.Adapter{adapter.HostGitHub: fa}}
 	if _, err := w.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -328,8 +357,8 @@ func TestWorkerEnsureNamespaceCalledFirst(t *testing.T) {
 	if sub.Repo.Namespace != "cs101-org" {
 		t.Errorf("repo.Namespace = %q, want cs101-org", sub.Repo.Namespace)
 	}
-	if sub.Repo.Name != "hw1-alice" {
-		t.Errorf("repo.Name = %q, want hw1-alice", sub.Repo.Name)
+	if sub.Repo.Name != submissionRepoName("s1") {
+		t.Errorf("repo.Name = %q, want submission-derived name", sub.Repo.Name)
 	}
 }
 
@@ -357,9 +386,9 @@ func TestWebhookFailureDoesNotActivateSubmission(t *testing.T) {
 	st := memory.New()
 	_ = st.CreateClassroom(ctx, &store.Classroom{ID: "c", Host: adapter.HostForgejo, HostNamespace: "course"})
 	_ = st.CreateAssignment(ctx, &store.Assignment{ID: "a", ClassroomID: "c", Slug: "work"})
-	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r", ClassroomID: "c", HostUsername: "alice"})
+	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r", ClassroomID: "c", HostUsername: "alice", HostUserID: "1"})
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s", AssignmentID: "a", RosterEntryID: "r", Status: "provisioning"})
-	fa := &fakeAdapter{webhookErr: errors.New("fixture outage")}
+	fa := &fakeAdapter{verifiedIDs: map[string]string{"bob": "1", "alice": "1", "1-alice": "1"}, host: adapter.HostForgejo, webhookErr: errors.New("fixture outage")}
 	w := &Worker{Store: st, Adapters: map[adapter.Host]adapter.Adapter{adapter.HostForgejo: fa}, WebhookBaseURL: "https://course.example", WebhookSecrets: map[adapter.Host]string{adapter.HostForgejo: "fixture"}}
 	if err := w.createRepo(ctx, "s"); err == nil {
 		t.Fatal("hook failure ignored")
@@ -373,6 +402,9 @@ func TestWebhookFailureDoesNotActivateSubmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	sub, _ = st.GetSubmission(ctx, "s")
+	if fa.createCalls != 1 {
+		t.Fatalf("retry recreated repository: %d calls", fa.createCalls)
+	}
 	if sub.Status != "active" {
 		t.Fatal("retry did not activate")
 	}

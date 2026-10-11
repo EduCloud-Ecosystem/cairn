@@ -24,7 +24,7 @@ func TestCalibrationOwnerRoutesAndBothHistoricalSources(t *testing.T) {
 	srv.routes()
 	st.CreateClassroom(ctx, &store.Classroom{ID: "c"})
 	st.CreateAssignment(ctx, &store.Assignment{ID: "a", ClassroomID: "c"})
-	st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r", ClassroomID: "c", Host: adapter.HostGitHub, HostUsername: "learner", Status: store.RosterActive})
+	st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r", ClassroomID: "c", Host: adapter.HostGitHub, HostUsername: "learner", HostUserID: "fixture-learner", Status: store.RosterActive})
 	st.CreateSubmission(ctx, &store.Submission{ID: "s", AssignmentID: "a", RosterEntryID: "r", LatestCommit: strings.Repeat("a", 40), Status: "active"})
 	owner := login(t, srv)
 	token := newSessionToken()

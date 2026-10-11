@@ -17,32 +17,30 @@ This document is that policy's Cairn-side pointer.
 
 ---
 
-## Privacy by schema
+## Roster minimization and retained coursework
 
-The privacy invariant is enforced by the shape of the database, not by
-application logic that could be bypassed or by policy text that could be
-ignored. The migration says so at the top, in the schema itself:
+Roster fields deliberately omit legal names, SIS IDs and plaintext emails.
+This is a constraint on structured roster fields, **not a guarantee that the
+server never holds identifying information**. Assessment captures retain raw
+selected source originals and feedback in database documents; calibration
+uploads and grading output may also contain identifying text. Source text is
+not automatically anonymized. Instructors must select appropriate material,
+remove unnecessary identifiers, and use the approved data destination.
 
-> `-- PRIVACY: this schema has no column for a student's legal name, SIS ID, or`
-> `-- plaintext email. A student's identity anchor is their Git-host username`
-> `-- (roster_entries.host_username). See DESIGN.md sections 5 and 6.`
-
-Source: `internal/store/migrations/0001_init.up.sql`.
-
-**What is never stored, server-side, for a student:**
-
-- Legal name — no column exists.
-- SIS ID or institutional student number — no column exists.
-- Plaintext email — no column exists on any student-bearing table.
+Sources: `internal/store/models.go`, `internal/assessment/extract.go`,
+`internal/assessment/service.go`, and `docs/llm-assessment.md`.
 
 **What is stored for a student:**
 
 | Field | What it is | Where |
 |---|---|---|
-| `host_username` | The Git-host username. The durable identity anchor. | `roster_entries` |
+| `host_username` | The Git-host username, used for display and roster matching. | `roster_entries` |
+| `host_user_id` | Stable provider account ID verified through OAuth; protects against recycled usernames. Not exposed in roster responses. | `roster_entries` |
 | `email_hash` | **Optional**, salted, one-way. Used only for client-side re-matching against an LMS pull. Never reversible to an address; never the plaintext. | `roster_entries` |
 | `repo_namespace`, `repo_name` | The submission repository | `submissions` |
-| `score`, `max_score`, `graded_at` | Autograder output | `grades` |
+| `score`, `max_score`, `graded_at` | Autograder or instructor-reviewed output | `grades` |
+| Source originals, feedback, proposed/reviewed judgments | Retained assessment and calibration material; may contain identifiers in free text | `assessments`, `calibrations` |
+| LMS subject, resource, line item, delivery receipt | Opaque but linkable learner/course identifiers and score delivery history | `lti_records` |
 
 Source: `internal/store/models.go` — see the `RosterEntry` doc comment, which
 states the constraint as a requirement on future changes: *"the
@@ -56,7 +54,7 @@ intentional. The schema comment marks the distinction inline (`-- operator
 type: *"Storing an operator's own email is fine; the privacy constraints apply
 to students."*
 
-## The name↔username map never reaches the server
+## Roster import keeps the name mapping local
 
 Instructors think in names; the server stores usernames. Cairn resolves that
 tension client-side rather than by relaxing the schema:
@@ -69,7 +67,10 @@ Source: `DESIGN.md` §6. The same section describes the Phase 3 roster agent,
 which runs locally in the instructor's authenticated context and whose only
 outputs to the server are join links and invite tokens — students then
 self-claim via OAuth on the Git host, and the server persists `host_username`
-plus the optional `email_hash`.
+plus the optional `email_hash`. OAuth also records a stable provider account
+ID when the learner claims an unbound roster entry. Older claimed entries
+without a verified ID fail closed until an instructor reconciles them; an ID
+is never inferred from the current owner of a reused username.
 
 This is what makes minimization a usable feature rather than a tax, and it is
 why the roster can be seeded from an LMS without the control plane ever
@@ -130,13 +131,12 @@ These are gaps, not decisions. Tracked in `data-destinations.md` §8.
   dependent submission, grade, and grading run — an irreversible erasure,
   distinct from the `RosterRemoved` lifecycle status. No configuration
   needed; available on every deployment.
-- **`README.md`'s and the white paper's "never student records" phrasing**
-  is now exact **once a deployment actually confirms exports and sets
-  `CAIRN_GRADE_RETENTION_DAYS`** — the code no longer makes it structurally
-  false, but an unconfigured deployment still accumulates grades
-  indefinitely in practice. Keep the accurate phrasing ("no student names,
-  SIS IDs, or plaintext emails") for any deployment that hasn't turned
-  retention on yet.
+- **Retention is not anonymization.** Purging exported grades does not justify
+  describing Cairn as holding no student records. Unpublished assessments,
+  calibration sources, raw coursework and free-text logs need an explicit
+  retention decision. Roster erasure cascades through linked submissions,
+  assessments and LMS receipts; locally exported copies/backups and independently
+  uploaded calibration material require separate handling.
 - **Deployment destination for the Fall 2026 pilot: D2 for now** (Greg,
   2026-08-10) — self-stewarded infrastructure, not yet institutional. A UITS
   conversation about D1 and whether it triggers UA's third-party review
@@ -144,11 +144,20 @@ These are gaps, not decisions. Tracked in `data-destinations.md` §8.
   raise, but isn't imminent — treat the destination as a working decision,
   not a closed one.
 
-## Compliance posture
+## Hosting and optional external services
 
-`DESIGN.md` §10 carries the strategic framing, marked there as
-**[DECIDE later, with counsel]**. Its conclusion is the one this document
-operates under:
+Self-hosting controls the destination of the Cairn database. Explicitly enabled
+OpenAI assessment generation sends selected source segments, rubric criteria
+and approved calibration guidance to OpenAI. Structured roster identifiers,
+raw originals and notebook outputs are omitted from that request, but source
+text may itself identify a person. Opt-in, budget checks and instructor review
+do not establish anonymization or institutional approval.
 
-> **Self-hosting** — records never leave infrastructure the institution already
-> stewards. The strongest FERPA story, and another reason to lead with it.
+Brightspace grade delivery sends the bound opaque LMS subject, numeric score,
+maximum, timestamp and progress state to the configured LMS. It does not send
+assessment feedback or source originals. CI model analysis uses repository
+source/logs and must use a separate project without student submissions or
+course credentials. See `docs/brightspace.md` and `docs/agentic-ci.md`.
+
+Institutional policy and legal review determine acceptable destinations,
+retention and use; the implementation alone is not a compliance determination.

@@ -81,7 +81,8 @@ type RosterEntry struct {
 	ID           string       `json:"id"`
 	ClassroomID  string       `json:"classroom_id"`
 	Host         adapter.Host `json:"host"`
-	HostUsername string       `json:"host_username"` // the durable identity anchor
+	HostUsername string       `json:"host_username"` // display and roster matching only
+	HostUserID   string       `json:"-"`             // verified immutable provider ID, never exposed in roster JSON
 	// EmailHash is an OPTIONAL salted, one-way hash used only for client-side
 	// re-matching against an LMS pull. It is never reversible to an address and
 	// is never the plaintext email.

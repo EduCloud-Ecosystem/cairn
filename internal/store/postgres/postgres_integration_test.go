@@ -178,11 +178,11 @@ func TestPostgresRoundTrip(t *testing.T) {
 	}
 
 	// Job idempotency + atomic claim.
-	created, err := s.CreateJob(ctx, &store.ProvisioningJob{ID: "j1", Type: "create_repo", TargetRef: "s1", IdempotencyKey: "k1"})
+	created, err := s.CreateJob(ctx, &store.ProvisioningJob{ID: "j1", Type: "create_repo", TargetRef: "s1", IdempotencyKey: "k1", ScheduledAt: time.Now().Add(-time.Minute)})
 	if err != nil || !created {
 		t.Fatalf("first CreateJob created=%v err=%v", created, err)
 	}
-	dup, err := s.CreateJob(ctx, &store.ProvisioningJob{ID: "j2", Type: "create_repo", TargetRef: "s1", IdempotencyKey: "k1"})
+	dup, err := s.CreateJob(ctx, &store.ProvisioningJob{ID: "j2", Type: "create_repo", TargetRef: "s1", IdempotencyKey: "k1", ScheduledAt: time.Now().Add(-time.Minute)})
 	if err != nil || dup {
 		t.Fatalf("duplicate CreateJob created=%v err=%v (want false)", dup, err)
 	}
