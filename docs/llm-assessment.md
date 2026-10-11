@@ -962,3 +962,9 @@ supporting reviews. Original responses are preserved; no independent instructor
 reviews, profile approvals or grades were created. Private review packets and
 per-section draft guidance are ready for instructor calibration. See
 `evaluations/2026-10-10-calibration-v11.json` for aggregate results and limits.
+
+Draft guidance was also preflighted locally against all 12 examples. The longest
+foundations input exceeded the limit with the first draft; shortening guidance
+preserved its decisions and brought every input below 16000 bytes (maximum
+15985). Source, rubric, references and completed provider requests were unchanged.
+This preflight does not approve or apply the guidance.

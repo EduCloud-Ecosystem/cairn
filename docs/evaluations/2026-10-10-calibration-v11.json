@@ -132,5 +132,14 @@
     "original_proposals_preserved": true,
     "grades": 0
   },
-  "private_evidence_manifest_sha256": "be94d6b6b6402b994b426eccfebf8ab377d03a8616e523de9c72ec3db0054fe9"
+  "draft_guidance_preflight": {
+    "inputs": 12,
+    "passed": 12,
+    "maximum_input_bytes": 15987,
+    "input_limit_bytes": 16000,
+    "guidance_revisions": 1,
+    "reason": "Shortened foundations guidance after its longest example exceeded input budget; no source/rubric/reference changes or additional provider requests",
+    "approved_or_applied": false
+  },
+  "private_evidence_manifest_sha256": "e74e06bcc2ffb197aec5d691e1ec497beea44bcb9f986365993a21f642363064"
 }
