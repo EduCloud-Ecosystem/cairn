@@ -16,6 +16,7 @@ import (
 
 // Store is a goroutine-safe in-memory store.Store.
 type Store struct {
+	ltiRecords         map[string]store.LTIRecord
 	calibrationSources map[string]map[string]bool
 	calibrations       map[string]store.Calibration
 	generations        map[string]store.Generation
@@ -38,6 +39,7 @@ type Store struct {
 // New returns an empty in-memory store.
 func New() *Store {
 	return &Store{
+		ltiRecords:         map[string]store.LTIRecord{},
 		calibrationSources: map[string]map[string]bool{},
 		calibrations:       map[string]store.Calibration{},
 		generations:        map[string]store.Generation{}, generationLearners: map[string]string{},
@@ -276,6 +278,11 @@ func (m *Store) DeleteRosterEntry(_ context.Context, id string) error {
 		}
 		delete(m.submissions, subID)
 	}
+	for key, r := range m.ltiRecords {
+		if r.RosterEntryID == id {
+			delete(m.ltiRecords, key)
+		}
+	}
 	delete(m.roster, id)
 	return nil
 }
@@ -504,6 +511,11 @@ func (m *Store) PurgeExportedGrades(_ context.Context, cutoff time.Time) (int, i
 	for id, g := range m.grades {
 		if g.ExportConfirmedAt == nil || !g.ExportConfirmedAt.Before(cutoff) {
 			continue
+		}
+		for key, r := range m.ltiRecords {
+			if r.GradeID == id {
+				delete(m.ltiRecords, key)
+			}
 		}
 		delete(m.grades, id)
 		for aid, a := range m.assessments {

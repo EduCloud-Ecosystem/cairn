@@ -23,6 +23,7 @@ import (
 	"github.com/EduCloud-Ecosystem/cairn/internal/grading"
 	"github.com/EduCloud-Ecosystem/cairn/internal/id"
 	"github.com/EduCloud-Ecosystem/cairn/internal/identity"
+	"github.com/EduCloud-Ecosystem/cairn/internal/lti"
 	"github.com/EduCloud-Ecosystem/cairn/internal/provisioning"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/adapter"
@@ -30,6 +31,7 @@ import (
 
 // Options holds the Server's dependencies.
 type Options struct {
+	LTIClient          *lti.Client
 	OpenAIProvider     *assessment.OpenAI
 	OpenAIClassrooms   []string
 	AssessmentCheckout grading.RevisionCheckout // nil disables assessment review routes
@@ -76,6 +78,8 @@ type Options struct {
 
 // Server routes and serves the control-plane API.
 type Server struct {
+	ltiService          *lti.Service
+	ltiState            ltiState
 	assessmentGenerator *assessment.Generator
 	assessment          *assessment.Service
 	assessmentCapture   chan struct{}
@@ -163,6 +167,10 @@ func New(opts Options) *Server {
 			s.assessmentGenerator = assessment.NewGenerator(*s.assessment, opts.OpenAIProvider, opts.OpenAIClassrooms)
 		}
 	}
+	if opts.LTIClient != nil && opts.AuthEnabled && (opts.CookieSecure || opts.LTIClient.Config.Simulation) {
+		s.ltiService = &lti.Service{Store: opts.Store, Client: opts.LTIClient}
+		s.ltiState = ltiState{flows: map[string]ltiFlow{}, pending: map[string]ltiPending{}}
+	}
 	s.routes()
 	return s
 }
@@ -205,6 +213,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /assignments/{id}/grade", protect(s.handleGrade))
 
 	s.assessmentRoutes(protect)
+	s.ltiRoutes(protect)
 
 	// Serve the built dashboard last and only if configured. Because Go 1.22's
 	// ServeMux gives more specific patterns precedence, every API route above

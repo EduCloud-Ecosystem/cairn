@@ -288,7 +288,23 @@ export interface Calibration {
     examples: CalibrationExample[];
   };
 }
+export interface LTIDelivery {
+  grade_id: string;
+  status: "sending" | "uncertain" | "verified" | "conflict";
+  attempts: number;
+  verified_at?: string;
+  lease_until: string;
+}
+export interface LTIPassbackStatus {
+  ready: boolean;
+  grade: { id: string; score: number; maximum: number } | null;
+  delivery: LTIDelivery | null;
+}
+
 export const api = {
+  ltiCapabilities: () => req<{ enabled: boolean }>("GET", "/lti-capabilities"),
+  ltiStatus: (id: string) => req<LTIPassbackStatus>("GET", `/submissions/${encodeURIComponent(id)}/lti`),
+  ltiDeliver: (id: string, gradeID: string) => req<LTIDelivery>("POST", `/submissions/${encodeURIComponent(id)}/lti`, { grade_id: gradeID }),
   listCalibrations: (id: string) =>
     req<Calibration[]>("GET", `/assignments/${id}/calibrations`),
   createCalibration: (id: string, based_on = "", section?: AssessmentRubric) =>

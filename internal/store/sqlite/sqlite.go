@@ -65,7 +65,19 @@ func Open(path string) (*Store, error) {
 
 // schema is the SQLite-adapted version of the Postgres 0001_init schema plus
 // the last_error column added in migration 0002.
-const schema = `CREATE TABLE IF NOT EXISTS calibration_sources (
+const schema = `CREATE TABLE IF NOT EXISTS lti_records (
+ id TEXT PRIMARY KEY,
+ kind TEXT NOT NULL CHECK(kind IN ('link','binding','delivery')),
+ unique_key TEXT NOT NULL UNIQUE,
+ assignment_id TEXT NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
+ roster_entry_id TEXT REFERENCES roster_entries(id) ON DELETE CASCADE,
+ grade_id TEXT REFERENCES grades(id) ON DELETE CASCADE,
+ revision INTEGER NOT NULL,
+ document TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_lti_roster ON lti_records(roster_entry_id);
+CREATE INDEX IF NOT EXISTS idx_lti_grade ON lti_records(grade_id);
+CREATE TABLE IF NOT EXISTS calibration_sources (
  calibration_id TEXT NOT NULL REFERENCES calibrations(id) ON DELETE CASCADE,
  submission_id TEXT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
  PRIMARY KEY (calibration_id,submission_id)
