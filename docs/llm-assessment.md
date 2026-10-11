@@ -934,3 +934,31 @@ CAIRN_OPENAI_LIVE_KEY_FILE=/private/cairn-openai.env \
 CAIRN_IMPLEMENTATION_EVAL_OUTPUT=/private/new-implementation-controls.json \
 go test ./internal/assessment -run '^TestOpenAILiveImplementationControls$' -v -count=1
 ```
+
+### Assisted calibration replay after v11
+
+The subsequent bounded run reused 12 archived examples across six INFO-511,
+INFO-523 and INFO-557 components. All inputs and prior assisted adjudications
+were frozen before generation. Quality criteria used captured-starter checks;
+functional criteria required implementation citations. No approved instructor
+guidance was supplied, and these were not new holdouts.
+
+Eleven proposals were accepted. Their scores matched the frozen baseline for
+18 of 19 criteria (11 of 12 scored, plus seven null). The remaining response
+tried to give zero to a malformed Python attempt and was rejected by the
+implementation-evidence check; no proposal or grade was saved for it and no
+retry was made. All six accepted quality judgments cited implementation.
+
+Source review still found one grouped-summary judgment missing citations for
+its credited rename mapping and index reset, and three quality comments needing
+better documentation attribution or supporting comment citations. A repeated
+module-level test/report invocation remains a materiality choice: the frozen
+assisted baseline deducts two quality points while the model treats it as
+advisory. The earlier foundations correctness/quality double deduction did not
+recur. Agreement here is an assisted comparison, not measured grading accuracy.
+
+Six profiles remain drafts with 12 pre-call assisted baselines and 12 post-call
+supporting reviews. Original responses are preserved; no independent instructor
+reviews, profile approvals or grades were created. Private review packets and
+per-section draft guidance are ready for instructor calibration. See
+`evaluations/2026-10-10-calibration-v11.json` for aggregate results and limits.

@@ -1,0 +1,136 @@
+{
+  "date": "2026-10-10",
+  "code_commit": "fc069ad186e68616dcdc0601b594bfef86e2cb19",
+  "prompt_version": "cairn-rubric-v11",
+  "model": "gpt-5.4-mini-2026-03-17",
+  "scope": "Assisted recalibration using the same 12 archived examples across six INFO-511/523/557 sections; not new holdouts or independent instructor validation",
+  "request_attempts": 12,
+  "accepted_proposals": 11,
+  "rejected_proposals": 1,
+  "accepted_criteria": 19,
+  "planned_criteria": 20,
+  "score_agreements_among_accepted": 18,
+  "scored_criteria": 12,
+  "scored_agreements": 11,
+  "expected_unassessable": 8,
+  "accepted_nulls": 7,
+  "blocked_invalid_zero_scores": 1,
+  "resolved_citations": 86,
+  "groups": {
+    "511-intro": {
+      "requests": 2,
+      "accepted_proposals": 1,
+      "accepted_criteria": 1,
+      "score_agreements": 0,
+      "scored_agreements": 0,
+      "preserved_nulls": 0
+    },
+    "511-eda": {
+      "requests": 2,
+      "accepted_proposals": 2,
+      "accepted_criteria": 2,
+      "score_agreements": 2,
+      "scored_agreements": 2,
+      "preserved_nulls": 0
+    },
+    "511-midterm": {
+      "requests": 2,
+      "accepted_proposals": 2,
+      "accepted_criteria": 8,
+      "score_agreements": 8,
+      "scored_agreements": 4,
+      "preserved_nulls": 4
+    },
+    "523-foundations": {
+      "requests": 2,
+      "accepted_proposals": 2,
+      "accepted_criteria": 2,
+      "score_agreements": 2,
+      "scored_agreements": 2,
+      "preserved_nulls": 0
+    },
+    "557-logistic": {
+      "requests": 2,
+      "accepted_proposals": 2,
+      "accepted_criteria": 4,
+      "score_agreements": 4,
+      "scored_agreements": 2,
+      "preserved_nulls": 2
+    },
+    "557-cnn-rnn": {
+      "requests": 2,
+      "accepted_proposals": 2,
+      "accepted_criteria": 2,
+      "score_agreements": 2,
+      "scored_agreements": 1,
+      "preserved_nulls": 1
+    }
+  },
+  "evidence_review": {
+    "scored_quality_judgments_with_implementation_anchors": 6,
+    "scaffold_only_scored_quality_judgments_accepted": 0,
+    "remaining_functional_claim_coverage_gaps": 1,
+    "quality_feedback_using_inherited_or_uncited_documentation": 3,
+    "accepted_criteria_requiring_review_correction": 5
+  },
+  "score_disagreement": {
+    "component": "Python fundamentals quality",
+    "frozen_assistant_baseline": 8,
+    "model": 10,
+    "basis": "Repeated module-level test/report invocation; instructor materiality choice pending"
+  },
+  "guard_rejection": {
+    "component": "Malformed Python attempt",
+    "raw_model_score": 0,
+    "expected": null,
+    "stored_proposal": false,
+    "error_code": "invalid_proposal_citation_implementation",
+    "retry_attempts": 0
+  },
+  "usage": {
+    "input_tokens_including_rejected_response": 81184,
+    "output_tokens_including_rejected_response": 5761,
+    "reserved_units": 372020,
+    "unit_limit": 650000
+  },
+  "frozen_artifacts_verified": 31,
+  "production_activation": false,
+  "student_code_executed": false,
+  "original_proposals_modified": false,
+  "independent_instructor_reviews": 0,
+  "grades_published": 0,
+  "readiness": "Draft assisted calibration only. Minimum implementation evidence improved; claim coverage, assessability compliance and instructor materiality still need review.",
+  "limitations": [
+    "Same examples as v10; no independent accuracy estimate",
+    "One instructor; no cross-instructor calibration validation",
+    "No approved guidance sent in this batch",
+    "Only selected rubric components, not full assignments",
+    "All provider responses retained without retries or post-result tuning"
+  ],
+  "verification": {
+    "profile_statuses": [
+      [
+        "draft",
+        6
+      ]
+    ],
+    "generation_statuses": [
+      [
+        "failed",
+        1
+      ],
+      [
+        "succeeded",
+        11
+      ]
+    ],
+    "supporting_review_attachments": 24,
+    "pre_call_assisted_baselines": 12,
+    "post_call_assisted_reviews": 12,
+    "independent_instructor_reviews": 0,
+    "frozen_artifacts_unchanged": 31,
+    "original_proposals_preserved": true,
+    "grades": 0
+  },
+  "private_evidence_manifest_sha256": "be94d6b6b6402b994b426eccfebf8ab377d03a8616e523de9c72ec3db0054fe9"
+}
