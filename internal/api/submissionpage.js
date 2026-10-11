@@ -49,6 +49,7 @@
   history.replaceState(null, "", location.pathname + location.search);
 
   function assignment() { return work.find(item => item.submission_id === active); }
+  function submissionOpen() { return Boolean(assignment() && assignment().submission_open); }
   function pathValid(path) {
     return typeof path === "string" && path.length > 0 && path.length <= 240 &&
       path.split("/").every(part => /^[A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*$/.test(part));
@@ -100,8 +101,8 @@
   function lock(value) {
     busy = value;
     $("selection").disabled = value;
-    $("sources").disabled = value || !active;
-    $("confirm").disabled = value;
+    $("sources").disabled = value || !submissionOpen();
+    $("confirm").disabled = value || !submissionOpen();
   }
   function renderManifest(changes, tbody) {
     tbody.replaceChildren();
@@ -152,7 +153,7 @@
       const content = document.createElement("p");
       content.textContent = "Receipt " + receipt.id + " · " + new Date(receipt.created_at).toLocaleString();
       article.append(heading, content);
-      if (receipt.status === "preview" && Date.parse(receipt.expires_at) > Date.now()) {
+      if (submissionOpen() && receipt.status === "preview" && Date.parse(receipt.expires_at) > Date.now()) {
         const resume = document.createElement("button");
         resume.type = "button";
         resume.textContent = "Review this preview";
@@ -195,10 +196,10 @@
     $("files").value = "";
     $("file-summary").textContent = "No files selected.";
     $("preview").disabled = true;
-    $("sources").disabled = !active;
+    $("sources").disabled = !submissionOpen();
     $("receipts-section").hidden = !active;
     const item = assignment();
-    $("assignment-details").textContent = item ? item.classroom_name + " · " + (item.deadline ? "Due " + new Date(item.deadline).toLocaleString() : "No deadline") : "";
+    $("assignment-details").textContent = item ? item.classroom_name + " · " + (item.deadline ? "Due " + new Date(item.deadline).toLocaleString() : "No deadline") + (submissionOpen() ? "" : " · New submissions are closed. Existing receipts remain available below.") : "";
     $("receive").disabled = !item || !bridge || !allowedOrigin(bridge.origin, item.workspace_url);
     $("bridge-status").textContent = item && bridge && $("receive").disabled ? "This workspace is not configured for the selected course. Choose the matching assignment, or use files saved on this device." : "";
     $("receipts").replaceChildren();

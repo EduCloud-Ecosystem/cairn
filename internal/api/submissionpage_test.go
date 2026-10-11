@@ -2,10 +2,29 @@
 package api
 
 import (
+	"context"
+	"github.com/EduCloud-Ecosystem/cairn/internal/handoff"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+func TestSubmissionReceiptsRemainVisibleForClosedWork(t *testing.T) {
+	srv, st, _ := newTestServer("operator")
+	seedStudentData(t, st)
+	srv.handoff = &handoff.Service{Classrooms: map[string]bool{"c1": true}}
+	sub, err := st.GetSubmission(context.Background(), "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item := newEnricher(srv).item(context.Background(), sub); !item.SubmissionsEnabled || !item.SubmissionOpen {
+		t.Fatal("active handoff unavailable")
+	}
+	sub.Status = "locked"
+	if item := newEnricher(srv).item(context.Background(), sub); !item.SubmissionsEnabled || item.SubmissionOpen {
+		t.Fatal("closing work must retain receipt access without enabling new uploads")
+	}
+}
 
 func TestSubmissionShellCannotBeFramedOrLoadExternalScripts(t *testing.T) {
 	srv, _, _ := newTestServer("operator")
