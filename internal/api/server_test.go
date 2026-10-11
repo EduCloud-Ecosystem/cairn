@@ -852,7 +852,7 @@ func TestWorkerSubmissionTerminalFailure(t *testing.T) {
 		ID: "a1", ClassroomID: "c1", Slug: "hw1",
 		TemplateRef: adapter.TemplateRef{Host: adapter.HostGitHub, Namespace: "org", Name: "tmpl"},
 	})
-	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", Host: adapter.HostGitHub, HostUsername: "bob"})
+	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", Host: adapter.HostGitHub, HostUsername: "bob", HostUserID: "42"})
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1", RosterEntryID: "r1", Status: "provisioning"})
 
 	queue := provisioning.NewService(st)
@@ -906,6 +906,9 @@ func (f *fakeWorkerAdapter) RepoExists(context.Context, adapter.RepoRef) (bool, 
 	return false, nil
 }
 func (f *fakeWorkerAdapter) SetCollaborator(context.Context, adapter.RepoRef, string, adapter.Role) error {
+	return nil
+}
+func (f *fakeWorkerAdapter) SetVerifiedCollaborator(context.Context, adapter.RepoRef, string, string, adapter.Role) error {
 	return nil
 }
 func (f *fakeWorkerAdapter) RemoveCollaborator(context.Context, adapter.RepoRef, string) error {

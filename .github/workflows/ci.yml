@@ -208,3 +208,31 @@ jobs:
             baseline-bench.txt
             head-bench.txt
           retention-days: 7
+
+  container:
+    name: Container — image vulnerabilities
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build the release image
+        run: |
+          docker build --pull -t cairn:ci .
+          docker save -o cairn-image.tar cairn:ci
+      - name: Scan image packages and embedded binary
+        # Trivy 0.74.0, immutable image digest verified in the local rehearsal.
+        # Only the image archive is mounted; no Docker socket, home or credentials.
+        run: |
+          docker run --rm \
+            -v "$PWD/cairn-image.tar:/scan/image.tar:ro" \
+            ghcr.io/aquasecurity/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969 \
+            image --input /scan/image.tar --scanners vuln --severity HIGH,CRITICAL \
+            --exit-code 1 --format json > image-vulnerabilities.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-image-security
+          path: image-vulnerabilities.json
+          retention-days: 7

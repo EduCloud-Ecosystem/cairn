@@ -33,7 +33,7 @@ FROM alpine:3.21
 # git   — the grading checkout clones student repos
 # docker-cli — grading runs each spec in a sandboxed container via the mounted socket
 # ca-certificates — TLS to the Git hosts
-RUN apk add --no-cache ca-certificates git docker-cli
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates git docker-cli
 
 # Run as a fixed non-root uid. It must own the grading work directory on the
 # HOST too, because that directory is bind-mounted at the same path on both

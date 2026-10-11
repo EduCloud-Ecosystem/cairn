@@ -189,6 +189,14 @@ func (w *Worker) createRepo(ctx context.Context, submissionID string) error {
 		return fmt.Errorf("no adapter configured for host %q", cls.Host)
 	}
 
+	verified, ok := ad.(adapter.VerifiedCollaborator)
+	if !ok {
+		return errors.New("adapter cannot verify collaborator identity")
+	}
+	if re.HostUserID == "" {
+		return errors.New("roster entry has no verified provider identity")
+	}
+
 	ns, err := ad.EnsureNamespace(ctx, cls.HostNamespace)
 	if err != nil {
 		return fmt.Errorf("ensure namespace %q: %w", cls.HostNamespace, err)
@@ -225,7 +233,7 @@ func (w *Worker) createRepo(ctx context.Context, submissionID string) error {
 			return fmt.Errorf("persist repository binding: %w", err)
 		}
 	}
-	if err := ad.SetCollaborator(ctx, repo, re.HostUsername, adapter.RoleWrite); err != nil {
+	if err := verified.SetVerifiedCollaborator(ctx, repo, re.HostUsername, re.HostUserID, adapter.RoleWrite); err != nil {
 		return fmt.Errorf("add collaborator: %w", err)
 	}
 	if w.WebhookBaseURL != "" {

@@ -315,9 +315,13 @@ func (a *Adapter) SetCollaborator(ctx context.Context, repo adapter.RepoRef, use
 	if err != nil {
 		return err
 	}
+	return a.setCollaboratorID(ctx, repo, uid, role)
+}
+
+func (a *Adapter) setCollaboratorID(ctx context.Context, repo adapter.RepoRef, uid int64, role adapter.Role) error {
 	in := map[string]any{"user_id": uid, "access_level": accessLevel(role)}
 	pid := projectID(repo)
-	err = a.do(ctx, http.MethodPost, "/projects/"+pid+"/members", in, nil, http.StatusOK, http.StatusCreated)
+	err := a.do(ctx, http.MethodPost, "/projects/"+pid+"/members", in, nil, http.StatusOK, http.StatusCreated)
 	if err == nil {
 		return nil
 	}

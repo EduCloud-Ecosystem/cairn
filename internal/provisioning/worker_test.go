@@ -15,6 +15,7 @@ import (
 
 // fakeAdapter records the calls the worker makes. Unused methods are no-ops.
 type fakeAdapter struct {
+	verifiedIDs       map[string]string
 	host              adapter.Host
 	repos             map[adapter.RepoRef]bool
 	createCalls       int
@@ -72,6 +73,13 @@ func (f *fakeAdapter) SetCollaborator(_ context.Context, _ adapter.RepoRef, user
 	return nil
 }
 
+func (f *fakeAdapter) SetVerifiedCollaborator(ctx context.Context, repo adapter.RepoRef, username, hostUserID string, role adapter.Role) error {
+	if hostUserID == "" || f.verifiedIDs[username] != hostUserID {
+		return adapter.ErrIdentityMismatch
+	}
+	return f.SetCollaborator(ctx, repo, username, role)
+}
+
 func (f *fakeAdapter) RemoveCollaborator(context.Context, adapter.RepoRef, string) error { return nil }
 
 func (f *fakeAdapter) LatestCommit(context.Context, adapter.RepoRef, string) (adapter.Commit, error) {
@@ -107,7 +115,7 @@ func TestWorkerCreateRepo(t *testing.T) {
 		ID: "a1", ClassroomID: "c1", Slug: "hw1",
 		TemplateRef: adapter.TemplateRef{Host: adapter.HostGitHub, Namespace: "cs101-org", Name: "hw1-template"},
 	})
-	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", Host: adapter.HostGitHub, HostUsername: "bob"})
+	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", Host: adapter.HostGitHub, HostUsername: "bob", HostUserID: "1"})
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1", RosterEntryID: "r1", Status: "provisioning"})
 
 	queue := NewService(st)
@@ -115,7 +123,7 @@ func TestWorkerCreateRepo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fa := &fakeAdapter{}
+	fa := &fakeAdapter{verifiedIDs: map[string]string{"bob": "1", "alice": "1", "1-alice": "1"}}
 	w := &Worker{
 		Store:          st,
 		Adapters:       map[adapter.Host]adapter.Adapter{adapter.HostGitHub: fa},
@@ -171,13 +179,13 @@ func TestWorkerWebhookURLPerHost(t *testing.T) {
 			st := memory.New()
 			_ = st.CreateClassroom(ctx, &store.Classroom{ID: "c1", Host: tc.host, HostNamespace: "org"})
 			_ = st.CreateAssignment(ctx, &store.Assignment{ID: "a1", ClassroomID: "c1", Slug: "hw1", TemplateRef: adapter.TemplateRef{Host: tc.host, Namespace: "org", Name: "tmpl"}})
-			_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", Host: tc.host, HostUsername: "bob"})
+			_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", Host: tc.host, HostUsername: "bob", HostUserID: "1"})
 			_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1", RosterEntryID: "r1", Status: "provisioning"})
 
 			queue := NewService(st)
 			_ = queue.Enqueue(ctx, JobCreateRepo, "s1", "repo:s1")
 
-			fa := &fakeAdapter{host: tc.host}
+			fa := &fakeAdapter{verifiedIDs: map[string]string{"bob": "1", "alice": "1", "1-alice": "1"}, host: tc.host}
 			// Trailing slash on the base also exercises the TrimRight.
 			w := &Worker{Store: st, Adapters: map[adapter.Host]adapter.Adapter{tc.host: fa}, WebhookBaseURL: "https://cairn.example/", WebhookSecrets: map[adapter.Host]string{tc.host: "fixture-secret"}}
 			if _, err := w.RunOnce(ctx); err != nil {
@@ -199,7 +207,7 @@ func TestWorkerLockUnlock(t *testing.T) {
 		Status:       "active",
 		Repo:         adapter.RepoRef{Host: adapter.HostGitHub, Namespace: "org", Name: "hw1-bob"},
 	})
-	fa := &fakeAdapter{}
+	fa := &fakeAdapter{verifiedIDs: map[string]string{"bob": "1", "alice": "1", "1-alice": "1"}}
 	w := &Worker{Store: st, Adapters: map[adapter.Host]adapter.Adapter{adapter.HostGitHub: fa}}
 	queue := NewService(st)
 
@@ -236,7 +244,7 @@ func TestSetLockNoRepoIsNoop(t *testing.T) {
 	ctx := context.Background()
 	st := memory.New()
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1", Status: "provisioning"})
-	fa := &fakeAdapter{}
+	fa := &fakeAdapter{verifiedIDs: map[string]string{"bob": "1", "alice": "1", "1-alice": "1"}}
 	w := &Worker{Store: st, Adapters: map[adapter.Host]adapter.Adapter{adapter.HostGitHub: fa}}
 	if err := w.setLock(ctx, "s1", true); err != nil {
 		t.Fatalf("setLock on unprovisioned submission should be a no-op, got %v", err)
@@ -251,7 +259,7 @@ func TestWorkerNoAdapterFailsJob(t *testing.T) {
 	st := memory.New()
 	_ = st.CreateClassroom(ctx, &store.Classroom{ID: "c1", Host: adapter.HostGitHub, HostNamespace: "org"})
 	_ = st.CreateAssignment(ctx, &store.Assignment{ID: "a1", ClassroomID: "c1", Slug: "hw1"})
-	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", HostUsername: "bob"})
+	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", HostUsername: "bob", HostUserID: "1"})
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1", RosterEntryID: "r1"})
 
 	queue := NewService(st)
@@ -319,13 +327,13 @@ func TestWorkerEnsureNamespaceCalledFirst(t *testing.T) {
 		ID: "a1", ClassroomID: "c1", Slug: "hw1",
 		TemplateRef: adapter.TemplateRef{Host: adapter.HostGitHub, Namespace: "cs101-org", Name: "hw1-template"},
 	})
-	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", Host: adapter.HostGitHub, HostUsername: "alice"})
+	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r1", ClassroomID: "c1", Host: adapter.HostGitHub, HostUsername: "alice", HostUserID: "1"})
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1", RosterEntryID: "r1", Status: "provisioning"})
 
 	queue := NewService(st)
 	_ = queue.Enqueue(ctx, JobCreateRepo, "s1", "repo:s1")
 
-	fa := &fakeAdapter{}
+	fa := &fakeAdapter{verifiedIDs: map[string]string{"bob": "1", "alice": "1", "1-alice": "1"}}
 	w := &Worker{Store: st, Adapters: map[adapter.Host]adapter.Adapter{adapter.HostGitHub: fa}}
 	if _, err := w.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -378,9 +386,9 @@ func TestWebhookFailureDoesNotActivateSubmission(t *testing.T) {
 	st := memory.New()
 	_ = st.CreateClassroom(ctx, &store.Classroom{ID: "c", Host: adapter.HostForgejo, HostNamespace: "course"})
 	_ = st.CreateAssignment(ctx, &store.Assignment{ID: "a", ClassroomID: "c", Slug: "work"})
-	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r", ClassroomID: "c", HostUsername: "alice"})
+	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r", ClassroomID: "c", HostUsername: "alice", HostUserID: "1"})
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s", AssignmentID: "a", RosterEntryID: "r", Status: "provisioning"})
-	fa := &fakeAdapter{host: adapter.HostForgejo, webhookErr: errors.New("fixture outage")}
+	fa := &fakeAdapter{verifiedIDs: map[string]string{"bob": "1", "alice": "1", "1-alice": "1"}, host: adapter.HostForgejo, webhookErr: errors.New("fixture outage")}
 	w := &Worker{Store: st, Adapters: map[adapter.Host]adapter.Adapter{adapter.HostForgejo: fa}, WebhookBaseURL: "https://course.example", WebhookSecrets: map[adapter.Host]string{adapter.HostForgejo: "fixture"}}
 	if err := w.createRepo(ctx, "s"); err == nil {
 		t.Fatal("hook failure ignored")

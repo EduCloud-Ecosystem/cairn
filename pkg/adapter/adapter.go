@@ -130,6 +130,19 @@ type Prober interface {
 	Probe(ctx context.Context) error
 }
 
+// ErrIdentityMismatch rejects a mutable username that no longer names the
+// immutable provider identity previously verified for a roster entry.
+var ErrIdentityMismatch = errors.New("adapter: collaborator identity mismatch")
+
+// VerifiedCollaborator binds an access grant to the authenticated provider ID.
+// Provisioning requires this capability and never falls back to username-only
+// SetCollaborator. Providers with username-only mutation APIs must verify before
+// and after the grant and report any failed cleanup; they cannot make the grant
+// atomic with username changes at the provider.
+type VerifiedCollaborator interface {
+	SetVerifiedCollaborator(ctx context.Context, repo RepoRef, username, hostUserID string, role Role) error
+}
+
 // Adapter is the contract every Git-host integration implements. v1 ships a
 // GitHub adapter; GitLab and Forgejo/Gitea are additive implementations of this
 // same interface.

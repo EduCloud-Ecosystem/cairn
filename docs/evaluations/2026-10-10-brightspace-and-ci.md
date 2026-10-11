@@ -63,6 +63,11 @@ symlink, size, timeout and publication constraints have deterministic tests.
   were unchanged. Timing was noisy; no speedup claim is made. CPU/memory profiles
   were generated. These are microbenchmarks, not classroom load/DB-query tests.
 - Final Docker image built and served its health endpoint and dashboard locally.
+  Image scanning initially identified CVE-2026-84782 in bundled libcrypto3/libssl3;
+  the runtime build now upgrades Alpine packages before installing runtime tools.
+  The rebuilt image passed the Trivy 0.74.0 high/critical scan with no findings.
+  Container scanning is also a separate CI job, with the scanner image pinned
+  by digest and only a read-only image archive mounted.
 
 ## Browser rehearsal
 
@@ -95,3 +100,25 @@ or course data were committed.
 
 NRPS roster sync, deep linking, bulk passback, automatic conflict overrides and
 unreviewed grade publication are outside this initial release.
+
+## External repository grant identity check
+
+Provisioning now requires a bound roster provider ID and the adapter's verified
+collaborator capability, including on delayed retries. GitLab grants by the
+verified numeric ID. GitHub and Forgejo/Gitea check before and after their
+username-based grant and attempt bounded cleanup on failed post-verification.
+GitHub also checks and cancels a mismatched returned invitation. Failed cleanup
+is surfaced in the provisioning error.
+
+Observed validation for this additional change:
+`go test -race ./internal/provisioning ./pkg/adapter/...` passed. Regression cases
+cover stale initial and retry usernames, absent identities, unsupported adapters,
+provider lookup/identity failures, post-grant mismatches and errors, cleanup after
+caller cancellation, explicit cleanup failures, wrong GitHub invitations, and
+GitLab numeric-ID targeting. These are local fake/HTTP-fixture tests, not live
+provider rename-race validation.
+
+The username-only GitHub and Forgejo/Gitea mutation endpoints retain an atomic
+rename race and possible temporary disclosure before cleanup. Unknown invitation
+outcomes and repeated renames can require manual reconciliation. See
+[repository identity deployment guidance](../provisioning-identity.md).

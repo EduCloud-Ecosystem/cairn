@@ -22,7 +22,8 @@ four proposed automation loops.
 
 The existing Go race, vet, build, PostgreSQL conformance, dashboard, and
 curriculum checks remain. CI adds reachable Go vulnerability scanning,
-high-or-critical npm dependency auditing, workflow linting, automation boundary
+high-or-critical npm dependency auditing, a separately built container scan for
+high/critical OS and embedded-binary vulnerabilities, workflow linting, automation boundary
 tests, and bounded fuzzing of evidence path confinement, score bounds, and LTI
 service URL restrictions. These controls do not prove that a component has no
 security vulnerabilities.

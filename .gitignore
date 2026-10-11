@@ -26,3 +26,5 @@ coverage.out
 ci-analysis/
 baseline-bench.txt
 head-bench.txt
+/cairn-image.tar
+/image-vulnerabilities.json
