@@ -18,12 +18,13 @@ import (
 // CloneCreds holds the clone endpoint and credentials for one Git host.
 // The token is optional; when empty, repos are cloned without authentication
 // (public repos only). When set, it is delivered to git exclusively via
-// GIT_ASKPASS — never in the URL or process arguments.
+// a credential helper (bounded mode) or GIT_ASKPASS (local mode) — never in
+// the URL or process arguments.
 type CloneCreds struct {
 	Scheme   string // "https" (default) or "http"; follows the host's base URL
 	Hostname string // clone endpoint, e.g. "github.com" or "localhost:3000"
 	Username string // URL username (non-secret), e.g. "x-access-token" or "oauth2"
-	Token    string // optional; delivered via askpass, never in argv or .git/config
+	Token    string // optional; delivered via helper, never in argv or .git/config
 }
 
 // GitCheckout fetches a submission repo with a shallow `git clone`.
@@ -31,10 +32,10 @@ type CloneCreds struct {
 // Per-host credentials are looked up from the Hosts map by repo.Host. An
 // unknown host returns an error immediately — there is no implicit fallback.
 //
-// Credential hygiene (H1): the token is injected via GIT_ASKPASS and the
-// $CAIRN_GIT_TOKEN environment variable. It never appears in process arguments,
-// the clone URL, or .git/config, so it cannot be read by untrusted student code
-// in the grading container (which mounts the checkout read-write as /work).
+// Credential hygiene (H1): the helper reads $CAIRN_GIT_TOKEN. Bounded mode
+// delivers it into the acquisition container through stdin; local mode uses
+// GIT_ASKPASS. It never appears in process arguments, the clone URL, or Git
+// configuration. Acquisition credentials are not supplied to student execution.
 type GitCheckout struct {
 	Hosts     map[adapter.Host]CloneCreds
 	GitBin    string             // default "git"; host mode is for trusted local development only

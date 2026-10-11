@@ -30,9 +30,12 @@ const checkoutScript = `set -eu
 IFS= read -r CAIRN_GIT_TOKEN
 export CAIRN_GIT_TOKEN GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 HOME=/scratch
 export GIT_CONFIG_GLOBAL=/dev/null
-printf '#!/bin/sh\nexec printf "%%s\\n" "$CAIRN_GIT_TOKEN"\n' > /scratch/askpass
-chmod 700 /scratch/askpass
-export GIT_ASKPASS='sh /scratch/askpass'
+# Askpass takes an executable path, not a shell command. A helper on /scratch
+# cannot execute because the bounded mount is noexec. Git's explicit shell
+# credential-helper form runs the trusted system shell and treats the token as
+# data; no credential is written into argv, config, or the exported checkout.
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper
+export GIT_CONFIG_VALUE_0='!f() { if [ "$1" = get ]; then printf "password=%s\n" "$CAIRN_GIT_TOKEN"; fi; }; f'
 git -c core.hooksPath=/dev/null clone --quiet --depth 1 -- "$1" /scratch/repo >&2
 if [ -n "$2" ]; then
  git -C /scratch/repo -c core.hooksPath=/dev/null fetch --quiet --depth 1 origin "$2" >&2
