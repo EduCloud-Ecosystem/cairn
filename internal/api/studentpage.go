@@ -140,6 +140,15 @@ function card(item) {
     el.appendChild(row);
   }
 
+  if (item.submissions_enabled) {
+    const row = document.createElement("p");
+    const link = document.createElement("a");
+    link.href = "/me/submit?submission=" + encodeURIComponent(item.submission_id);
+    link.textContent = "Submit saved files & view receipts";
+    row.appendChild(link);
+    el.appendChild(row);
+  }
+
   const det = document.createElement("details");
   const sum = document.createElement("summary");
   sum.textContent = "Per-test results & history";

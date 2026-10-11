@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Submit saved files — Cairn</title>
+<style>
+:root { color-scheme: light dark; }
+body { font: 1rem/1.6 system-ui,sans-serif; max-width: 64rem; margin: 2rem auto; padding: 0 1rem; background: #fff; color: #182431; }
+h1 { font-size: 1.8rem; } h2 { font-size: 1.25rem; }
+fieldset,section { border: 1px solid #8d9baa; border-radius: .5rem; padding: 1rem; margin: 1.2rem 0; }
+label { display: block; margin: .75rem 0; } input,select,button { font: inherit; max-width: 100%; }
+select,button { padding: .5rem .75rem; } button { cursor: pointer; } button:disabled { cursor: default; }
+table { width: 100%; border-collapse: collapse; } th,td { text-align: left; padding: .5rem; border-bottom: 1px solid #a7b0bb; vertical-align: top; }
+code { overflow-wrap: anywhere; } .scroll { overflow-x: auto; } .muted { color: #526171; }
+#status { min-height: 1.6em; } .error { color: #a41d17; } [hidden] { display: none !important; }
+a { color: #005bac; } :focus-visible { outline: 3px solid #147bc1; outline-offset: 3px; }
+@media (prefers-color-scheme: dark) { body { background:#151c24;color:#f2f5f8; } a { color:#8acbff; } .muted { color:#bfcddd; } .error { color:#ffb4ac; } }
+</style>
+<script src="/me/submission.js" defer></script>
+</head>
+<body><main>
+<p><a href="/me">← My work</a></p>
+<h1>Submit saved files</h1>
+<p>Choose an assignment, review the exact saved files, then confirm your submission. Saving a notebook alone does not submit it.</p>
+<p id="status" role="status" aria-live="polite">Loading your assignments…</p>
+<div id="signin" hidden><p><a href="/student/login" target="_blank" rel="noopener">Sign in to Cairn in a new tab</a>, then return here.</p><button id="reload" type="button">Check sign-in</button></div>
+<p id="account"></p>
+<fieldset id="selection" disabled>
+<legend>1. Choose your assignment</legend>
+<label for="assignment">Assignment</label><select id="assignment"><option value="">Choose an assignment</option></select>
+<p id="assignment-details" class="muted"></p>
+</fieldset>
+<fieldset id="sources" disabled>
+<legend>2. Select saved files</legend>
+<div id="bridge" hidden><p id="source-origin"></p><button id="receive" type="button">Receive saved files from Waypoint</button><p id="bridge-status" role="status"></p></div>
+<label for="files">Or select files saved on this device</label><input type="file" id="files" multiple>
+<p class="muted">Up to 32 files, 1 MiB each and 4 MiB total. Use letters, numbers, hyphens, underscores and file extensions in paths. Selected files replace the same paths in your assignment repository; all other files remain. For nested paths, use Waypoint. Hidden files and course automation files are not accepted.</p>
+<p id="file-summary">No files selected.</p>
+<button type="button" id="preview" disabled>Preview submission</button>
+</fieldset>
+<section id="preview-section" hidden aria-labelledby="preview-heading">
+<h2 id="preview-heading">3. Review and confirm</h2>
+<p id="preview-context"></p><p id="preview-base"></p>
+<div class="scroll"><table><caption>Exact saved files to submit</caption><thead><tr><th scope="col">Path</th><th scope="col">Change</th><th scope="col">Bytes</th><th scope="col">SHA-256</th></tr></thead><tbody id="manifest"></tbody></table></div>
+<p>Review replacements before confirming. If you edit your notebook after this preview, select and preview it again to include those changes.</p>
+<button type="button" id="confirm">Confirm submission</button>
+</section>
+<section id="receipts-section" hidden aria-labelledby="receipts-heading">
+<h2 id="receipts-heading">Submission receipts</h2>
+<p>“Committed” confirms the files reached your repository at the recorded commit. Grading and instructor review are separate; check <a href="/me">My work</a> for results.</p>
+<button type="button" id="refresh">Refresh receipts</button>
+<div id="receipts"></div>
+</section>
+</main></body></html>

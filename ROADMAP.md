@@ -5,6 +5,12 @@ The July–August sections below preserve delivery history; they are not the cur
 pilot schedule. The October component pilot uses synthetic fixtures first, followed
 by independent instructor review and separately accepted hosted/LMS testing.
 
+October workspace submission build: [saved-file submissions](docs/workspace-submissions.md)
+adds selected-file preview/confirmation, durable receipts, bounded Git commits,
+concurrency refusal and restart-safe reconciliation. It is opt-in by classroom.
+Operator adjudication of ambiguous receipts, broader provider acceptance and
+hosted institutional validation remain follow-up gates.
+
 ## Phase 1 — MVP (GitHub only)
 The full vertical slice on one host, with the adapter interface and data model in
 their final shape:

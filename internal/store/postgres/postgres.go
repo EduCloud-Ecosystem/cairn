@@ -733,10 +733,10 @@ func (s *Store) CreateJob(ctx context.Context, j *store.ProvisioningJob) (bool, 
 func (s *Store) ClaimNextJob(ctx context.Context) (*store.ProvisioningJob, error) {
 	j := &store.ProvisioningJob{}
 	err := scanJob(s.db.QueryRowContext(ctx,
-		`UPDATE provisioning_jobs SET status='in_progress'
+		`UPDATE provisioning_jobs SET status='in_progress',scheduled_at=CASE WHEN type='submission_handoff' THEN now() ELSE scheduled_at END
 		 WHERE id = (
 		     SELECT id FROM provisioning_jobs
-		     WHERE status='pending' AND scheduled_at <= now()
+		     WHERE (status='pending' AND scheduled_at <= now()) OR (type='submission_handoff' AND status='in_progress' AND scheduled_at <= now()-interval '10 minutes')
 		     ORDER BY scheduled_at ASC
 		     FOR UPDATE SKIP LOCKED
 		     LIMIT 1

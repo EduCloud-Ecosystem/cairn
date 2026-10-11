@@ -20,6 +20,7 @@ import (
 	"github.com/EduCloud-Ecosystem/cairn/internal/assessment"
 	"github.com/EduCloud-Ecosystem/cairn/internal/config"
 	"github.com/EduCloud-Ecosystem/cairn/internal/grading"
+	"github.com/EduCloud-Ecosystem/cairn/internal/handoff"
 	"github.com/EduCloud-Ecosystem/cairn/internal/identity"
 	"github.com/EduCloud-Ecosystem/cairn/internal/lti"
 	"github.com/EduCloud-Ecosystem/cairn/internal/provisioning"
@@ -205,8 +206,6 @@ func serve() {
 		worker.Grader = grader
 	}
 
-	go worker.Run(ctx)
-
 	scheduler := &provisioning.Scheduler{Store: st, Queue: queue, Interval: time.Minute}
 	go scheduler.Run(ctx)
 
@@ -272,7 +271,34 @@ func serve() {
 			log.Fatal("LTI requires secure cookies")
 		}
 	}
+	var handoffService *handoff.Service
+	var handoffOrigin string
+	if os.Getenv("CAIRN_SUBMISSIONS") == "true" {
+		classrooms := splitCSV(os.Getenv("CAIRN_SUBMISSION_CLASSROOMS"))
+		checkout := checkoutFromEnv()
+		if !authEnabled || len(resolvers) == 0 || checkout.Container == nil || len(classrooms) == 0 {
+			log.Fatal("submissions require authentication, bounded checkout and explicit CAIRN_SUBMISSION_CLASSROOMS")
+		}
+		handoffOrigin, err = api.SubmissionOrigin(os.Getenv("CAIRN_OAUTH_REDIRECT_URL"))
+		if err != nil {
+			log.Fatal("submissions require a valid CAIRN_OAUTH_REDIRECT_URL origin")
+		}
+		if strings.HasPrefix(handoffOrigin, "https:") && os.Getenv("CAIRN_COOKIE_SECURE") != "1" {
+			log.Fatal("submissions over HTTPS require secure cookies")
+		}
+		allowed := map[string]bool{}
+		for _, classroom := range classrooms {
+			allowed[classroom] = true
+		}
+		handoffService = &handoff.Service{Store: st, Writer: grading.NewSubmissionWriter(checkout.Hosts, *checkout.Container), GraderConfigured: grader != nil, Classrooms: allowed}
+		worker.Handoff = handoffService
+	}
+	go worker.Run(ctx)
+	if handoffService != nil {
+		go handoffService.RunCleanup(ctx)
+	}
 	srv := api.New(api.Options{LTIClient: ltiClient,
+		Handoff: handoffService, HandoffOrigin: handoffOrigin,
 		OpenAIProvider: provider, OpenAIClassrooms: openAIClassrooms,
 		AssessmentCheckout: assessmentCheckout,
 		WorkspaceURLs:      workspaceURLs,

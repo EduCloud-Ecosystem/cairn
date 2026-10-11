@@ -65,7 +65,23 @@ func Open(path string) (*Store, error) {
 
 // schema is the SQLite-adapted version of the Postgres 0001_init schema plus
 // the last_error column added in migration 0002.
-const schema = `CREATE TABLE IF NOT EXISTS reconciliation_audit (
+const schema = `CREATE TABLE IF NOT EXISTS submission_handoffs (
+ id TEXT PRIMARY KEY,
+ submission_id TEXT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+ owner_id TEXT NOT NULL,
+ idempotency_key TEXT NOT NULL,
+ payload_digest TEXT NOT NULL,
+ status TEXT NOT NULL,
+ created_at BIGINT NOT NULL,
+ expires_at BIGINT NOT NULL,
+ version INTEGER NOT NULL,
+ document TEXT NOT NULL,
+ UNIQUE(submission_id, owner_id, idempotency_key)
+);
+CREATE INDEX IF NOT EXISTS idx_handoff_submission ON submission_handoffs(submission_id,created_at);
+CREATE TABLE IF NOT EXISTS submission_handoff_control (id INTEGER PRIMARY KEY);
+INSERT INTO submission_handoff_control(id) VALUES(1) ON CONFLICT DO NOTHING;
+CREATE TABLE IF NOT EXISTS reconciliation_audit (
  plan_id TEXT PRIMARY KEY,
  roster_id TEXT NOT NULL REFERENCES roster_entries(id) ON DELETE CASCADE,
  document TEXT NOT NULL
@@ -997,9 +1013,9 @@ func (s *Store) ClaimNextJob(ctx context.Context) (*store.ProvisioningJob, error
 	var id string
 	err = tx.QueryRowContext(ctx,
 		`SELECT id FROM provisioning_jobs
-		 WHERE status='pending' AND scheduled_at <= ?
+		 WHERE (status='pending' AND scheduled_at <= ?) OR (type='submission_handoff' AND status='in_progress' AND scheduled_at <= ?)
 		 ORDER BY scheduled_at ASC LIMIT 1`,
-		encodeTime(time.Now().UTC())).Scan(&id)
+		encodeTime(time.Now().UTC()), encodeTime(time.Now().UTC().Add(-10*time.Minute))).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, store.ErrNotFound
 	}
@@ -1008,7 +1024,7 @@ func (s *Store) ClaimNextJob(ctx context.Context) (*store.ProvisioningJob, error
 	}
 
 	if _, err := tx.ExecContext(ctx,
-		`UPDATE provisioning_jobs SET status='in_progress' WHERE id=?`, id); err != nil {
+		`UPDATE provisioning_jobs SET status='in_progress',scheduled_at=CASE WHEN type='submission_handoff' THEN ? ELSE scheduled_at END WHERE id=?`, encodeTime(time.Now().UTC()), id); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {

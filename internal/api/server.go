@@ -21,6 +21,7 @@ import (
 
 	"github.com/EduCloud-Ecosystem/cairn/internal/assessment"
 	"github.com/EduCloud-Ecosystem/cairn/internal/grading"
+	"github.com/EduCloud-Ecosystem/cairn/internal/handoff"
 	"github.com/EduCloud-Ecosystem/cairn/internal/id"
 	"github.com/EduCloud-Ecosystem/cairn/internal/identity"
 	"github.com/EduCloud-Ecosystem/cairn/internal/lti"
@@ -31,6 +32,8 @@ import (
 
 // Options holds the Server's dependencies.
 type Options struct {
+	Handoff            *handoff.Service
+	HandoffOrigin      string
 	LTIClient          *lti.Client
 	OpenAIProvider     *assessment.OpenAI
 	OpenAIClassrooms   []string
@@ -78,6 +81,9 @@ type Options struct {
 
 // Server routes and serves the control-plane API.
 type Server struct {
+	handoffRequests     chan struct{}
+	handoff             *handoff.Service
+	handoffOrigin       string
 	ltiService          *lti.Service
 	ltiState            ltiState
 	assessmentGenerator *assessment.Generator
@@ -173,6 +179,13 @@ func New(opts Options) *Server {
 		s.ltiService = &lti.Service{Store: opts.Store, Client: opts.LTIClient}
 		s.ltiState = ltiState{flows: map[string]ltiFlow{}, pending: map[string]ltiPending{}}
 	}
+	if opts.AuthEnabled && opts.Handoff != nil {
+		if origin, err := SubmissionOrigin(opts.HandoffOrigin); err == nil && origin == opts.HandoffOrigin {
+			s.handoff = opts.Handoff
+			s.handoffOrigin = origin
+			s.handoffRequests = make(chan struct{}, 2)
+		}
+	}
 	s.routes()
 	return s
 }
@@ -192,6 +205,12 @@ func (s *Server) routes() {
 	// caller's own work; NOT admin-gated. /me serves the page itself (public so the
 	// page can render a sign-in link); the data routes require a session.
 	s.mux.HandleFunc("GET /me", s.handleStudentPage)
+	s.mux.HandleFunc("GET /me/submit", s.handleSubmissionPage)
+	s.mux.HandleFunc("GET /me/submission.js", s.handleSubmissionScript)
+	s.mux.HandleFunc("POST /me/work/{submissionID}/submission-previews", s.handleSubmissionPreview)
+	s.mux.HandleFunc("POST /me/work/{submissionID}/submission-previews/{receiptID}/confirm", s.handleSubmissionConfirm)
+	s.mux.HandleFunc("GET /me/work/{submissionID}/submission-receipts", s.handleSubmissionReceipts)
+	s.mux.HandleFunc("GET /me/work/{submissionID}/submission-receipts/{receiptID}", s.handleSubmissionReceipt)
 	s.mux.HandleFunc("GET /me/work", s.handleMyWork)
 	s.mux.HandleFunc("GET /me/work/{submissionID}", s.handleMyWorkDetail)
 
