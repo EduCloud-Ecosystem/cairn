@@ -966,5 +966,5 @@ per-section draft guidance are ready for instructor calibration. See
 Draft guidance was also preflighted locally against all 12 examples. The longest
 foundations input exceeded the limit with the first draft; shortening guidance
 preserved its decisions and brought every input below 16000 bytes (maximum
-15985). Source, rubric, references and completed provider requests were unchanged.
+15987). Source, rubric, references and completed provider requests were unchanged.
 This preflight does not approve or apply the guidance.
