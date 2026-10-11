@@ -49,7 +49,7 @@ func TestLTIBrowserFixture(t *testing.T) {
 		}
 	}
 	for _, user := range []string{"student-a", "student-b"} {
-		if err := st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r-" + user, ClassroomID: "c", Host: adapter.HostGitHub, HostUsername: user, Status: store.RosterActive}); err != nil {
+		if err := st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r-" + user, ClassroomID: "c", Host: adapter.HostGitHub, HostUsername: user, HostUserID: "fixture-" + user, Status: store.RosterActive}); err != nil {
 			t.Fatal(err)
 		}
 		if err := st.CreateSubmission(ctx, &store.Submission{ID: "s-" + user, AssignmentID: "a", RosterEntryID: "r-" + user, Status: "active", LatestCommit: revision, LastActivityAt: &now}); err != nil {
@@ -107,7 +107,7 @@ func TestLTIBrowserFixture(t *testing.T) {
 	parsed, _ := url.Parse(toolURL)
 	for _, user := range []string{"instructor", "student-a", "student-b"} {
 		token := newSessionToken()
-		sess := session{username: user, host: adapter.HostGitHub, created: time.Now()}
+		sess := session{username: user, hostUserID: "fixture-" + user, host: adapter.HostGitHub, created: time.Now()}
 		if user == "instructor" {
 			sess.userID = "owner"
 			sess.username = "synthetic-instructor"

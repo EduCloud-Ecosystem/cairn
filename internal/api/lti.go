@@ -175,12 +175,22 @@ func (s *Server) handleLTIConnectAction(w http.ResponseWriter, r *http.Request) 
 		err = s.ltiService.MapAssignment(r.Context(), in.AssignmentID, op.ID, launch)
 	} else {
 		sess, ok := s.sessionFromCookie(r)
-		if !ok || sess.isOperator {
+		if !ok || sess.isOperator || sess.hostUserID == "" {
 			httpError(w, 401, "Cairn learner login required")
 			return
 		}
 		if in.AssignmentID != "" {
 			httpError(w, 400, "learners cannot select assignment mappings")
+			return
+		}
+		assignment, lookupErr := s.ltiService.AssignmentForLaunch(r.Context(), launch)
+		if lookupErr != nil {
+			ltiHTTPError(w, lookupErr)
+			return
+		}
+		roster, lookupErr := s.store.FindRosterEntryByUsername(r.Context(), assignment.ClassroomID, sess.username)
+		if lookupErr != nil || roster.Host != sess.host || roster.HostUserID == "" || roster.HostUserID != sess.hostUserID {
+			ltiHTTPError(w, lti.ErrForbidden)
 			return
 		}
 		err = s.ltiService.Bind(r.Context(), launch, sess.host, sess.username)

@@ -28,7 +28,7 @@ func TestAssessmentOperatorReviewAndStudentPrivacy(t *testing.T) {
 	ctx := context.Background()
 	st.CreateClassroom(ctx, &store.Classroom{ID: "c"})
 	st.CreateAssignment(ctx, &store.Assignment{ID: "a", ClassroomID: "c"})
-	st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r", ClassroomID: "c", Host: adapter.HostGitHub, HostUsername: "bob", Status: store.RosterActive})
+	st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r", ClassroomID: "c", Host: adapter.HostGitHub, HostUsername: "bob", HostUserID: "fixture-bob", Status: store.RosterActive})
 	st.CreateSubmission(ctx, &store.Submission{ID: "s", AssignmentID: "a", RosterEntryID: "r", Status: "active", LatestCommit: strings.Repeat("a", 40)})
 	operator := login(t, srv)
 	student := studentCookie(srv, adapter.HostGitHub, "bob")

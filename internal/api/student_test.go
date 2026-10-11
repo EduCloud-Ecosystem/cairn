@@ -22,7 +22,7 @@ import (
 func studentCookie(srv *Server, host adapter.Host, username string) *http.Cookie {
 	token := "sess-" + username
 	srv.sessMu.Lock()
-	srv.sessions[token] = session{username: username, host: host, created: time.Now(), isOperator: false}
+	srv.sessions[token] = session{username: username, hostUserID: "fixture-" + username, host: host, created: time.Now(), isOperator: false}
 	srv.sessMu.Unlock()
 	return &http.Cookie{Name: sessionCookie, Value: token}
 }
@@ -35,9 +35,9 @@ func seedStudentData(t *testing.T, st *memory.Store) {
 	dl := time.Now().Add(48 * time.Hour)
 	_ = st.CreateAssignment(ctx, &store.Assignment{ID: "a1", ClassroomID: "c1", Title: "Homework 1", Slug: "hw-1", Deadline: &dl})
 	_ = st.CreateAssignment(ctx, &store.Assignment{ID: "a2", ClassroomID: "c2", Title: "Homework 2", Slug: "hw-2"})
-	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "ra1", ClassroomID: "c1", Host: adapter.HostGitHub, HostUsername: "alice", Status: store.RosterActive})
-	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "ra2", ClassroomID: "c2", Host: adapter.HostGitHub, HostUsername: "alice", Status: store.RosterActive})
-	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "rb1", ClassroomID: "c1", Host: adapter.HostGitHub, HostUsername: "bob", Status: store.RosterActive})
+	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "ra1", ClassroomID: "c1", Host: adapter.HostGitHub, HostUsername: "alice", HostUserID: "fixture-alice", Status: store.RosterActive})
+	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "ra2", ClassroomID: "c2", Host: adapter.HostGitHub, HostUsername: "alice", HostUserID: "fixture-alice", Status: store.RosterActive})
+	_ = st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "rb1", ClassroomID: "c1", Host: adapter.HostGitHub, HostUsername: "bob", HostUserID: "fixture-bob", Status: store.RosterActive})
 	older := time.Now().Add(-2 * time.Hour)
 	newer := time.Now().Add(-1 * time.Hour)
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1", RosterEntryID: "ra1", Status: "active", LastActivityAt: &older, Repo: adapter.RepoRef{Host: adapter.HostGitHub, Namespace: "org1", Name: "hw-1-alice"}})

@@ -210,7 +210,7 @@ func (a *Adapter) EnsureNamespace(ctx context.Context, slug string) (adapter.Nam
 
 // CreateRepoFromTemplate creates a repository from a template using Forgejo's
 // "generate" endpoint. The call is idempotent: if the repo already exists it is
-// returned as-is.
+// returned as-is unless opts.RequireNew rejects adoption.
 //
 // Limitation: Gitea's generate API copies only the default branch (git_content:
 // true). opts.IncludeAllBranches is accepted but cannot be honoured. The template
@@ -223,6 +223,9 @@ func (a *Adapter) CreateRepoFromTemplate(ctx context.Context, tmpl adapter.Templ
 		return adapter.RepoRef{}, err
 	}
 	if exists {
+		if opts.RequireNew {
+			return adapter.RepoRef{}, adapter.ErrRepoExists
+		}
 		return ref, nil
 	}
 	in := map[string]any{
@@ -239,7 +242,7 @@ func (a *Adapter) CreateRepoFromTemplate(ctx context.Context, tmpl adapter.Templ
 		// as a template, invalid name, etc.). Don't infer "already exists" from
 		// the status alone; confirm with a RepoExists check.
 		s := statusOf(createErr)
-		if s == http.StatusConflict || s == http.StatusUnprocessableEntity {
+		if !opts.RequireNew && (s == http.StatusConflict || s == http.StatusUnprocessableEntity) {
 			if ok, _ := a.RepoExists(ctx, ref); ok {
 				return ref, nil // repo exists (created concurrently or pre-existing)
 			}

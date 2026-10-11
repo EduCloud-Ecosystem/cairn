@@ -231,6 +231,34 @@ The `grading workdir` check runs a real container and confirms it can see the
 directory Cairn writes checkouts into. If it fails, grading would silently
 produce empty checkouts, so treat it as blocking.
 
+Writable grading uses a fresh runtime-managed **tmpfs workspace capped at
+512 MiB and 65,536 inodes for the entire run**. Cairn copies the checkout from a
+read-only host mount into that workspace, then removes the host source mount
+from all setup/test containers. Setup artifacts remain available to later tests.
+Each step still runs in a fresh hardened container, with its own 64 MiB `/tmp`
+and the configured memory/CPU/PID/time limits. A separate, network-disabled
+keeper container holds the tmpfs mount between steps (64 MiB memory, 0.1 CPU,
+8 PIDs); it executes no learner commands. Workspace mounts disable image-content
+copying so the image cannot replace the volume's configured permissions.
+
+The grading image must already exist in the runtime and provide `sh`, `sleep`
+and `cp`; preload it through the operator's normal image-management workflow.
+The runtime must support local tmpfs volumes and `nocopy` mounts. Unsupported
+volume/mount setup, oversized source copying or failed cleanup stops grading;
+Cairn does not fall back to a writable host checkout. The read-only calibration
+execution path continues to mount source directly read-only. Shared-kernel
+Docker is verified by the opt-in `TestBoundedWorkspaceDockerIntegration` test;
+other runtime/tier combinations need their own deployment acceptance.
+
+On normal completion, failure or canceled grading, Cairn removes the keeper
+and volume using a separate cleanup context. A process/host crash can still
+leave `cairn-work-*` volumes or `cairn-work-keeper-*` containers for operator
+recovery. **These workspace limits do not bound Git clone/fetch disk usage**:
+submission and instructor-policy acquisition still writes to `CAIRN_WORK_DIR`
+before the container runs. Put that host directory on a capacity-limited
+filesystem and monitor it; the source checkout, runtime image storage and any
+crash leftovers remain deployment resource responsibilities.
+
 > **Security note, stated plainly.** Cairn mounts `/var/run/docker.sock` so it can
 > start grading containers. Access to that socket is equivalent to root on this
 > host. That is why Cairn should run on a VM dedicated to it, and why only people

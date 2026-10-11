@@ -30,15 +30,15 @@ import (
 //     none, so "restricted" never silently means "open".
 //   - --memory / --memory-swap (no swap escape), --cpus, --pids-limit.
 //   - --cap-drop ALL, --security-opt no-new-privileges, --read-only rootfs.
-//   - a writable /work bind mount (the throwaway checkout) and a /tmp tmpfs; the
-//     rest of the filesystem is read-only.
+//   - a bounded per-run tmpfs volume at /work and a /tmp tmpfs; the host checkout
+//     is read-only during initialization and is absent from grading steps.
 //   - runs as the server's own uid:gid by default (CAIRN_GRADER_USER overrides).
 //
 // The host performs the checkout (cloning a repo is not code execution); only the
 // commands from the spec run inside the container, against the mounted clone.
 // Bind-mounting a host path requires a local runtime daemon.
 //
-// Setup-level changes persist between steps only within the mounted checkout, so
+// Setup-level changes persist between steps only within the bounded workspace, so
 // the toolchain belongs in the image; setup should build into the working tree.
 type ContainerRunner struct {
 	// ReadOnlyWork keeps captured source immutable during evidence-only checks.
@@ -394,6 +394,9 @@ func (r *ContainerRunner) buildRunArgs(image, command string, lim resolvedLimits
 	mount := mountDir + ":/work"
 	if r.ReadOnlyWork {
 		mount += ":ro"
+	} else {
+		// Do not copy image /work content or permissions into the fresh tmpfs.
+		mount += ":nocopy"
 	}
 	args := []string{
 		"run", "--rm", "--name", name,
@@ -442,7 +445,7 @@ func (r *ContainerRunner) RunWithPolicy(ctx context.Context, spec gradingspec.Sp
 }
 
 // Run executes the spec inside containers, one invocation per step.
-func (r *ContainerRunner) Run(ctx context.Context, spec gradingspec.Spec, dir string) (Result, error) {
+func (r *ContainerRunner) Run(ctx context.Context, spec gradingspec.Spec, dir string) (result Result, runErr error) {
 	if err := r.ValidateIsolation(); err != nil {
 		return Result{}, err
 	}
@@ -465,6 +468,14 @@ func (r *ContainerRunner) Run(ctx context.Context, spec gradingspec.Spec, dir st
 	res := Result{MaxScore: spec.MaxScore()}
 	cr := r.runner()
 	rt := r.runtime()
+	if !r.ReadOnlyWork {
+		workspace, cleanup, err := r.prepareWorkspace(ctx, cr, rt, image, dir, tier)
+		if err != nil {
+			return Result{}, err
+		}
+		defer func() { runErr = errors.Join(runErr, cleanup()) }()
+		dir = workspace
+	}
 
 	for _, step := range spec.Setup {
 		out, err := r.exec1(ctx, cr, rt, image, step, r.resolveLimits(spec, nil), dir, tier)
@@ -535,15 +546,12 @@ func (r *ContainerRunner) Run(ctx context.Context, spec gradingspec.Spec, dir st
 func (r *ContainerRunner) exec1(ctx context.Context, cr commandRunner, rt, image, command string, lim resolvedLimits, dir string, tier IsolationTier) (cmdResult, error) {
 	name := "cairn-grade-" + id.New()
 	out, err := cr.run(ctx, rt, r.buildRunArgs(image, command, lim, dir, name, tier), lim.timeout)
-	if err != nil {
-		return out, err
-	}
-	if out.timedOut {
+	if err != nil || out.timedOut {
 		// Use a fresh context so a cancelled worker context does not prevent the
 		// kill from reaching the daemon (the container keeps running otherwise).
 		killCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_, _ = cr.run(killCtx, rt, []string{"kill", name}, 10*time.Second)
+		_, _ = cr.run(killCtx, rt, []string{"rm", "--force", name}, 10*time.Second)
 		cancel()
 	}
-	return out, nil
+	return out, err
 }

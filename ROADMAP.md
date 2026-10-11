@@ -188,7 +188,7 @@ supported Brightspace), so the manual fallback ships first and independently.
   Surfaced 2026-08-10 while wiring up the pilot droplet's GitHub App.
 - [ ] Multi-tenant hosted offering (scoped data processor)
 - [ ] LTI 1.3 Names-and-Roles (NRPS) roster sync
-- [ ] LTI Assignment-and-Grade Services (AGS) grade passback
+- [x] LTI Assignment-and-Grade Services (AGS) grade passback — opt-in resource-link launches, explicit learner binding, instructor-approved numeric delivery and readback; local simulator tested. Brightspace administrator registration and real-tenant acceptance remain pending (`docs/brightspace.md`).
 
 ## Computing continuity (2026-10-06)
 

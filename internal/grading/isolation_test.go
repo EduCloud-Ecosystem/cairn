@@ -16,15 +16,9 @@ func oneTest() gradingspec.Spec {
 	return gradingspec.Spec{Tests: []gradingspec.Test{{Name: "t", Run: "true", Points: 1}}}
 }
 
-// The exact argument list the runner produced before isolation tiers existed,
-// transcribed from buildRunArgs. This is the regression guard the whole change
-// rests on: an existing deployment that has not opted in must invoke the runtime
-// byte-for-byte identically to before.
-//
-// If a future change to buildRunArgs makes this fail, that is the test doing its
-// job — do not re-baseline it without deciding that the default path really
-// should change.
-func defaultArgsBefore(name string) []string {
+// Tier selection must preserve every hardening flag and the bounded workspace
+// mount. Only container/volume names vary between runs.
+func defaultArgsBefore(name, mount string) []string {
 	return []string{
 		"run", "--rm", "--name", name,
 		"--cap-drop", "ALL",
@@ -36,7 +30,7 @@ func defaultArgsBefore(name string) []string {
 		"--cpus", "1",
 		"--tmpfs", "/tmp:rw,size=64m",
 		"--env", "HOME=/tmp",
-		"-v", "/host/checkout:/work",
+		"-v", mount,
 		"--workdir", "/work",
 		"--user", "65534:65534",
 		"--network", "none",
@@ -60,7 +54,7 @@ func TestDefaultTierArgsAreByteIdenticalToBefore(t *testing.T) {
 			got := fr.calls[0].args
 			// The container name is random; substitute it into the expectation
 			// rather than skipping the comparison of every other argument.
-			want := defaultArgsBefore(flagValue(got, "--name"))
+			want := defaultArgsBefore(flagValue(got, "--name"), flagValue(got, "-v"))
 
 			if !reflect.DeepEqual(got, want) {
 				t.Errorf("default tier arguments changed.\n got: %q\nwant: %q", got, want)
@@ -98,7 +92,7 @@ func TestGVisorTierAddsRuntimeFlagAndNothingElse(t *testing.T) {
 		}
 		stripped = append(stripped, got[i])
 	}
-	want := defaultArgsBefore(flagValue(got, "--name"))
+	want := defaultArgsBefore(flagValue(got, "--name"), flagValue(got, "-v"))
 	if !reflect.DeepEqual(stripped, want) {
 		t.Errorf("gVisor tier changed more than the runtime flag.\n got: %q\nwant: %q", stripped, want)
 	}

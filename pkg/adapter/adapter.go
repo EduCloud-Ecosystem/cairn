@@ -67,6 +67,9 @@ type Commit struct {
 
 // CreateRepoOptions controls repository creation.
 type CreateRepoOptions struct {
+	// RequireNew rejects existing repositories, including creation races. A caller
+	// must persist a successful creation before granting access or retrying it.
+	RequireNew         bool
 	Private            bool
 	IncludeAllBranches bool // template every branch, not just the default
 	Description        string
@@ -112,6 +115,10 @@ type CheckResult struct {
 // support. Callers should treat it as a soft failure where reasonable.
 var ErrNotImplemented = errors.New("adapter: not implemented")
 
+// ErrRepoExists means creation would adopt a repository whose ownership has not
+// been established by the caller.
+var ErrRepoExists = errors.New("adapter: repository already exists")
+
 // Prober is an OPTIONAL interface an adapter may implement so that operators can
 // verify credentials without provisioning anything. It is deliberately separate
 // from Adapter: it is a diagnostic, not part of the provisioning contract, and an
@@ -131,7 +138,8 @@ type Prober interface {
 // these methods from many workers at once. Each method must be individually
 // retry-safe, and verbs that create state (EnsureNamespace, CreateRepoFromTemplate,
 // SetCollaborator, EnsureWebhook) must be idempotent — a repeated call that
-// reaches the desired state must not error.
+// reaches the desired state must not error, except when RequireNew explicitly
+// requires proof of fresh repository creation.
 type Adapter interface {
 	// Host returns the host this adapter targets.
 	Host() Host
@@ -145,7 +153,9 @@ type Adapter interface {
 	EnsureNamespace(ctx context.Context, slug string) (NamespaceRef, error)
 
 	// CreateRepoFromTemplate creates or reconciles a repo from a template. A
-	// second call for an already-created repo returns the existing ref, no error.
+	// second call returns the existing ref unless opts.RequireNew is set. With
+	// RequireNew, only confirmed fresh creation succeeds; uncertain outcomes and
+	// creation conflicts must fail rather than adopting an existing repository.
 	CreateRepoFromTemplate(ctx context.Context, tmpl TemplateRef, ns NamespaceRef, name string, opts CreateRepoOptions) (RepoRef, error)
 
 	// RepoExists reports whether the repo exists.

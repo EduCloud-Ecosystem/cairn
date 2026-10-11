@@ -34,6 +34,16 @@ overrides. Use a top-level resource launch, not an embedded iframe. Pending
 launches expire after ten minutes and are invalidated by a restart. Start a
 fresh launch after a failed or interrupted connection.
 
+## Existing learner accounts
+
+Learner authorization now uses the immutable provider account ID verified by
+OAuth in addition to the roster username. Students must first accept an
+assignment to bind an invited roster row before connecting their LMS account.
+An older claimed row lacking that ID, a mismatched ID, or a changed username
+requires instructor/operator reconciliation; Cairn will not infer historical
+ownership from the current owner of a username. Back up existing stores before
+migration. Never resolve a mismatch by erasing coursework or clearing an ID.
+
 ## Administrator setup
 
 Use a publicly accessible HTTPS origin for Cairn. Supply these tool URLs:

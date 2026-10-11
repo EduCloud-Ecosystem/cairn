@@ -1,0 +1,1 @@
+ALTER TABLE roster_entries ADD COLUMN IF NOT EXISTS host_user_id TEXT NOT NULL DEFAULT '';

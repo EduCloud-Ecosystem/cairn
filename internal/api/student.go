@@ -78,7 +78,7 @@ type workDetail struct {
 // handleMyWork lists the caller's own submissions. Requires a session; never
 // exposes another student's work (the query is scoped to the caller's identity).
 func (s *Server) handleMyWork(w http.ResponseWriter, r *http.Request) {
-	host, username, ok := s.currentIdentity(r)
+	host, username, hostUserID, ok := s.currentIdentity(r)
 	if !ok {
 		httpError(w, http.StatusUnauthorized, "sign in to view your work")
 		return
@@ -91,6 +91,10 @@ func (s *Server) handleMyWork(w http.ResponseWriter, r *http.Request) {
 	enr := newEnricher(s)
 	items := make([]workItem, 0, len(subs))
 	for _, sub := range subs {
+		re, err := s.store.GetRosterEntry(r.Context(), sub.RosterEntryID)
+		if err != nil || re.Host != host || re.HostUsername != username || re.HostUserID == "" || re.HostUserID != hostUserID {
+			continue
+		}
 		items = append(items, enr.item(r.Context(), sub))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"work": items})
@@ -100,7 +104,7 @@ func (s *Server) handleMyWork(w http.ResponseWriter, r *http.Request) {
 // breakdown and attempt history. A submission the caller does not own returns 404
 // — never revealing that another student's submission exists.
 func (s *Server) handleMyWorkDetail(w http.ResponseWriter, r *http.Request) {
-	host, username, ok := s.currentIdentity(r)
+	host, username, hostUserID, ok := s.currentIdentity(r)
 	if !ok {
 		httpError(w, http.StatusUnauthorized, "sign in to view your work")
 		return
@@ -114,7 +118,7 @@ func (s *Server) handleMyWorkDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	// Authorization: the submission's roster entry must match the caller's identity.
 	re, err := s.store.GetRosterEntry(r.Context(), sub.RosterEntryID)
-	if err != nil || re.Host != host || re.HostUsername != username {
+	if err != nil || re.Host != host || re.HostUsername != username || re.HostUserID == "" || re.HostUserID != hostUserID {
 		httpError(w, http.StatusNotFound, "not found")
 		return
 	}

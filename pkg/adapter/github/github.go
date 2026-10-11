@@ -292,6 +292,9 @@ func (a *Adapter) CreateRepoFromTemplate(ctx context.Context, tmpl adapter.Templ
 		return adapter.RepoRef{}, err
 	}
 	if exists {
+		if opts.RequireNew {
+			return adapter.RepoRef{}, adapter.ErrRepoExists
+		}
 		return ref, nil
 	}
 	in := map[string]any{
@@ -305,7 +308,7 @@ func (a *Adapter) CreateRepoFromTemplate(ctx context.Context, tmpl adapter.Templ
 	if err := a.do(ctx, http.MethodPost, path, in, nil, http.StatusCreated); err != nil {
 		// 422 fires when the repo name already exists. Confirm with a RepoExists
 		// check rather than trusting the status code alone.
-		if statusOf(err) == http.StatusUnprocessableEntity {
+		if !opts.RequireNew && statusOf(err) == http.StatusUnprocessableEntity {
 			if ok, _ := a.RepoExists(ctx, ref); ok {
 				return ref, nil
 			}

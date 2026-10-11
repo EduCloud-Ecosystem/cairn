@@ -45,7 +45,7 @@ func ltiTestServer(t *testing.T) (*Server, *rsa.PrivateKey) {
 	}
 	s.sessions["owner"] = session{userID: "owner", username: "teacher", isOperator: true, created: time.Now()}
 	s.sessions["other"] = session{userID: "other", username: "other", isOperator: true, created: time.Now()}
-	s.sessions["learner"] = session{username: "student", host: adapter.HostGitHub, created: time.Now()}
+	s.sessions["learner"] = session{username: "student", hostUserID: "fixture-student", host: adapter.HostGitHub, created: time.Now()}
 	return s, key
 }
 func ltiRequest(s *Server, method, path, body, sessionID, pending, origin, content string) *httptest.ResponseRecorder {

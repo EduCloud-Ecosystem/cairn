@@ -235,6 +235,16 @@ func (s *Store) migrate(ctx context.Context) error {
 			return fmt.Errorf("statement %q: %w", stmt[:min(len(stmt), 60)], err)
 		}
 	}
+	// Existing databases retain unbound identities; never infer IDs from usernames.
+	var count int
+	if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM pragma_table_info('roster_entries') WHERE name='host_user_id'").Scan(&count); err != nil {
+		return err
+	}
+	if count == 0 {
+		if _, err := s.db.ExecContext(ctx, "ALTER TABLE roster_entries ADD COLUMN host_user_id TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -511,12 +521,12 @@ func (s *Store) queryAssignments(ctx context.Context, q string, args ...any) ([]
 
 // --- roster ---------------------------------------------------------------
 
-const rosterCols = "id, classroom_id, host, host_username, email_hash, status, claimed_at"
+const rosterCols = "id, classroom_id, host, host_username, email_hash, status, claimed_at, host_user_id"
 
 func scanRoster(r rowScanner, e *store.RosterEntry) error {
 	var emailHash *string
 	var claimedAt *string
-	if err := r.Scan(&e.ID, &e.ClassroomID, &e.Host, &e.HostUsername, &emailHash, &e.Status, &claimedAt); err != nil {
+	if err := r.Scan(&e.ID, &e.ClassroomID, &e.Host, &e.HostUsername, &emailHash, &e.Status, &claimedAt, &e.HostUserID); err != nil {
 		return err
 	}
 	if emailHash != nil {
@@ -539,8 +549,8 @@ func (s *Store) CreateRosterEntry(ctx context.Context, e *store.RosterEntry) err
 		emailHash = &e.EmailHash
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO roster_entries (`+rosterCols+`) VALUES (?,?,?,?,?,?,?)`,
-		e.ID, e.ClassroomID, string(e.Host), e.HostUsername, emailHash, string(e.Status), encodeTimePtr(e.ClaimedAt))
+		`INSERT INTO roster_entries (`+rosterCols+`) VALUES (?,?,?,?,?,?,?,?)`,
+		e.ID, e.ClassroomID, string(e.Host), e.HostUsername, emailHash, string(e.Status), encodeTimePtr(e.ClaimedAt), e.HostUserID)
 	return err
 }
 
@@ -568,9 +578,15 @@ func (s *Store) UpdateRosterEntry(ctx context.Context, e *store.RosterEntry) err
 		emailHash = &e.EmailHash
 	}
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE roster_entries SET host=?, host_username=?, email_hash=?, status=?, claimed_at=? WHERE id=?`,
-		string(e.Host), e.HostUsername, emailHash, string(e.Status), encodeTimePtr(e.ClaimedAt), e.ID)
-	return affected(res, err)
+		`UPDATE roster_entries SET host=?, host_username=?, email_hash=?, status=?, claimed_at=?, host_user_id=? WHERE id=? AND host=? AND (host_user_id=? OR (host_user_id='' AND claimed_at IS NULL))`,
+		string(e.Host), e.HostUsername, emailHash, string(e.Status), encodeTimePtr(e.ClaimedAt), e.HostUserID, e.ID, string(e.Host), e.HostUserID)
+	err = affected(res, err)
+	if errors.Is(err, store.ErrNotFound) {
+		if _, found := s.GetRosterEntry(ctx, e.ID); found == nil {
+			return store.ErrConflict
+		}
+	}
+	return err
 }
 
 func (s *Store) ListRosterEntries(ctx context.Context, classroomID string) ([]*store.RosterEntry, error) {

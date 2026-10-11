@@ -197,7 +197,8 @@ func (a *Adapter) EnsureNamespace(ctx context.Context, slug string) (adapter.Nam
 // the target group, then breaking the fork relationship so the student repo is
 // independent. The fork (import) may complete asynchronously — the project exists
 // immediately even if its content arrives shortly after. The call is idempotent:
-// if the target project already exists it is returned as-is.
+// if the target project already exists it is returned as-is unless opts.RequireNew
+// rejects adoption.
 //
 // An alternative to forking is creating an empty project with import_url set to
 // the template's clone URL; forking is used here because it needs no second
@@ -210,6 +211,9 @@ func (a *Adapter) CreateRepoFromTemplate(ctx context.Context, tmpl adapter.Templ
 		return adapter.RepoRef{}, err
 	}
 	if exists {
+		if opts.RequireNew {
+			return adapter.RepoRef{}, adapter.ErrRepoExists
+		}
 		return ref, nil
 	}
 
@@ -230,6 +234,9 @@ func (a *Adapter) CreateRepoFromTemplate(ctx context.Context, tmpl adapter.Templ
 	if createErr := a.do(ctx, http.MethodPost, "/projects/"+templateID+"/fork", in, &forked, http.StatusCreated); createErr != nil {
 		// A conflict may mean the project already exists (concurrent provision) —
 		// confirm via RepoExists rather than trusting the status code.
+		if opts.RequireNew {
+			return adapter.RepoRef{}, createErr
+		}
 		if ok, _ := a.RepoExists(ctx, ref); ok {
 			return ref, nil
 		}

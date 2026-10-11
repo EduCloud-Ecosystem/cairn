@@ -343,12 +343,12 @@ func (s *Store) queryAssignments(ctx context.Context, q string, args ...any) ([]
 
 // ========================= roster =========================
 
-const rosterCols = "id, classroom_id, host, host_username, email_hash, status, claimed_at"
+const rosterCols = "id, classroom_id, host, host_username, email_hash, status, claimed_at, host_user_id"
 
 func scanRoster(r rowScanner, e *store.RosterEntry) error {
 	var eh sql.NullString
 	var claimed sql.NullTime
-	if err := r.Scan(&e.ID, &e.ClassroomID, &e.Host, &e.HostUsername, &eh, &e.Status, &claimed); err != nil {
+	if err := r.Scan(&e.ID, &e.ClassroomID, &e.Host, &e.HostUsername, &eh, &e.Status, &claimed, &e.HostUserID); err != nil {
 		return err
 	}
 	e.EmailHash = eh.String
@@ -361,8 +361,8 @@ func (s *Store) CreateRosterEntry(ctx context.Context, e *store.RosterEntry) err
 		e.Status = store.RosterInvited
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO roster_entries (`+rosterCols+`) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-		e.ID, e.ClassroomID, string(e.Host), e.HostUsername, ns(e.EmailHash), string(e.Status), nt(e.ClaimedAt))
+		`INSERT INTO roster_entries (`+rosterCols+`) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+		e.ID, e.ClassroomID, string(e.Host), e.HostUsername, ns(e.EmailHash), string(e.Status), nt(e.ClaimedAt), e.HostUserID)
 	return err
 }
 
@@ -386,9 +386,15 @@ func (s *Store) FindRosterEntryByUsername(ctx context.Context, classroomID, user
 
 func (s *Store) UpdateRosterEntry(ctx context.Context, e *store.RosterEntry) error {
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE roster_entries SET host=$2, host_username=$3, email_hash=$4, status=$5, claimed_at=$6 WHERE id=$1`,
-		e.ID, string(e.Host), e.HostUsername, ns(e.EmailHash), string(e.Status), nt(e.ClaimedAt))
-	return affected(res, err)
+		`UPDATE roster_entries SET host=$2, host_username=$3, email_hash=$4, status=$5, claimed_at=$6, host_user_id=$7 WHERE id=$1 AND host=$2 AND (host_user_id=$7 OR (host_user_id='' AND claimed_at IS NULL))`,
+		e.ID, string(e.Host), e.HostUsername, ns(e.EmailHash), string(e.Status), nt(e.ClaimedAt), e.HostUserID)
+	err = affected(res, err)
+	if errors.Is(err, store.ErrNotFound) {
+		if _, found := s.GetRosterEntry(ctx, e.ID); found == nil {
+			return store.ErrConflict
+		}
+	}
+	return err
 }
 
 func (s *Store) ListRosterEntries(ctx context.Context, classroomID string) ([]*store.RosterEntry, error) {

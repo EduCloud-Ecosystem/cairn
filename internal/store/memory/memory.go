@@ -222,8 +222,12 @@ func (m *Store) FindRosterEntryByUsername(_ context.Context, classroomID, userna
 func (m *Store) UpdateRosterEntry(_ context.Context, r *store.RosterEntry) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.roster[r.ID]; !ok {
+	old, ok := m.roster[r.ID]
+	if !ok {
 		return store.ErrNotFound
+	}
+	if old.Host != r.Host || (old.HostUserID != r.HostUserID && (old.HostUserID != "" || old.ClaimedAt != nil)) {
+		return store.ErrConflict
 	}
 	m.roster[r.ID] = *r
 	return nil
