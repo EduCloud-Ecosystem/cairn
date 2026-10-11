@@ -7,8 +7,8 @@ real learner binding, change provider access or deploy a hosted service.
 
 ## Observed local evidence
 
-- Full Go race suite, build and vet passed before final review; affected suites
-  are repeated after review fixes and the final release is gated by CI.
+- Full Go race suite, build and vet passed after review fixes; the final release
+  is also gated by CI.
 - Real Docker acquisition observed kernel ENOSPC at the 512 MiB boundary, stopped
   a stalled process, redacted its synthetic token and completed pinned policy /
   submission acquisition followed by a real container grading result of 10/10.
@@ -34,6 +34,10 @@ real learner binding, change provider access or deploy a hosted service.
 - Independent review identified a gap between repair duplicate checks and normal
   roster claims; release acceptance includes enforcing the identity invariant
   through both paths, rather than relying on the repair transaction alone.
+- The first Linux recovery run exposed a checkout-image entrypoint mismatch
+  when that image was reused by the grading-workspace fixture. The image now
+  supplies a default command instead; the combined acquisition/workspace/recovery
+  Docker suite passed, with an assertion that the crash fixture remains running.
 - Local Go vulnerability scanning reported no known reachable vulnerabilities.
   Workflow static analysis passed. CI scans both the application and acquisition
   images and runs the Docker/recovery tests on Linux.

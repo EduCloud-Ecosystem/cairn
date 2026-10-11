@@ -146,6 +146,9 @@ func TestRuntimeRecoveryDocker(t *testing.T) {
 	defer Execute(ctx, "docker", "volume", "rm", volume)
 	run("run", "--detach", "--pull=never", "--name", name, "--label", ScopeLabel+"="+l.Scope, "--label", KindLabel+"=grading", "--network=none", "--mount", "type=volume,source="+volume+",target=/work", image, "sh", "-c", "sleep 300")
 	defer Execute(ctx, "docker", "rm", "--force", name)
+	if state := strings.TrimSpace(string(run("inspect", "--format", "{{.State.Running}}", name))); state != "true" {
+		t.Fatal("crash fixture keeper did not remain running")
+	}
 	p, e := Inventory(ctx, l, "docker", Execute)
 	if e != nil {
 		t.Fatal(e)
