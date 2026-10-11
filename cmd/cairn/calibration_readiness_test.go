@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"testing"
 
@@ -46,6 +47,9 @@ func TestReadinessPrivateFrozenSourceFirstAndOverlap(t *testing.T) {
 	}
 	if err = json.Unmarshal(raw, &report); err != nil {
 		t.Fatal(err)
+	}
+	if len(report.BinarySHA256) != 64 {
+		t.Fatal("executed binary hash missing")
 	}
 	sample := report.Sections[0].Samples[0]
 	if !sample.PriorExactOverlap || !sample.PriorWhitespaceOverlap || !sample.Fits || !report.SourceReviewRequired || report.ModelCalls != 0 || report.IndependentReferences != 0 || report.ProductionActivation {
@@ -113,5 +117,46 @@ func TestReadinessWhitespaceOverlapAndDuplicateSelection(t *testing.T) {
 	}
 	if _, err := os.Stat(failed); !os.IsNotExist(err) {
 		t.Fatal("invalid selection created output")
+	}
+}
+
+func TestReadinessBuildProvenanceUnknownAndRecorded(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		settings  []debug.BuildSetting
+		available bool
+		modified  *bool
+	}{
+		{name: "absent"},
+		{name: "revision-only", settings: []debug.BuildSetting{{Key: "vcs.revision", Value: "abc"}}},
+		{name: "malformed-modified", settings: []debug.BuildSetting{{Key: "vcs.revision", Value: "abc"}, {Key: "vcs.modified", Value: "unknown"}}},
+		{name: "clean", settings: []debug.BuildSetting{{Key: "vcs.revision", Value: "abc"}, {Key: "vcs.modified", Value: "false"}}, available: true, modified: new(bool)},
+		{name: "dirty", settings: []debug.BuildSetting{{Key: "vcs.revision", Value: "abc"}, {Key: "vcs.modified", Value: "true"}}, available: true, modified: func() *bool { v := true; return &v }()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, modified, available := readinessBuildProvenance(tc.settings)
+			if available != tc.available || (modified == nil) != (tc.modified == nil) || (modified != nil && *modified != *tc.modified) {
+				t.Fatalf("modified=%v available=%v", modified, available)
+			}
+		})
+	}
+	raw, err := json.Marshal(readinessReport{})
+	if err != nil || !strings.Contains(string(raw), `"binary_code_modified":null`) || !strings.Contains(string(raw), `"binary_code_provenance_available":false`) {
+		t.Fatal("unknown provenance not explicit", string(raw), err)
+	}
+}
+
+func TestReadinessBinaryHash(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "binary")
+	contents := []byte("executable fixture")
+	if err := os.WriteFile(path, contents, 0600); err != nil {
+		t.Fatal(err)
+	}
+	actual, err := readinessFileSHA256(path)
+	if err != nil || actual != assessment.DigestBytes(contents) {
+		t.Fatal(actual, err)
+	}
+	if _, err := readinessFileSHA256(path + "-missing"); err == nil {
+		t.Fatal("missing binary accepted")
 	}
 }

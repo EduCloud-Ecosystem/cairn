@@ -3,11 +3,14 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -49,21 +52,23 @@ type readinessSection struct {
 	Samples        []readinessSample `json:"samples"`
 }
 type readinessReport struct {
-	PromptSHA256          string             `json:"prompt_instructions_sha256"`
-	Version               string             `json:"version"`
-	InstructorScope       string             `json:"instructor_scope"`
-	Status                string             `json:"status"`
-	PromptVersion         string             `json:"prompt_version"`
-	PolicyVersion         string             `json:"policy_version"`
-	Model                 string             `json:"model"`
-	CodeRevision          string             `json:"binary_code_revision"`
-	CodeModified          bool               `json:"binary_code_modified"`
-	PriorBundleSHA256     []string           `json:"prior_bundle_file_sha256"`
-	SourceReviewRequired  bool               `json:"source_review_required"`
-	IndependentReferences int                `json:"independent_instructor_references"`
-	ModelCalls            int                `json:"model_calls"`
-	ProductionActivation  bool               `json:"production_activation"`
-	Sections              []readinessSection `json:"sections"`
+	PromptSHA256            string             `json:"prompt_instructions_sha256"`
+	Version                 string             `json:"version"`
+	InstructorScope         string             `json:"instructor_scope"`
+	Status                  string             `json:"status"`
+	PromptVersion           string             `json:"prompt_version"`
+	PolicyVersion           string             `json:"policy_version"`
+	Model                   string             `json:"model"`
+	CodeRevision            string             `json:"binary_code_revision"`
+	CodeModified            *bool              `json:"binary_code_modified"`
+	CodeProvenanceAvailable bool               `json:"binary_code_provenance_available"`
+	BinarySHA256            string             `json:"executed_binary_sha256"`
+	PriorBundleSHA256       []string           `json:"prior_bundle_file_sha256"`
+	SourceReviewRequired    bool               `json:"source_review_required"`
+	IndependentReferences   int                `json:"independent_instructor_references"`
+	ModelCalls              int                `json:"model_calls"`
+	ProductionActivation    bool               `json:"production_activation"`
+	Sections                []readinessSection `json:"sections"`
 }
 
 func runCalibrationReadiness(args []string) error {
@@ -106,14 +111,15 @@ func runCalibrationReadiness(args []string) error {
 	}
 	report := readinessReport{PromptSHA256: assessment.PromptInstructionsDigest(), Version: "cairn-calibration-readiness-v1", InstructorScope: m.InstructorScope, Status: "awaiting-instructor-source-review", PromptVersion: assessment.PromptVersion, PolicyVersion: assessment.PolicyVersion, Model: assessment.DefaultOpenAIModel, SourceReviewRequired: true, PriorBundleSHA256: []string{}, Sections: []readinessSection{}}
 	if info, ok := debug.ReadBuildInfo(); ok {
-		for _, s := range info.Settings {
-			if s.Key == "vcs.revision" {
-				report.CodeRevision = s.Value
-			}
-			if s.Key == "vcs.modified" {
-				report.CodeModified = s.Value == "true"
-			}
-		}
+		report.CodeRevision, report.CodeModified, report.CodeProvenanceAvailable = readinessBuildProvenance(info.Settings)
+	}
+	binaryPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("locate executed binary: %w", err)
+	}
+	report.BinarySHA256, err = readinessFileSHA256(binaryPath)
+	if err != nil {
+		return fmt.Errorf("hash executed binary: %w", err)
 	}
 	prior, normalized := map[string]bool{}, map[string]bool{}
 	for _, path := range m.PriorBundles {
@@ -210,10 +216,41 @@ func runCalibrationReadiness(args []string) error {
 	return nil
 }
 
+// An absent or malformed modified setting must never become an implicit clean build.
+func readinessBuildProvenance(settings []debug.BuildSetting) (string, *bool, bool) {
+	var revision string
+	var modified *bool
+	for _, setting := range settings {
+		switch setting.Key {
+		case "vcs.revision":
+			revision = setting.Value
+		case "vcs.modified":
+			if setting.Value == "true" || setting.Value == "false" {
+				value := setting.Value == "true"
+				modified = &value
+			}
+		}
+	}
+	return revision, modified, strings.TrimSpace(revision) != "" && modified != nil
+}
+
+func readinessFileSHA256(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	digest := sha256.New()
+	if _, err := io.Copy(digest, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(digest.Sum(nil)), nil
+}
+
 var readinessTemplate = template.Must(template.New("readiness").Funcs(template.FuncMap{"source": func(a assessment.Artifact) string {
 	lines := strings.Split(string(a.Original), "\n")
 	for i, line := range lines {
 		lines[i] = fmt.Sprintf("%d: %s", i+1, line)
 	}
 	return strings.Join(lines, "\n")
-}}).Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'"><title>Cairn instructor readiness review</title><style>body{font:17px/1.5 system-ui;max-width:960px;margin:30px auto;padding:0 20px;color:#18232d}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}details{border:1px solid #bbb;padding:12px;margin:14px 0}summary{cursor:pointer;font-weight:bold}table{border-collapse:collapse}td,th{border:1px solid #aaa;padding:8px;text-align:left}.warning{background:#fff0d1;padding:12px}</style><h1>Instructor readiness review</h1><p>Private · {{.InstructorScope}} · {{.PromptVersion}} · {{.Model}}</p><p class="warning">Source-first preparation only. No new model calls, instructor reference judgments, approvals or grades. Prior assisted decisions remain separate. Score fields are deliberately blank.</p><ol><li>Review each source and captured starter against the rubric. Write your judgment before seeing a new model proposal.</li><li>For every later feedback claim, identify the exact cited operation supporting it. Check every credited step, deduction and required versus optional change. A valid citation alone does not establish meaning.</li><li>Attribute comments and docstrings to the captured starter, student changes, or unknown provenance. Matching text is overlap, not proof of authorship. Do not credit inherited documentation as newly authored.</li><li>Keep unassessable criteria null until you resolve the evidence. Preserve the authorized localized duplication decision without applying a universal penalty.</li></ol><p>Record notes in instructor-review.json or the instructor console. This worksheet cannot import an independent reference or approve a profile. Use authenticated reference capture before any new model attempt. Draft guidance below is neither approved nor active.</p>{{range .Sections}}<h2>{{.ID}}</h2><p>Rubric SHA-256: <code>{{.RubricSHA256}}</code></p><details><summary>Frozen draft guidance</summary><p>{{.DraftGuidance}}</p></details>{{range .Samples}}<h3>{{.ID}}</h3><p>Prior exact-source overlap: {{.PriorExactOverlap}} · prior whitespace-normalized overlap: {{.PriorWhitespaceOverlap}}. These checks cover supplied prior bundles only; they do not establish independent holdout status or semantic novelty.</p><p>Current request preflight: {{.InputBytes}} bytes · fits: {{.Fits}} {{.PreflightIssue}}</p><table><tr><th>Criterion</th><th>Maximum</th><th>Your judgment</th></tr>{{range .Document.Rubric.Criteria}}<tr><td>{{.ID}}: {{.Description}}</td><td>{{.MaxPoints}}</td><td>Not reviewed</td></tr>{{end}}</table>{{range .Document.Artifacts}}<details><summary>Captured source: {{.Path}}</summary><p>SHA-256: {{.SHA256}}</p><pre>{{source .}}</pre></details>{{end}}{{range $path,$starter:=.Document.Rubric.StarterFiles}}<details><summary>Captured instructor starter: {{$path}}</summary><pre>{{$starter}}</pre></details>{{end}}{{end}}{{end}}<p>Preflight success is a size/schema check, not a calibration or quality result. Exact and whitespace overlap checks do not detect all related submissions. Do not publish this packet or its source.</p></html>`))
+}}).Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'"><title>Cairn instructor readiness review</title><style>body{font:17px/1.5 system-ui;max-width:960px;margin:30px auto;padding:0 20px;color:#18232d}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}details{border:1px solid #bbb;padding:12px;margin:14px 0}summary{cursor:pointer;font-weight:bold}table{border-collapse:collapse}td,th{border:1px solid #aaa;padding:8px;text-align:left}.warning{background:#fff0d1;padding:12px}</style><h1>Instructor readiness review</h1><p>Private · {{.InstructorScope}} · {{.PromptVersion}} · {{.Model}}</p><p>Binary code provenance available: {{.CodeProvenanceAvailable}} · executed binary SHA-256: <code>{{.BinarySHA256}}</code>. Missing embedded provenance is unknown, not a verified clean build. Retain a separately verified build record binding this hash to the source revision.</p><p class="warning">Source-first preparation only. No new model calls, instructor reference judgments, approvals or grades. Prior assisted decisions remain separate. Score fields are deliberately blank.</p><ol><li>Review each source and captured starter against the rubric. Write your judgment before seeing a new model proposal.</li><li>For every later feedback claim, identify the exact cited operation supporting it. Check every credited step, deduction and required versus optional change. A valid citation alone does not establish meaning.</li><li>Attribute comments and docstrings to the captured starter, student changes, or unknown provenance. Matching text is overlap, not proof of authorship. Do not credit inherited documentation as newly authored.</li><li>Keep unassessable criteria null until you resolve the evidence. Preserve the authorized localized duplication decision without applying a universal penalty.</li></ol><p>Record notes in instructor-review.json or the instructor console. This worksheet cannot import an independent reference or approve a profile. Use authenticated reference capture before any new model attempt. Draft guidance below is neither approved nor active.</p>{{range .Sections}}<h2>{{.ID}}</h2><p>Rubric SHA-256: <code>{{.RubricSHA256}}</code></p><details><summary>Frozen draft guidance</summary><p>{{.DraftGuidance}}</p></details>{{range .Samples}}<h3>{{.ID}}</h3><p>Prior exact-source overlap: {{.PriorExactOverlap}} · prior whitespace-normalized overlap: {{.PriorWhitespaceOverlap}}. These checks cover supplied prior bundles only; they do not establish independent holdout status or semantic novelty.</p><p>Current request preflight: {{.InputBytes}} bytes · fits: {{.Fits}} {{.PreflightIssue}}</p><table><tr><th>Criterion</th><th>Maximum</th><th>Your judgment</th></tr>{{range .Document.Rubric.Criteria}}<tr><td>{{.ID}}: {{.Description}}</td><td>{{.MaxPoints}}</td><td>Not reviewed</td></tr>{{end}}</table>{{range .Document.Artifacts}}<details><summary>Captured source: {{.Path}}</summary><p>SHA-256: {{.SHA256}}</p><pre>{{source .}}</pre></details>{{end}}{{range $path,$starter:=.Document.Rubric.StarterFiles}}<details><summary>Captured instructor starter: {{$path}}</summary><pre>{{$starter}}</pre></details>{{end}}{{end}}{{end}}<p>Preflight success is a size/schema check, not a calibration or quality result. Exact and whitespace overlap checks do not detect all related submissions. Do not publish this packet or its source.</p></html>`))

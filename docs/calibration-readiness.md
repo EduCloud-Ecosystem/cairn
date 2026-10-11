@@ -5,8 +5,9 @@ opening the application database, executing coursework, sending model requests,
 creating references, approving profiles, or changing grades. It supports review
 of complete locally available sources before a new calibration attempt.
 
-Build from a clean accepted checkout so the binary revision and dirty flag in the
-report identify the code used:
+Build from a clean accepted checkout and retain a separate build record containing
+the source revision, verified clean status, build command, and executed binary
+SHA-256. Go builds may omit embedded VCS settings even when requested:
 
 ```sh
 go build -o /tmp/cairn-readiness ./cmd/cairn
@@ -44,11 +45,17 @@ file counts are retained. These checks do not establish semantic novelty,
 independence, unseen-by-model status, or authorship.
 
 The report freezes the current model, prompt version and exact prompt-instructions
-SHA-256, policy version, binary revision/dirty state, source and rubric hashes,
+SHA-256, policy version, executed binary SHA-256, available embedded binary
+revision/dirty state, source and rubric hashes,
 draft-guidance hashes, and prior-bundle hashes. `checksums.json` covers the report,
 frozen manifest, HTML review, and blank worksheet. Preserve the manifest and its
 referenced bundles, then regenerate into a new directory after the final build.
 Compare these hashes to detect changed inputs. Never overwrite prior decisions.
+`binary_code_provenance_available` is true only when both embedded revision and
+valid modified state exist. An absent modified state is JSON null, not false.
+Missing provenance is unknown; the binary hash identifies the executable but does
+not independently establish its source revision or clean build. Verify the
+external build record before accepting a code freeze.
 
 Open `REVIEW.html` locally for the rubric, complete captured source with line
 numbers, captured starter, overlap findings and request-size preflight. A failed
