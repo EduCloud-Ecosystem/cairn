@@ -639,9 +639,28 @@ quality case 5/5. A second reviewed example still received an unjustified 4/5
 deduction for previously waived constant-column handling. Its original proposal
 was retained and a separately attributed assistant adjudication recorded 5/5.
 That correction is calibration evidence, not independent instructor ground
-truth. Updated next-round guidance is drafted but has not been live tested.
-No fresh reserved work, grade publication, profile approval or production
-activation occurred. The larger catalog request cost is recorded in the report.
+truth. That development round did not use fresh reserved work, publish grades,
+approve profiles or activate production. The larger catalog request cost is
+recorded in the report.
+
+The subsequent [reserved-source score review](evaluations/2026-10-10-reserved-score-review-v10.json)
+carried the previously adjudicated constant-column waiver into a historical
+quality v5 rubric before reviewing two reserved sources. Four bounded calls
+matched assistant references recorded before provider responses: both quality
+scores were 5/5; a reversed membership comparison received 2/10 for the outlier
+criterion, while a coherent log-density rule received 10/10 under the historical
+ambiguity exception. The functional criterion was unchanged. The policy was
+supplied in the rubric, not through an approved calibration guidance binding.
+
+All four proposals passed exact citation checks, but one omitted the model call
+needed to support its explanation. A separately attributed assistant review
+added that citation and clarified log-density threshold units; the original
+proposal and score were preserved. The two-source result is not general grading
+accuracy or independent instructor validation. Both diagnostic profiles remain
+drafts with zero grades; neither is a formal approved-profile holdout. These
+sources are now consumed evaluation data. The next stage is broader instructor
+course rehearsal with fixed policy and explicit instructor review, not automatic
+grade publication.
 
 ### Contiguous multiline excerpts (v7)
 
