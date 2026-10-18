@@ -102,6 +102,12 @@ cover ambiguous/malformed/missing receipts, corruption, concurrency, and the
 existing generic worker retry loop. Evidence records source/file/binary/image
 and fixture pins and retains the wrong-answer control.
 
+The [local acceptance record](evidence/2026-10-17-synthetic-outfitter.json)
+contains 19 passing controls and explicit cleanup outcomes. The
+[independent review record](evidence/2026-10-17-synthetic-outfitter-review.json)
+retains the reproduced findings, fixes and rechecks. These are pinned local
+records; the PR separately records final-head CI and merge status.
+
 ## Production handoff still required
 
 The current Service creates a new `GradingRun` on every infrastructure retry
