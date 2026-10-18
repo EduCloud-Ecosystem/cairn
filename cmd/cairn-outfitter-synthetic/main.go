@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -18,15 +19,24 @@ import (
 	"github.com/EduCloud-Ecosystem/cairn/internal/grading"
 	"github.com/EduCloud-Ecosystem/cairn/internal/syntheticoutfitter"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/gradingspec"
+	"golang.org/x/sys/unix"
 )
 
 func read(path string, v any) error {
-	f, err := os.Open(path)
+	f, err := os.OpenFile(path, os.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	d := json.NewDecoder(io.LimitReader(f, 32769))
+	st, err := f.Stat()
+	if err != nil || !st.Mode().IsRegular() || st.Size() > 32768 {
+		return errors.New("config and policy must be bounded regular files")
+	}
+	b, err := io.ReadAll(io.LimitReader(f, 32769))
+	if err != nil || len(b) > 32768 {
+		return errors.New("oversized or unreadable JSON")
+	}
+	d := json.NewDecoder(bytes.NewReader(b))
 	d.DisallowUnknownFields()
 	if err = d.Decode(v); err != nil {
 		return err
