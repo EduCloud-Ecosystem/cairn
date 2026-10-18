@@ -324,8 +324,24 @@ func (r *Runner) Cancel(ctx context.Context) error {
 	if err = r.authority(ctx, true); err != nil {
 		return err
 	}
-	_, err = r.call(ctx, "cancel", i.Preflight.RequestID)
-	return err
+	b, err := r.call(ctx, "cancel", i.Preflight.RequestID)
+	if err != nil {
+		return ErrUnassessable
+	}
+	var got receipt
+	var keys map[string]json.RawMessage
+	if decode(b, &got, false) != nil || decode(b, &keys, false) != nil {
+		return ErrUnassessable
+	}
+	for _, k := range strings.Fields("schema_version request_id project_id image status admitted cleanup_verified unresolved_liability compute") {
+		if v, ok := keys[k]; !ok || string(v) == "null" {
+			return ErrUnassessable
+		}
+	}
+	if got.SchemaVersion != 1 || got.RequestID != i.Preflight.RequestID || got.ProjectID != i.Request.ProjectID || got.Image != i.Request.Workload.Image || !got.Admitted || !got.CleanupVerified || got.Unresolved || (got.Status != "cancelled" && got.Status != "failed" && got.Status != "succeeded") || got.Compute.Reserved != i.Preflight.ReservedCPUSeconds || got.Compute.Charged != got.Compute.Reserved || got.Compute.Provenance != "estimated_upper_bound" {
+		return ErrUnassessable
+	}
+	return nil
 }
 func (r *Runner) authority(ctx context.Context, dispatch bool) error {
 	b, err := r.call(ctx, "recovery-status", nil)

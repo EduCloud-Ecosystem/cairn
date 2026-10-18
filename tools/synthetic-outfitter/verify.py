@@ -28,7 +28,7 @@ fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
 root = (Path('.runtime') / ('cairn-outfitter-' + uuid.uuid4().hex)).resolve()
 root.mkdir(parents=True, mode=0o700)
 state = root / 'broker'
-checks, jobs, processes, controls = [], [], [], []
+checks, jobs, processes, controls, cleanup = [], [], [], [], []
 started = time.monotonic()
 
 
@@ -179,6 +179,11 @@ try:
     shutil.rmtree(policy_snapshot)
     check('held authority recovers score without policy or source', invoke(good, 'status') == first)
     check('held recovery never activates broker', broker('recovery-status', directory=held)['admission'] == 'held')
+    held_record = json.loads((held / 'ledger.json').read_text())['runs'][original['request_id']]
+    (held / 'outputs' / (held_record['output_sha256'] + '.json')).unlink()
+    missing = invoke(good, 'status', 2)
+    check('missing execution output remains unassessable without refund', missing['unassessable']
+          and 'result' not in missing and receipt(good, held)['compute'] == original['compute'])
     usage = broker('project-status', '--project-id', 'synthetic')
     check('five bounded jobs consume exactly 150 CPU seconds', usage['charged_cpu_seconds'] == 150)
     owner = json.loads((state / 'ledger.json').read_text())['owner']
@@ -193,8 +198,8 @@ except Exception as exc:
 finally:
     for proc in processes:
         if proc.poll() is None:
-            proc.terminate()
             try:
+                proc.terminate()
                 proc.communicate(timeout=3)
             except subprocess.TimeoutExpired:
                 proc.kill(); proc.communicate(timeout=3)
@@ -204,12 +209,30 @@ finally:
             r = receipt(job)
             if not r['cleanup_verified']:
                 broker('cancel', '--request-id', r['request_id'])
-                wait_clean(job)
-        except Exception:
-            pass
+                r = wait_clean(job)
+            if not r['cleanup_verified'] or r['unresolved_liability']:
+                raise AssertionError('cleanup or liability remains unresolved')
+            cleanup.append(dict(job=job['name'], status='PASS', cleanup_verified=True,
+                                unresolved_liability=False, compute=r['compute']))
+        except Exception as exc:
+            # Refusal has no durable broker receipt. Only the specifically
+            # bounded refusal account can establish this expected absence.
+            refused = False
+            if job['config']['project_id'] == 'denied':
+                try:
+                    u = broker('project-status', '--project-id', 'denied')
+                    refused = all(u[k] == 0 for k in ['charged_cpu_seconds', 'reserved_cpu_seconds', 'unknown_cpu_seconds']) and u['budget_cpu_seconds'] == 1
+                except Exception:
+                    refused = False
+            if refused:
+                cleanup.append(dict(job=job['name'], status='NOT_ADMITTED', evidence='finite refusal account has no reservations, charge or unknown usage'))
+            else:
+                cleanup.append(dict(job=job['name'], status='FAIL', error=str(exc)[:1000], unresolved=True))
+                outcome = 'FAIL'
+                problem = problem or 'cleanup failed or outstanding liability remains; see cleanup evidence'
     output = Path(a.output); output.parent.mkdir(parents=True, exist_ok=True)
     source = {str(f): sha(f.read_bytes()) for base in ['internal/syntheticoutfitter', 'cmd/cairn-outfitter-synthetic', 'tools/synthetic-outfitter'] for f in sorted(Path(base).glob('*')) if f.is_file()}
-    output.write_text(json.dumps(dict(status=outcome, error=problem, checks=checks, controls=controls,
+    output.write_text(json.dumps(dict(status=outcome, error=problem, checks=checks, controls=controls, cleanup=cleanup,
         created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(), elapsed_seconds=round(time.monotonic()-started, 2),
         cairn_revision=run(['git', 'rev-parse', 'HEAD']).strip(), source_sha256=source,
         cairn_binary_sha256=sha(Path(cairn).read_bytes()), outfitter_binary_sha256=sha(Path(outfitter).read_bytes()),

@@ -27,6 +27,8 @@ Only version 1, one `python /input/submission.py` check, no setup or per-test
 overrides, a digest-pinned installed image, no network, at most 1 CPU,
 256 MiB RAM, 64 PIDs, 30 seconds and 65,536 output bytes are supported.
 Input and policy manifests together have at most 128 files and 16 MiB.
+Each snapshot is limited to 512 total entries; special files and symlinks are
+refused before inspection, with nonblocking descriptor checks for replacement.
 Arbitrary shell commands, multi-step policies, writable workspaces, remote
 checkouts and general course execution are outside this profile.
 
@@ -56,6 +58,9 @@ path and `recovery_checkpoint_sha256`; its source authority and checkpoint must
 match the original pin. Recovery does not activate the authority or dispatch
 on a held restore. `--mode cancel` operates only on the original active
 authority and produces no score.
+It reports success only after a matching terminal receipt verifies cleanup and
+settled accounting; unknown or failed cleanup remains an explicit error. The
+harness retains per-job cleanup outcomes and fails on outstanding liabilities.
 
 Cairn scores only a complete matching receipt with execution started,
 verified cleanup, no unresolved liability/reconciliation/output error, a

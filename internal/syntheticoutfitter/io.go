@@ -33,7 +33,9 @@ func decode(b []byte, v any, strict bool) error {
 	return nil
 }
 func readBounded(root *os.Root, path string, limit int64) ([]byte, error) {
-	f, err := root.Open(path)
+	// A fixture may contain a FIFO or be replaced while being inspected. Open
+	// nonblocking and without following links, then check the opened descriptor.
+	f, err := root.OpenFile(path, os.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -63,6 +65,7 @@ func manifest(dir string) ([]fileEntry, error) {
 	defer root.Close()
 	files := []fileEntry{}
 	var total int64
+	entries := 0
 	err = fs.WalkDir(root.FS(), ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -70,11 +73,19 @@ func manifest(dir string) ([]fileEntry, error) {
 		if p == "." {
 			return nil
 		}
+		entries++
+		if entries > 512 {
+			return errors.New("too many fixture entries")
+		}
 		if !relative(p) || d.Name() == ".git" || d.Type()&os.ModeSymlink != 0 {
 			return errors.New("unsafe fixture path; materialize a Git-free snapshot")
 		}
 		if d.IsDir() {
 			return nil
+		}
+		info, err := d.Info()
+		if err != nil || !info.Mode().IsRegular() {
+			return errors.New("fixture entry must be a regular file")
 		}
 		if len(files) >= 128 {
 			return errors.New("too many fixture files")

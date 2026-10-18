@@ -18,6 +18,7 @@ import (
 	"github.com/EduCloud-Ecosystem/cairn/internal/store/memory"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/adapter"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/gradingspec"
+	"golang.org/x/sys/unix"
 )
 
 type fixture struct {
@@ -425,5 +426,87 @@ func TestIntentJSONChecksum(t *testing.T) {
 	}
 	if _, err = f.r.Recover(context.Background()); err == nil {
 		t.Fatal("corrupt intent graded")
+	}
+}
+
+func TestNamedPipeCannotBlockFixtureInspection(t *testing.T) {
+	f := setup(t)
+	pipe := filepath.Join(f.input, "extra")
+	if err := unix.Mkfifo(pipe, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, direct := range []bool{false, true} {
+		done := make(chan error, 1)
+		go func() {
+			if direct {
+				root, err := os.OpenRoot(f.input)
+				if err != nil {
+					done <- err
+					return
+				}
+				defer root.Close()
+				_, err = readBounded(root, "extra", 1024)
+				done <- err
+			} else {
+				_, err := f.run()
+				done <- err
+			}
+		}()
+		select {
+		case err := <-done:
+			if err == nil {
+				t.Fatal("named pipe accepted")
+			}
+		case <-time.After(time.Second):
+			// Release a regressed blocking reader so the failed test leaves no goroutine.
+			fd, err := unix.Open(pipe, unix.O_RDWR|unix.O_NONBLOCK, 0)
+			if err == nil {
+				_ = unix.Close(fd)
+			}
+			select {
+			case <-done:
+			case <-time.After(time.Second):
+			}
+			t.Fatal("fixture inspection blocked on named pipe")
+		}
+	}
+	if f.broker.runs != 0 {
+		t.Fatal("special file reached dispatch")
+	}
+}
+
+func TestCancellationRetainsUnresolvedCleanup(t *testing.T) {
+	for _, change := range []string{"unknown", "cleanup", "liability", "identity", "missing"} {
+		t.Run(change, func(t *testing.T) {
+			f := setup(t)
+			if _, err := f.run(); err != nil {
+				t.Fatal(err)
+			}
+			f.r.call = func(ctx context.Context, verb string, payload any) ([]byte, error) {
+				if verb != "cancel" {
+					return f.broker.call(ctx, verb, payload)
+				}
+				r := f.broker.receipt
+				switch change {
+				case "unknown":
+					r["status"] = "unknown"
+				case "cleanup":
+					r["cleanup_verified"] = false
+				case "liability":
+					r["unresolved_liability"] = true
+				case "identity":
+					r["request_id"] = "other"
+				case "missing":
+					delete(r, "cleanup_verified")
+				}
+				return encode(r), nil
+			}
+			if err := f.r.Cancel(context.Background()); !errors.Is(err, ErrUnassessable) {
+				t.Fatalf("cancel hid uncertainty: %v", err)
+			}
+			if f.broker.runs != 1 {
+				t.Fatal("cancel dispatched work")
+			}
+		})
 	}
 }
