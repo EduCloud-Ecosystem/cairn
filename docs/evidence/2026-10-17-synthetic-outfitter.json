@@ -1,0 +1,263 @@
+{
+  "status": "PASS",
+  "error": null,
+  "checks": [
+    {
+      "name": "pinned local image already installed",
+      "passed": true
+    },
+    {
+      "name": "Cairn deterministic correct score and pinned policy",
+      "passed": true
+    },
+    {
+      "name": "repeated delivery retains one effect and charge",
+      "passed": true
+    },
+    {
+      "name": "changed input is refused before dispatch",
+      "passed": true
+    },
+    {
+      "name": "changed submission_revision is refused on restart",
+      "passed": true
+    },
+    {
+      "name": "changed policy is refused on restart",
+      "passed": true
+    },
+    {
+      "name": "restart recovers without original submission",
+      "passed": true
+    },
+    {
+      "name": "wrong answer remains failed despite successful compute",
+      "passed": true
+    },
+    {
+      "name": "matching output with nonzero exit fails",
+      "passed": true
+    },
+    {
+      "name": "explicit cancellation never publishes result",
+      "passed": true
+    },
+    {
+      "name": "cancelled work remains unassessable",
+      "passed": true
+    },
+    {
+      "name": "client loss and deadline retain charge without grade",
+      "passed": true
+    },
+    {
+      "name": "budget refusal is unassessable",
+      "passed": true
+    },
+    {
+      "name": "repeated refusal is status-only and not admitted",
+      "passed": true
+    },
+    {
+      "name": "held authority recovers score without policy or source",
+      "passed": true
+    },
+    {
+      "name": "held recovery never activates broker",
+      "passed": true
+    },
+    {
+      "name": "missing execution output remains unassessable without refund",
+      "passed": true
+    },
+    {
+      "name": "five bounded jobs consume exactly 150 CPU seconds",
+      "passed": true
+    },
+    {
+      "name": "independent Docker observation finds no fixture containers",
+      "passed": true
+    }
+  ],
+  "controls": [
+    {
+      "fixture": "wrong",
+      "expected": 42,
+      "observed": 41,
+      "score": 0,
+      "compute": "succeeded"
+    }
+  ],
+  "cleanup": [
+    {
+      "job": "correct",
+      "status": "PASS",
+      "cleanup_verified": true,
+      "unresolved_liability": false,
+      "compute": {
+        "reserved_cpu_seconds": 30,
+        "charged_cpu_seconds": 30,
+        "provenance": "estimated_upper_bound"
+      }
+    },
+    {
+      "job": "wrong",
+      "status": "PASS",
+      "cleanup_verified": true,
+      "unresolved_liability": false,
+      "compute": {
+        "reserved_cpu_seconds": 30,
+        "charged_cpu_seconds": 30,
+        "provenance": "estimated_upper_bound"
+      }
+    },
+    {
+      "job": "nonzero",
+      "status": "PASS",
+      "cleanup_verified": true,
+      "unresolved_liability": false,
+      "compute": {
+        "reserved_cpu_seconds": 30,
+        "charged_cpu_seconds": 30,
+        "provenance": "estimated_upper_bound"
+      }
+    },
+    {
+      "job": "cancelled",
+      "status": "PASS",
+      "cleanup_verified": true,
+      "unresolved_liability": false,
+      "compute": {
+        "reserved_cpu_seconds": 30,
+        "charged_cpu_seconds": 30,
+        "provenance": "estimated_upper_bound"
+      }
+    },
+    {
+      "job": "client-killed",
+      "status": "PASS",
+      "cleanup_verified": true,
+      "unresolved_liability": false,
+      "compute": {
+        "reserved_cpu_seconds": 30,
+        "charged_cpu_seconds": 30,
+        "provenance": "estimated_upper_bound"
+      }
+    },
+    {
+      "job": "budget-refused",
+      "status": "NOT_ADMITTED",
+      "evidence": "finite refusal account has no reservations, charge or unknown usage"
+    }
+  ],
+  "created_at": "2026-10-18T03:37:02.871100+00:00",
+  "elapsed_seconds": 34.92,
+  "cairn_revision": "48476e68020353d41eff2f7d40ae738eac49085b",
+  "source_sha256": {
+    "internal/syntheticoutfitter/io.go": "91433d1cd128abf0e26354d7e305d22b4d9bc7cb8891066aec7c83327be0900a",
+    "internal/syntheticoutfitter/runner.go": "27d1f64dd678fe2ea5d816e7be39c206ebc8196496defbaf5bc64d0fbc8678e0",
+    "internal/syntheticoutfitter/runner_test.go": "4bb0f5ce56b8791ad1869a04a90839455bafa88137b71e6dc9dee5b32ca6476f",
+    "cmd/cairn-outfitter-synthetic/main.go": "33bee116708dd450938bdfdae348a476ce2711b07a1e14827ab01466f31c2094",
+    "cmd/cairn-outfitter-synthetic/main_test.go": "975ba1db0fef45f360ba34666856602a1510ed06c20d0c2a2d1b64c11376d63c",
+    "tools/synthetic-outfitter/verify.py": "4b1032c448aaaace8c2204800da706ef04b35ce10ab8e4cb52e42a20ec33169d"
+  },
+  "cairn_binary_sha256": "9a8a5c30cacc5072b125458cff02ccccbc07e2c5038484f9038122346bfff5ce",
+  "outfitter_binary_sha256": "ba5510a1f3971425deb86ada3bbdec748d12b1ece22814deea6e2d067a1534c6",
+  "outfitter_accepted_revision": "273bb0148fead33c91fcb92e0cc9e0bacdb929c2",
+  "image": "python@sha256:229a2c5bfa27522db7815ea81f9bed70af17ccb9de9fc7ad142b1877b5830d36",
+  "fixtures": [
+    {
+      "job": "correct",
+      "submission_revision": "e28a11aa0e3a57aab4bd9ccf60369d1024e5b6f5",
+      "policy": {
+        "repository": {
+          "host": "github",
+          "namespace": "synthetic",
+          "name": "instructor"
+        },
+        "revision": "224a2de4be8daeb1cd0033362f9ef0722e93a2b7",
+        "path": "grading.json",
+        "sha256": "78bfcb4cbf0f7bdd63d63770e967c5516fab9c5d0ebc83cc3771ce32ced20d75"
+      }
+    },
+    {
+      "job": "wrong",
+      "submission_revision": "774c0f6ddbab3c694b44ba2582cc42f2c5741b14",
+      "policy": {
+        "repository": {
+          "host": "github",
+          "namespace": "synthetic",
+          "name": "instructor"
+        },
+        "revision": "224a2de4be8daeb1cd0033362f9ef0722e93a2b7",
+        "path": "grading.json",
+        "sha256": "78bfcb4cbf0f7bdd63d63770e967c5516fab9c5d0ebc83cc3771ce32ced20d75"
+      }
+    },
+    {
+      "job": "nonzero",
+      "submission_revision": "55c079cd5823d38c0145d78405512866bcad1368",
+      "policy": {
+        "repository": {
+          "host": "github",
+          "namespace": "synthetic",
+          "name": "instructor"
+        },
+        "revision": "224a2de4be8daeb1cd0033362f9ef0722e93a2b7",
+        "path": "grading.json",
+        "sha256": "78bfcb4cbf0f7bdd63d63770e967c5516fab9c5d0ebc83cc3771ce32ced20d75"
+      }
+    },
+    {
+      "job": "cancelled",
+      "submission_revision": "82fd253d58e68537cbaeb3673e19292efd440892",
+      "policy": {
+        "repository": {
+          "host": "github",
+          "namespace": "synthetic",
+          "name": "instructor"
+        },
+        "revision": "224a2de4be8daeb1cd0033362f9ef0722e93a2b7",
+        "path": "grading.json",
+        "sha256": "78bfcb4cbf0f7bdd63d63770e967c5516fab9c5d0ebc83cc3771ce32ced20d75"
+      }
+    },
+    {
+      "job": "client-killed",
+      "submission_revision": "82fd253d58e68537cbaeb3673e19292efd440892",
+      "policy": {
+        "repository": {
+          "host": "github",
+          "namespace": "synthetic",
+          "name": "instructor"
+        },
+        "revision": "224a2de4be8daeb1cd0033362f9ef0722e93a2b7",
+        "path": "grading.json",
+        "sha256": "78bfcb4cbf0f7bdd63d63770e967c5516fab9c5d0ebc83cc3771ce32ced20d75"
+      }
+    },
+    {
+      "job": "budget-refused",
+      "submission_revision": "d8da8a653d0815c07639ee005b942e8c158d580f",
+      "policy": {
+        "repository": {
+          "host": "github",
+          "namespace": "synthetic",
+          "name": "instructor"
+        },
+        "revision": "224a2de4be8daeb1cd0033362f9ef0722e93a2b7",
+        "path": "grading.json",
+        "sha256": "78bfcb4cbf0f7bdd63d63770e967c5516fab9c5d0ebc83cc3771ce32ced20d75"
+      }
+    }
+  ],
+  "limits": {
+    "cpus": 1,
+    "memory_mb": 256,
+    "pids": 64,
+    "timeout_seconds": 30,
+    "max_output_bytes": 65536,
+    "total_cpu_seconds": 150
+  },
+  "scope": "Local synthetic only; no publication, service wiring, live provider, real data or second-human acceptance."
+}

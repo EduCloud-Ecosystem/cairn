@@ -6,6 +6,7 @@ node_modules/
 dist/
 
 # local runtime state and credentials -- never commit
+/.runtime/
 cairn.env
 cairn.db
 *.db

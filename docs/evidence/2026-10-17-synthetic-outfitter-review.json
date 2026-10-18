@@ -1,0 +1,58 @@
+{
+  "status": "PASS",
+  "reviewed_source_sha": "48476e68020353d41eff2f7d40ae738eac49085b",
+  "reviewer": "independent_cairn_bridge_review",
+  "actionable_findings_remaining": 0,
+  "findings": [
+    {
+      "severity": "P2",
+      "finding": "FIFO fixture blocks before descriptor validation",
+      "reproduced_at": "77345fbd2b97b12c343b1e57b181184fe2f7f5c3",
+      "fixed_at": "fcabf521fb9a73391854567b19b2962e1ad41101",
+      "independent_reprobe": "PASS"
+    },
+    {
+      "severity": "P2",
+      "finding": "Cancellation discards unresolved cleanup receipt",
+      "reproduced_at": "77345fbd2b97b12c343b1e57b181184fe2f7f5c3",
+      "fixed_at": "fcabf521fb9a73391854567b19b2962e1ad41101",
+      "independent_reprobe": "PASS"
+    },
+    {
+      "severity": "P2",
+      "finding": "CLI policy read blocks on FIFO before runner validation",
+      "reproduced_at": "fcabf521fb9a73391854567b19b2962e1ad41101",
+      "fixed_at": "48476e68020353d41eff2f7d40ae738eac49085b",
+      "independent_reprobe": "PASS"
+    }
+  ],
+  "evidence_gap_fixed": "Harness retains per-job cleanup failure and unresolved liability; failures cannot be silently discarded.",
+  "independent_checks": [
+    "original runner FIFO probe",
+    "unresolved cancellation probe",
+    "actual CLI FIFO rejection",
+    "focused race tests",
+    "go vet",
+    "diff check"
+  ],
+  "implementer_checks": {
+    "full_repository_race": "PASS at fcabf52",
+    "final_build_vet": "PASS at 48476e6",
+    "final_focused_race_with_executable_regression": "PASS at 48476e6",
+    "actual_local_docker_checks": 19,
+    "actual_local_docker_status": "PASS at 48476e6"
+  },
+  "broker_source": {
+    "built_from": "2438cd1e93c06d4f09e549f2e750769c51df2373",
+    "accepted_merge": "273bb0148fead33c91fcb92e0cc9e0bacdb929c2",
+    "both_tree": "65805b8a36df793acabb78ae806c6d7c400c55da"
+  },
+  "gates": {
+    "final_head_ci": "Required separately before merge; PR carries final results",
+    "live_jetstream2": "BLOCKED pending separate approval",
+    "production_service_wiring": "NOT IMPLEMENTED",
+    "real_course_data": "NOT RUN",
+    "second_human_operator": "NOT RUN"
+  },
+  "scope": "Bounded local synthetic consumer; Cairn scoring and Outfitter accounting remain separate."
+}
