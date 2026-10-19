@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/EduCloud-Ecosystem/cairn/internal/grading"
+	"github.com/EduCloud-Ecosystem/cairn/internal/gradingjob"
 	"github.com/EduCloud-Ecosystem/cairn/internal/provisioning"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/adapter"
@@ -185,8 +186,22 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	// Idempotency key includes the sha so the same push grades once but a new
 	// commit triggers a fresh regrade.
 	idem := "grade:webhook:" + sub.ID + ":" + sha
-	target, _ := json.Marshal(provisioning.GradeTarget{SubmissionID: sub.ID, Revision: sha})
-	if err := s.queue.Enqueue(r.Context(), provisioning.JobGradeRevision, string(target), idem); err != nil {
+	asg, err := s.store.GetAssignment(r.Context(), sub.AssignmentID)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, "could not capture instructor grading policy")
+		return
+	}
+	target, err := gradingjob.Capture(sub, asg, sha)
+	if err != nil {
+		httpError(w, http.StatusConflict, "push recorded; grading requires pinned submission and instructor policy")
+		return
+	}
+	encoded, err := target.Encode()
+	if err != nil {
+		httpError(w, http.StatusConflict, "invalid pinned grading context")
+		return
+	}
+	if err := s.queue.Enqueue(r.Context(), provisioning.JobGradeRevision, encoded, idem); err != nil {
 		httpError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

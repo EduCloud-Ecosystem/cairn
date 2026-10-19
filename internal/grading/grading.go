@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/EduCloud-Ecosystem/cairn/internal/gradingjob"
 	"github.com/EduCloud-Ecosystem/cairn/internal/id"
 	"github.com/EduCloud-Ecosystem/cairn/internal/runtimeguard"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store"
@@ -50,12 +51,13 @@ type PolicyEvidence struct {
 }
 
 type Result struct {
-	SubmissionRevision string          `json:"submission_revision,omitempty"`
-	Policy             *PolicyEvidence `json:"policy,omitempty"`
-	Score              float64         `json:"score"`
-	MaxScore           float64         `json:"max_score"`
-	Tests              []TestResult    `json:"tests"`
-	Log                string          `json:"log,omitempty"`
+	Job                *gradingjob.Context `json:"job,omitempty"`
+	SubmissionRevision string              `json:"submission_revision,omitempty"`
+	Policy             *PolicyEvidence     `json:"policy,omitempty"`
+	Score              float64             `json:"score"`
+	MaxScore           float64             `json:"max_score"`
+	Tests              []TestResult        `json:"tests"`
+	Log                string              `json:"log,omitempty"`
 }
 
 // Runner executes a grading spec against a checked-out repo at dir and returns
@@ -94,10 +96,10 @@ func (s *Service) now() time.Time {
 	return time.Now()
 }
 
-// Grade runs grading for one submission. It is the method the provisioning
-// worker invokes for a JobGrade. TargetRef is the submission ID.
+// Grade is a direct library call without durable queue context. The worker
+// uses GradeJob, never this moving-submission compatibility method.
 func (s *Service) Grade(ctx context.Context, submissionID string) error {
-	return s.grade(ctx, submissionID, "")
+	return s.grade(ctx, submissionID, "", nil)
 }
 
 // GradeRevision evaluates the immutable push revision, never a later moving head.
@@ -105,10 +107,19 @@ func (s *Service) GradeRevision(ctx context.Context, submissionID, revision stri
 	if !ValidPolicyRevision(revision) {
 		return errors.New("grading requires a full submission commit ID")
 	}
-	return s.grade(ctx, submissionID, strings.ToLower(revision))
+	return s.grade(ctx, submissionID, strings.ToLower(revision), nil)
 }
 
-func (s *Service) grade(ctx context.Context, submissionID, revision string) error {
+// GradeJob executes the immutable queue target. Context is provenance, not
+// authorization for another compute attempt when an infrastructure retry occurs.
+func (s *Service) GradeJob(ctx context.Context, job gradingjob.Context) error {
+	if err := job.Validate(); err != nil {
+		return err
+	}
+	return s.grade(ctx, job.Target.SubmissionID, job.Target.Revision, &job)
+}
+
+func (s *Service) grade(ctx context.Context, submissionID, revision string, job *gradingjob.Context) error {
 	sub, err := s.Store.GetSubmission(ctx, submissionID)
 	if err != nil {
 		return fmt.Errorf("get submission: %w", err)
@@ -120,6 +131,17 @@ func (s *Service) grade(ctx context.Context, submissionID, revision string) erro
 	if err != nil {
 		return fmt.Errorf("get assignment: %w", err)
 	}
+	if job != nil {
+		t := job.Target
+		if !gradingjob.EligibleStatus(sub.Status) || sub.AssignmentID != t.AssignmentID || sub.Repo != t.Repository {
+			return errors.New("queued grading submission binding is no longer eligible or matches a different repository/assignment")
+		}
+		// Do not mutate the store's object or use today's instructor policy.
+		pinned := *asg
+		pinned.TemplateRef = adapter.TemplateRef{Host: t.Policy.Repository.Host, Namespace: t.Policy.Repository.Namespace, Name: t.Policy.Repository.Name, Ref: t.Policy.Revision}
+		pinned.GradingSpec = t.Policy.Path
+		asg = &pinned
+	}
 
 	started := s.now()
 	run := &store.GradingRun{
@@ -128,6 +150,11 @@ func (s *Service) grade(ctx context.Context, submissionID, revision string) erro
 		Status:       "running",
 		Runner:       s.Runner.Name(),
 		StartedAt:    &started,
+	}
+	if job != nil {
+		run.Result, _ = json.Marshal(struct {
+			Job *gradingjob.Context `json:"job"`
+		}{job})
 	}
 	if err := s.Store.CreateGradingRun(ctx, run); err != nil {
 		return fmt.Errorf("create grading run: %w", err)
@@ -139,7 +166,8 @@ func (s *Service) grade(ctx context.Context, submissionID, revision string) erro
 	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	res, gradeErr := s.execute(runCtx, sub.Repo, asg, revision)
+	res, gradeErr := s.execute(runCtx, sub.Repo, asg, revision, job)
+	res.Job = job
 	if gradeErr == nil && runCtx.Err() != nil {
 		gradeErr = runCtx.Err()
 	}
@@ -151,7 +179,11 @@ func (s *Service) grade(ctx context.Context, submissionID, revision string) erro
 
 	if gradeErr != nil {
 		run.Status = "failed"
-		run.Result, _ = json.Marshal(map[string]string{"error": gradeErr.Error()})
+		run.Result, _ = json.Marshal(struct {
+			Error  string              `json:"error"`
+			Job    *gradingjob.Context `json:"job,omitempty"`
+			Policy *PolicyEvidence     `json:"policy,omitempty"`
+		}{gradeErr.Error(), job, res.Policy})
 		if err := s.Store.UpdateGradingRun(persistCtx, run); err != nil {
 			return errors.Join(gradeErr, fmt.Errorf("persist failed grading run: %w", err))
 		}
@@ -186,11 +218,18 @@ type PolicyRunner interface {
 	RunWithPolicy(context.Context, gradingspec.Spec, string, string) (Result, error)
 }
 
+// JobPolicyRunner optionally receives the logical job and computed policy
+// evidence. Ordinary PolicyRunner dispatch is unchanged. Implementing this
+// interface alone does not establish durable dispatch/recovery or safe retries.
+type JobPolicyRunner interface {
+	RunJobWithPolicy(context.Context, gradingjob.Context, PolicyEvidence, gradingspec.Spec, string, string) (Result, error)
+}
+
 type RevisionCheckout interface {
 	FetchRevision(context.Context, adapter.RepoRef, string, string) error
 }
 
-func (s *Service) execute(ctx context.Context, repo adapter.RepoRef, asg *store.Assignment, revision string) (Result, error) {
+func (s *Service) execute(ctx context.Context, repo adapter.RepoRef, asg *store.Assignment, revision string, job *gradingjob.Context) (Result, error) {
 	if !ValidPolicyRevision(asg.TemplateRef.Ref) || asg.TemplateRef.Namespace == "" || asg.TemplateRef.Name == "" {
 		return Result{}, errors.New("grading requires an instructor template pinned to a full commit ID; configure the assignment grading policy")
 	}
@@ -273,9 +312,15 @@ func (s *Service) execute(ctx context.Context, repo adapter.RepoRef, asg *store.
 		return Result{}, fmt.Errorf("strip .git: %w", err)
 	}
 	// Never read grading.json or policy files from the learner's checkout.
-	res, err := runner.RunWithPolicy(ctx, spec, dir, policyDir)
+	policyEvidence := PolicyEvidence{Repository: template, Revision: strings.ToLower(asg.TemplateRef.Ref), Path: asg.GradingSpec, SHA256: fmt.Sprintf("%x", sha256.Sum256(data))}
+	var res Result
+	if jobRunner, ok := s.Runner.(JobPolicyRunner); job != nil && ok {
+		res, err = jobRunner.RunJobWithPolicy(ctx, *job, policyEvidence, spec, dir, policyDir)
+	} else {
+		res, err = runner.RunWithPolicy(ctx, spec, dir, policyDir)
+	}
 	res.SubmissionRevision = revision
-	res.Policy = &PolicyEvidence{Repository: template, Revision: strings.ToLower(asg.TemplateRef.Ref), Path: asg.GradingSpec, SHA256: fmt.Sprintf("%x", sha256.Sum256(data))}
+	res.Policy = &policyEvidence
 	return res, err
 }
 

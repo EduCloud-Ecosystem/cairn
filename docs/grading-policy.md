@@ -103,9 +103,17 @@ validate institutional TLS/OIDC, or retroactively certify existing scores.
 ## Automatic push grading
 
 Signed default-branch pushes enqueue `grade_revision` jobs containing the full
-submission commit ID. The runner fetches and verifies that exact commit and
+submission commit ID and the instructor repository/commit/spec path selected at
+enqueue. Manual grade requests capture the recorded full submission commit and
+the same policy context. Eligible submissions without a recorded full commit
+return HTTP 409; the operator must record/reconcile the intended revision first.
+The runner fetches and verifies the queued commits and
 records `submission_revision` alongside the pinned instructor policy. Another
-push arriving while a job waits cannot change its input. Student attempt history
+push or instructor-policy edit while a job waits cannot change its input.
+The stable queue job ID is recorded separately from per-delivery grading runs.
+Old unpinned queue targets fail closed; see [pinned grading jobs](pinned-grading-jobs.md)
+for the explicit operator re-enqueue policy and the remaining replay/publication
+limits. Student attempt history
 shows the evaluated commit; historical/manual grades without recorded commit
 provenance are marked "Not recorded" rather than assigned a guessed revision.
 The most recently completed grade is not necessarily the newest Git head if
