@@ -21,7 +21,8 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/EduCloud-Ecosystem/cairn/internal/store"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store/storetest"
@@ -252,5 +253,30 @@ func TestStaleJobUpdateCannotOverwriteDispatch(t *testing.T) {
 	q, err := s.GetGradingJob(ctx, "dispatch-race")
 	if err != nil || q.Status != store.JobSucceeded {
 		t.Fatalf("published queue overwritten: %+v %v", q, err)
+	}
+}
+
+// The existing configured CI database proves the inspection statement works on
+// a server-enforced read-only connection; this is not a local/live DB test.
+func TestGradingInspectionReadOnlyConnection(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.CreateJob(ctx, &store.ProvisioningJob{ID: "inspect", Type: "grade", TargetRef: "legacy", Status: store.JobInProgress, IdempotencyKey: "inspect", ScheduledAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := pgx.ParseConfig(os.Getenv("CAIRN_TEST_DATABASE_URL"))
+	if err != nil {
+		t.Fatal("parse test database configuration")
+	}
+	cfg.RuntimeParams["default_transaction_read_only"] = "on"
+	db := stdlib.OpenDB(*cfg)
+	defer db.Close()
+	reader := New(db)
+	rows, err := reader.ReadGradingInspection(ctx, store.GradingInspectionQuery{JobID: "inspect", Limit: 1})
+	if err != nil || len(rows) != 1 || rows[0].Job.Status != store.JobInProgress || rows[0].HasDispatch {
+		t.Fatal("read-only inspection", err, rows)
+	}
+	if _, err = reader.CreateJob(ctx, &store.ProvisioningJob{ID: "forbidden", Type: "grade", TargetRef: "legacy", Status: store.JobPending, IdempotencyKey: "forbidden", ScheduledAt: time.Now()}); err == nil {
+		t.Fatal("test connection did not prohibit mutations")
 	}
 }
