@@ -178,7 +178,7 @@ func (f *pinnedFixture) changeCurrentPolicy() {
 	}
 }
 
-func TestPinnedGradeAPIWorkerServiceRetryAndReopen(t *testing.T) {
+func TestPinnedGradeOrdinaryRunnerRetryAndReopen(t *testing.T) {
 	for _, webhook := range []bool{false, true} {
 		t.Run(fmt.Sprint("webhook=", webhook), func(t *testing.T) {
 			f := newPinnedFixture(t)
@@ -193,30 +193,32 @@ func TestPinnedGradeAPIWorkerServiceRetryAndReopen(t *testing.T) {
 			if webhook && f.request(true) != http.StatusAccepted {
 				t.Fatal("duplicate webhook refused after current policy changed")
 			}
-			first := &contextPinnedRunner{}
+			first := &ordinaryPinnedRunner{}
 			first.effect = func(context.Context) error { return errors.New("simulated lost infrastructure response") }
 			checkout := &pinnedCheckout{}
 			if did, err := f.worker(first, checkout).RunOnce(context.Background()); !did || err == nil {
 				t.Fatalf("first=%v %v", did, err)
 			}
 			f.noGrade()
-			if len(first.jobs) != 1 || first.jobs[0].JobID == "" {
+			before, err := f.db.ListGradingRunsBySubmission(context.Background(), "s")
+			var firstAudit struct {
+				Job    *gradingjob.Context     `json:"job"`
+				Policy *grading.PolicyEvidence `json:"policy"`
+			}
+			if err != nil || len(before) != 1 || json.Unmarshal(before[0].Result, &firstAudit) != nil || firstAudit.Job == nil || firstAudit.Job.JobID == "" {
 				t.Fatal("missing queue context")
 			}
 			f.reopen()
-			second := &contextPinnedRunner{}
+			second := &ordinaryPinnedRunner{}
 			if did, err := f.worker(second, checkout).RunOnce(context.Background()); !did || err != nil {
 				t.Fatalf("retry=%v %v", did, err)
 			}
-			if len(second.jobs) != 1 || second.jobs[0] != first.jobs[0] {
-				t.Fatalf("retry changed context: %+v %+v", first.jobs, second.jobs)
-			}
-			j := second.jobs[0]
+			j := *firstAudit.Job
 			if j.Target.Revision != pinnedSubmission || j.Target.Policy.Revision != pinnedPolicy || j.Target.Policy.Path != "grading.json" || j.Target.Policy.Repository.Name != "policy" {
 				t.Fatal(j)
 			}
 			hash := fmt.Sprintf("%x", sha256.Sum256([]byte(pinnedSpec)))
-			if second.policies[0].SHA256 != hash || second.policies[0] != first.policies[0] {
+			if firstAudit.Policy == nil || firstAudit.Policy.SHA256 != hash {
 				t.Fatal("policy evidence drift")
 			}
 			g, err := f.db.LatestGradeForSubmission(context.Background(), "s")
@@ -227,7 +229,7 @@ func TestPinnedGradeAPIWorkerServiceRetryAndReopen(t *testing.T) {
 			if err = json.Unmarshal(g.Breakdown, &result); err != nil {
 				t.Fatal(err)
 			}
-			if result.Job == nil || *result.Job != j || result.Policy == nil || *result.Policy != second.policies[0] || result.Score != 10 || result.SubmissionRevision != pinnedSubmission {
+			if result.Job == nil || *result.Job != j || result.Policy == nil || *result.Policy != *firstAudit.Policy || result.Score != 10 || result.SubmissionRevision != pinnedSubmission {
 				t.Fatalf("unbound result %+v", result)
 			}
 			runs, err := f.db.ListGradingRunsBySubmission(context.Background(), "s")

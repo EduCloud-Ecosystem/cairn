@@ -198,3 +198,59 @@ func TestPostgresRoundTrip(t *testing.T) {
 		t.Fatalf("update missing: want ErrNotFound, got %v", err)
 	}
 }
+
+// Exercise the cross-row READ COMMITTED hazard with a stale generic update
+// already waiting on the queue row when the dispatch becomes visible.
+func TestStaleJobUpdateCannotOverwriteDispatch(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	_, err := s.CreateJob(ctx, &store.ProvisioningJob{ID: "dispatch-race", Type: "grade", TargetRef: "fixture", Status: store.JobInProgress, IdempotencyKey: "dispatch-race", ScheduledAt: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `UPDATE provisioning_jobs SET id=id WHERE id='dispatch-race'`); err != nil {
+		t.Fatal(err)
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- s.UpdateJob(waitCtx, &store.ProvisioningJob{ID: "dispatch-race", Status: store.JobPending, ScheduledAt: time.Now()})
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var blocked int
+		err = s.db.QueryRowContext(waitCtx, `SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND wait_event_type='Lock' AND query LIKE '%UPDATE provisioning_jobs%'`).Scan(&blocked)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if blocked > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("stale updater never waited on row lock")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO grading_dispatches(job_id,submission_id,target_sha256,context_sha256,claim_sha256,run_id,runner,state,grade_id,result_sha256) VALUES('dispatch-race','opaque','target','context','claim','race-run','fake','published','grade','result')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE provisioning_jobs SET status='succeeded' WHERE id='dispatch-race'`); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err = <-done; !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("stale update did not refuse: %v", err)
+	}
+	q, err := s.GetGradingJob(ctx, "dispatch-race")
+	if err != nil || q.Status != store.JobSucceeded {
+		t.Fatalf("published queue overwritten: %+v %v", q, err)
+	}
+}

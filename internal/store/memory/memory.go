@@ -16,6 +16,7 @@ import (
 
 // Store is a goroutine-safe in-memory store.Store.
 type Store struct {
+	gradingDispatches   map[string]store.GradingDispatch
 	handoffs            map[string]store.SubmissionHandoff
 	reconciliationAudit map[string]store.IdentityReconciliation
 
@@ -42,6 +43,7 @@ type Store struct {
 // New returns an empty in-memory store.
 func New() *Store {
 	return &Store{
+		gradingDispatches:   map[string]store.GradingDispatch{},
 		handoffs:            map[string]store.SubmissionHandoff{},
 		reconciliationAudit: map[string]store.IdentityReconciliation{},
 
@@ -631,6 +633,9 @@ func (m *Store) ClaimNextJob(_ context.Context) (*store.ProvisioningJob, error) 
 	now := time.Now()
 	var pick *store.ProvisioningJob
 	for id, j := range m.jobs {
+		if _, consumed := m.gradingDispatches[id]; consumed {
+			continue
+		}
 		if !(j.Status == store.JobPending && !j.ScheduledAt.After(now)) && !(j.Type == "submission_handoff" && j.Status == store.JobInProgress && !j.ScheduledAt.After(now.Add(-10*time.Minute))) {
 			continue
 		}
@@ -654,6 +659,9 @@ func (m *Store) ClaimNextJob(_ context.Context) (*store.ProvisioningJob, error) 
 func (m *Store) UpdateJob(_ context.Context, j *store.ProvisioningJob) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if _, consumed := m.gradingDispatches[j.ID]; consumed {
+		return store.ErrConflict
+	}
 	if _, ok := m.jobs[j.ID]; !ok {
 		return store.ErrNotFound
 	}

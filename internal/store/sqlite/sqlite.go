@@ -242,6 +242,19 @@ CREATE TABLE IF NOT EXISTS grading_runs (
     logs_ref      TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS grading_dispatches (
+ job_id TEXT PRIMARY KEY REFERENCES provisioning_jobs(id) ON DELETE RESTRICT,
+ submission_id TEXT NOT NULL,
+ target_sha256 TEXT NOT NULL,
+ context_sha256 TEXT NOT NULL,
+ claim_sha256 TEXT NOT NULL,
+ run_id TEXT NOT NULL UNIQUE,
+ runner TEXT NOT NULL,
+ state TEXT NOT NULL CHECK(state IN ('claimed','held','published')),
+ grade_id TEXT NOT NULL DEFAULT '',
+ result_sha256 TEXT NOT NULL DEFAULT ''
+);
+
 CREATE INDEX IF NOT EXISTS idx_roster_classroom      ON roster_entries (classroom_id);
 CREATE INDEX IF NOT EXISTS idx_roster_host_username  ON roster_entries (host, host_username);
 CREATE INDEX IF NOT EXISTS idx_assignments_classroom ON assignments (classroom_id);
@@ -1013,7 +1026,7 @@ func (s *Store) ClaimNextJob(ctx context.Context) (*store.ProvisioningJob, error
 	var id string
 	err = tx.QueryRowContext(ctx,
 		`SELECT id FROM provisioning_jobs
-		 WHERE (status='pending' AND scheduled_at <= ?) OR (type='submission_handoff' AND status='in_progress' AND scheduled_at <= ?)
+		 WHERE ((status='pending' AND scheduled_at <= ?) OR (type='submission_handoff' AND status='in_progress' AND scheduled_at <= ?)) AND NOT EXISTS (SELECT 1 FROM grading_dispatches d WHERE d.job_id=provisioning_jobs.id)
 		 ORDER BY scheduled_at ASC LIMIT 1`,
 		encodeTime(time.Now().UTC()), encodeTime(time.Now().UTC().Add(-10*time.Minute))).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -1040,10 +1053,7 @@ func (s *Store) ClaimNextJob(ctx context.Context) (*store.ProvisioningJob, error
 }
 
 func (s *Store) UpdateJob(ctx context.Context, j *store.ProvisioningJob) error {
-	res, err := s.db.ExecContext(ctx,
-		`UPDATE provisioning_jobs SET status=?, attempts=?, last_error=?, scheduled_at=? WHERE id=?`,
-		string(j.Status), j.Attempts, j.LastError, encodeTime(j.ScheduledAt), j.ID)
-	return affected(res, err)
+	return s.gradingDispatchSQL().UpdateUnmanagedJob(ctx, j)
 }
 
 // Close releases the database connection pool.

@@ -1,0 +1,2 @@
+-- Consumed dispatch authority must not be erased by downgrade.
+-- Restore a separately reviewed backup only with external authority fenced.

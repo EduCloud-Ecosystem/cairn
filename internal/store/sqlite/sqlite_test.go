@@ -4,6 +4,7 @@ package sqlite_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -188,5 +189,36 @@ func TestGenerationBudgetAndPauseSurviveRestart(t *testing.T) {
 	limits.DailyRequests = 10
 	if err := s.ReserveGeneration(ctx, r, g, limits); err != nil {
 		t.Fatalf("remaining budget unavailable: %v", err)
+	}
+}
+
+func TestGradingDispatchUpgradePreservesExistingQueue(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`CREATE TABLE provisioning_jobs(id TEXT PRIMARY KEY,type TEXT NOT NULL,target_ref TEXT NOT NULL,status TEXT NOT NULL,attempts INTEGER NOT NULL,idempotency_key TEXT NOT NULL UNIQUE,last_error TEXT NOT NULL,scheduled_at TEXT NOT NULL);
+ INSERT INTO provisioning_jobs VALUES('old','grade','legacy-submission','in_progress',2,'old','prior uncertainty','2026-01-01T00:00:00Z')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	st, err := sqlite.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	job, err := st.GetGradingJob(context.Background(), "old")
+	if err != nil || job.TargetRef != "legacy-submission" || job.Status != store.JobInProgress {
+		t.Fatalf("upgrade rewrote old queue %+v %v", job, err)
+	}
+	if _, err = st.GetGradingDispatch(context.Background(), "old"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("upgrade invented past dispatch authority")
+	}
+	if _, err = st.ClaimNextJob(context.Background()); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("upgrade reopened old in-progress job")
 	}
 }

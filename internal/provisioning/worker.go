@@ -110,7 +110,10 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
-	execErr := w.execute(ctx, job)
+	managed, execErr := w.executeJob(ctx, job)
+	if managed {
+		return true, execErr
+	}
 	job.Attempts++
 	switch {
 	case execErr == nil:
@@ -142,6 +145,32 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 		return true, fmt.Errorf("update job %s: %w", job.ID, err)
 	}
 	return true, execErr
+}
+
+// ManagedJobGrader owns terminal queue state for consumed grading dispatches.
+// A managed result must never pass through the generic retry/update path.
+type ManagedJobGrader interface {
+	GradeManagedJob(context.Context, gradingjob.Context) (managed bool, err error)
+}
+
+func (w *Worker) executeJob(ctx context.Context, job *store.ProvisioningJob) (bool, error) {
+	if JobType(job.Type) == JobGrade || JobType(job.Type) == JobGradeRevision {
+		if g, ok := w.Grader.(ManagedJobGrader); ok {
+			target, err := gradingjob.Decode(job.TargetRef)
+			if err != nil {
+				return false, err
+			}
+			call := gradingjob.Context{JobID: job.ID, Target: target}
+			if err = call.Validate(); err != nil {
+				return false, err
+			}
+			managed, err := g.GradeManagedJob(ctx, call)
+			if managed || err != nil {
+				return managed, err
+			}
+		}
+	}
+	return false, w.execute(ctx, job)
 }
 
 func (w *Worker) execute(ctx context.Context, job *store.ProvisioningJob) error {
