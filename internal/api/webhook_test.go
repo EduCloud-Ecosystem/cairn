@@ -49,6 +49,11 @@ func newWebhookServer(t *testing.T, queue provisioning.Queue, graderConfigured b
 		GraderConfigured: graderConfigured,
 	})
 	ctx := context.Background()
+	for _, id := range []string{"a1", "a2", "a3"} {
+		if err := st.CreateAssignment(ctx, &store.Assignment{ID: id, TemplateRef: adapter.TemplateRef{Host: adapter.HostGitHub, Namespace: "teacher", Name: "policy", Ref: strings.Repeat("b", 40)}, GradingSpec: "grading.json"}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	// GitHub-hosted submission.
 	_ = st.CreateSubmission(ctx, &store.Submission{
 		ID: "sub-gh", AssignmentID: "a1", RosterEntryID: "r1", Status: "active",
@@ -266,6 +271,7 @@ func TestWebhookSameShaDedupes(t *testing.T) {
 		GraderConfigured: true,
 	})
 	ctx := context.Background()
+	_ = st.CreateAssignment(ctx, &store.Assignment{ID: "a1", TemplateRef: adapter.TemplateRef{Host: adapter.HostGitHub, Namespace: "teacher", Name: "policy", Ref: strings.Repeat("b", 40)}, GradingSpec: "grading.json"})
 	_ = st.CreateSubmission(ctx, &store.Submission{
 		ID: "sub-gh", AssignmentID: "a1", RosterEntryID: "r1", Status: "active",
 		Repo: adapter.RepoRef{Host: adapter.HostGitHub, Namespace: "cs-dept", Name: "hw1-alice"},

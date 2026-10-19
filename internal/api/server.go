@@ -21,6 +21,7 @@ import (
 
 	"github.com/EduCloud-Ecosystem/cairn/internal/assessment"
 	"github.com/EduCloud-Ecosystem/cairn/internal/grading"
+	"github.com/EduCloud-Ecosystem/cairn/internal/gradingjob"
 	"github.com/EduCloud-Ecosystem/cairn/internal/handoff"
 	"github.com/EduCloud-Ecosystem/cairn/internal/id"
 	"github.com/EduCloud-Ecosystem/cairn/internal/identity"
@@ -986,13 +987,50 @@ func (s *Server) handleGrade(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusConflict, "select a pinned instructor grading version before grading")
 		return
 	}
-	s.enqueueAcrossSubmissions(w, r, provisioning.JobGrade, "grade", "grading")
+	subs, err := s.store.ListSubmissionsByAssignment(r.Context(), asg.ID)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, "could not list submissions")
+		return
+	}
+	// Validate every target before enqueueing any. A missing recorded revision
+	// must not silently become a moving-head checkout or partially queue an
+	// invalid batch. The later individual enqueue writes are not atomic.
+	targets := make([]gradingjob.Target, 0, len(subs))
+	skipped := 0
+	for _, sub := range subs {
+		if sub.Repo.Name == "" || !gradingjob.EligibleStatus(sub.Status) {
+			skipped++
+			continue
+		}
+		target, err := gradingjob.Capture(sub, asg, sub.LatestCommit)
+		if err != nil {
+			httpError(w, http.StatusConflict, "grading requires a recorded full submission commit and pinned instructor policy for every eligible submission")
+			return
+		}
+		targets = append(targets, target)
+	}
+	for _, target := range targets {
+		encoded, err := target.Encode()
+		if err != nil {
+			httpError(w, http.StatusConflict, "invalid pinned grading context")
+			return
+		}
+		if err := s.queue.Enqueue(r.Context(), provisioning.JobGrade, encoded, "grade:"+target.SubmissionID+":"+id.New()); err != nil {
+			httpError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	status := "grading"
+	if len(targets) == 0 {
+		status = "no_eligible_submissions"
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": status, "jobs_enqueued": len(targets), "skipped_unprovisioned": skipped})
 }
 
 // enqueueAcrossSubmissions enqueues a job of type jt for every provisioned repo
-// of an assignment. It backs the manual lock/unlock/grade triggers. Each call
+// of an assignment. It backs the manual lock/unlock triggers. Each call
 // uses a unique idempotency key, so repeated requests are honored — the
-// underlying operations (LockRepo/UnlockRepo, and re-grading) are safe to repeat.
+// underlying lock operations are safe to repeat. Grading uses pinned targets.
 func (s *Server) enqueueAcrossSubmissions(w http.ResponseWriter, r *http.Request, jt provisioning.JobType, keyPrefix, gerund string) {
 	asg, err := s.store.GetAssignment(r.Context(), r.PathValue("id"))
 	if err != nil {

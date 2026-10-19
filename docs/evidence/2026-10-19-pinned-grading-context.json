@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-19",
+  "base_commit": "bb41bdaffe7a9ec9feb1b8fdcdcbbdda527b20f8",
+  "scope": "Local Go checks with temporary SQLite, real API/queue/Worker/Service and fake checkout/runner boundaries. No engine/provider/private-data acceptance.",
+  "environment": {
+    "GOMAXPROCS": "2",
+    "package_parallelism": 1,
+    "all_inherited_CAIRN_environment_flags_removed": true
+  },
+  "counts_note": "Focused checks are a subset of the full suite. Test/subtest events and top-level tests are overlapping counts, not additive. Explicit gated integration/browser/live tests stayed skipped.",
+  "checks": [
+    {
+      "log_name": "locked-before.jsonl",
+      "log_sha256": "9a0951729f0830ace150cdf8a2c0579be47eb28f4b73d798f795c39849b9036e",
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-count=1",
+        "-json",
+        "./internal/api",
+        "-run",
+        "^TestPinnedGradeLockedSubmissionsRemainEligible$"
+      ],
+      "exit_code": 1,
+      "passed_test_and_subtest_events": 0,
+      "passed_top_level_tests": 0,
+      "failed_test_and_subtest_events": 3,
+      "skipped_tests": []
+    },
+    {
+      "log_name": "pinned-corrected-race.jsonl",
+      "log_sha256": "93eb5862ada4e24427be7af3e468796e451197fbb486a628472d312a0644fc70",
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-count=1",
+        "-json",
+        "./internal/api",
+        "-run",
+        "^TestPinnedGrade"
+      ],
+      "exit_code": 0,
+      "passed_test_and_subtest_events": 51,
+      "passed_top_level_tests": 8,
+      "failed_test_and_subtest_events": 0,
+      "skipped_tests": []
+    },
+    {
+      "log_name": "full-corrected-race.jsonl",
+      "log_sha256": "0bcb4db9a1c92ded4dae9dc4f6884e102085fdbedf0c949195464415fa590ff5",
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-count=1",
+        "-json",
+        "./..."
+      ],
+      "exit_code": 0,
+      "passed_test_and_subtest_events": 1004,
+      "passed_top_level_tests": 482,
+      "failed_test_and_subtest_events": 0,
+      "skipped_tests": [
+        "github.com/EduCloud-Ecosystem/cairn/internal/api:TestAssessmentBrowserFixture",
+        "github.com/EduCloud-Ecosystem/cairn/internal/api:TestLTIBrowserFixture",
+        "github.com/EduCloud-Ecosystem/cairn/internal/assessment:TestOpenAILiveCitationControls",
+        "github.com/EduCloud-Ecosystem/cairn/internal/assessment:TestOpenAILiveImplementationControls",
+        "github.com/EduCloud-Ecosystem/cairn/internal/assessment:TestOpenAILiveSynthetic",
+        "github.com/EduCloud-Ecosystem/cairn/internal/assessment:TestOpenAILiveCompactSource",
+        "github.com/EduCloud-Ecosystem/cairn/internal/assessment:TestOpenAILiveStarterControl",
+        "github.com/EduCloud-Ecosystem/cairn/internal/grading:TestCheckoutDockerAcquisition",
+        "github.com/EduCloud-Ecosystem/cairn/internal/grading:TestCheckoutDockerAuthenticatedHTTP",
+        "github.com/EduCloud-Ecosystem/cairn/internal/grading:TestBoundedWorkspaceDockerIntegration",
+        "github.com/EduCloud-Ecosystem/cairn/internal/grading:TestContainerPolicyIntegration",
+        "github.com/EduCloud-Ecosystem/cairn/internal/grading:TestSubmissionWriterDockerObjectCAS",
+        "github.com/EduCloud-Ecosystem/cairn/internal/grading:TestSubmissionWriterDockerBounds",
+        "github.com/EduCloud-Ecosystem/cairn/internal/runtimeguard:TestRuntimeRecoveryDocker",
+        "github.com/EduCloud-Ecosystem/cairn/tools/recovery:TestPostgresRecovery"
+      ]
+    },
+    {
+      "log_name": "vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "argv": [
+        "go",
+        "vet",
+        "-p",
+        "1",
+        "./..."
+      ],
+      "exit_code": 0,
+      "passed_test_and_subtest_events": 0,
+      "passed_top_level_tests": 0,
+      "failed_test_and_subtest_events": 0,
+      "skipped_tests": []
+    }
+  ],
+  "retained_review_failure": {
+    "name": "locked submission eligibility",
+    "status": "FAIL before correction; PASS after active-or-locked policy",
+    "observed_errors": [
+      "pinned_grading_test.go:328: locked queued grading=false <nil>",
+      "pinned_grading_test.go:328: locked queued grading=true queued grading submission binding is no longer active or matches a different repository/assignment"
+    ],
+    "original_log_retained_locally": ".runtime/pinned-grading/locked-before.jsonl",
+    "initial_full_suite_limit": "The earlier full-suite PASS predated the locked-state regression test and did not establish that control."
+  },
+  "source_sha256": {
+    "docs/grading-policy.md": "a188bf573d72dadda7aded874b4bfd782d4091c4dccbb0508af93ce31fd1c1df",
+    "docs/pinned-grading-jobs.md": "4714bf75d1f139864bda434493d54bd890ae28402f93b0368b3eef032c002c61",
+    "docs/synthetic-outfitter.md": "2aad73b1433a480cf061f80bf69a0efe55e66f0fd5cda0799fd4158068980a31",
+    "internal/api/pinned_grading_test.go": "2b0415ca57e189fbb7d32fe96c0ea8d814c4a870640a0f7bdbb994a938a2be9a",
+    "internal/api/server.go": "8cf1d3b1d188a5a5c0280379ad0d887bce9414f0984da860ab94d0915b3b43eb",
+    "internal/api/server_test.go": "3595c966104e1f8250cefae65f93b536538b6ab6286bbba756787c68a0052680",
+    "internal/api/webhook.go": "8b8ab39f06d8d0cb95db88dbb6a44f79933882016547317e77b627a823fc7d41",
+    "internal/api/webhook_test.go": "9f1e3542e1a31886b613eb459c0fdd134856bfa91e4e6ba87bfe6556f893ad76",
+    "internal/grading/grading.go": "6e90605fdfd0ec155f9c410fcef16f7ad2223a0833eafc06972c180573871b67",
+    "internal/gradingjob/context.go": "1f780b6c934f75c0c797775c07b3332b679e75f4695bbc4db5ee0101c64e3385",
+    "internal/provisioning/worker.go": "92149161d9472b9677338b3c2de26f98c79b2d804b6ebdf81c99303b69d37729",
+    "internal/provisioning/worker_test.go": "bd6787d0e8509f91f9ce4a08a50ca028e7c085f45c8cdc174ee1102c5f7fe01b",
+    "internal/syntheticoutfitter/runner_test.go": "2129477f668999beefcceeae1b87e7b568c4bdcc65631872dfc8fafbca36f61d"
+  },
+  "remaining_boundaries": [
+    "No synthetic Outfitter adapter installation or production default change.",
+    "Queue delivery counters and GradingRun IDs do not authorize compute.",
+    "Durable pre-dispatch claims, replay recovery, operator reconciliation and atomic publication remain open.",
+    "Legacy unpinned queue entries require explicit operator review and a new manual request; no automatic re-enqueue."
+  ]
+}

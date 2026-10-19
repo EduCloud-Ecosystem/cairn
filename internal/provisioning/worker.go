@@ -5,13 +5,13 @@ package provisioning
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"strings"
 	"time"
 
+	"github.com/EduCloud-Ecosystem/cairn/internal/gradingjob"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/adapter"
 )
@@ -22,13 +22,10 @@ type Grader interface {
 	Grade(ctx context.Context, submissionID string) error
 }
 
-// GradeTarget preserves immutable submission provenance in the durable queue.
-type GradeTarget struct {
-	SubmissionID string `json:"submission_id"`
-	Revision     string `json:"revision"`
-}
-type RevisionGrader interface {
-	GradeRevision(context.Context, string, string) error
+// JobGrader receives durable queue identity and frozen submission/policy pins.
+// Delivery counters and per-delivery run IDs do not authorize compute attempts.
+type JobGrader interface {
+	GradeJob(context.Context, gradingjob.Context) error
 }
 
 // Worker drains the job queue, executing each job against the Git-host adapter
@@ -122,6 +119,9 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 		if JobType(job.Type) == JobCreateRepo {
 			w.clearSubmissionError(ctx, job.TargetRef)
 		}
+	case errors.Is(execErr, gradingjob.ErrInvalid):
+		job.Status = store.JobFailed
+		job.LastError = execErr.Error()
 	case job.Attempts >= w.maxAttempts():
 		if JobType(job.Type) == JobSubmissionHandoff && w.Handoff != nil {
 			if err := w.Handoff.Exhausted(ctx, job.TargetRef); err != nil {
@@ -157,21 +157,23 @@ func (w *Worker) execute(ctx context.Context, job *store.ProvisioningJob) error 
 		return w.setLock(ctx, job.TargetRef, true)
 	case JobUnlockRepo:
 		return w.setLock(ctx, job.TargetRef, false)
-	case JobGradeRevision:
-		var target GradeTarget
-		if err := json.Unmarshal([]byte(job.TargetRef), &target); err != nil || target.SubmissionID == "" || target.Revision == "" {
-			return errors.New("invalid revision grade target")
+	case JobGradeRevision, JobGrade:
+		target, err := gradingjob.Decode(job.TargetRef)
+		if err != nil {
+			return err
 		}
-		grader, ok := w.Grader.(RevisionGrader)
-		if !ok {
-			return errors.New("grader does not support immutable submission revisions")
+		call := gradingjob.Context{JobID: job.ID, Target: target}
+		if err := call.Validate(); err != nil {
+			return err
 		}
-		return grader.GradeRevision(ctx, target.SubmissionID, target.Revision)
-	case JobGrade:
 		if w.Grader == nil {
 			return fmt.Errorf("grade job %s: no grader configured", job.ID)
 		}
-		return w.Grader.Grade(ctx, job.TargetRef)
+		grader, ok := w.Grader.(JobGrader)
+		if !ok {
+			return errors.New("grader does not support pinned queue context")
+		}
+		return grader.GradeJob(ctx, call)
 	default:
 		return fmt.Errorf("unknown job type %q", job.Type)
 	}

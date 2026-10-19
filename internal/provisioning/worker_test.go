@@ -4,10 +4,11 @@ package provisioning
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
+	"github.com/EduCloud-Ecosystem/cairn/internal/gradingjob"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store/memory"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/adapter"
@@ -287,14 +288,14 @@ func TestWorkerGradeJobInvokesGrader(t *testing.T) {
 	st := memory.New()
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1", Repo: adapter.RepoRef{Host: adapter.HostGitHub, Namespace: "org", Name: "hw1-bob"}})
 	queue := NewService(st)
-	_ = queue.Enqueue(ctx, JobGrade, "s1", "grade:s1")
+	_ = queue.Enqueue(ctx, JobGrade, testGradeTarget(t), "grade:s1")
 
 	g := &fakeGrader{}
 	w := &Worker{Store: st, Adapters: map[adapter.Host]adapter.Adapter{}, Grader: g}
 	if _, err := w.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if len(g.graded) != 1 || g.graded[0] != "s1" {
+	if len(g.graded) != 1 || g.graded[0] != "s1@"+strings.Repeat("a", 40) {
 		t.Fatalf("graded = %v, want [s1]", g.graded)
 	}
 }
@@ -304,7 +305,7 @@ func TestWorkerGradeJobWithoutGraderFails(t *testing.T) {
 	st := memory.New()
 	_ = st.CreateSubmission(ctx, &store.Submission{ID: "s1", AssignmentID: "a1", Repo: adapter.RepoRef{Host: adapter.HostGitHub, Namespace: "org", Name: "hw1-bob"}})
 	queue := NewService(st)
-	_ = queue.Enqueue(ctx, JobGrade, "s1", "grade:s1")
+	_ = queue.Enqueue(ctx, JobGrade, testGradeTarget(t), "grade:s1")
 
 	w := &Worker{Store: st, Adapters: map[adapter.Host]adapter.Adapter{}} // no grader
 	did, err := w.RunOnce(ctx)
@@ -362,15 +363,24 @@ func TestWorkerEnsureNamespaceCalledFirst(t *testing.T) {
 	}
 }
 
-func (g *fakeGrader) GradeRevision(_ context.Context, submissionID, revision string) error {
-	g.graded = append(g.graded, submissionID+"@"+revision)
+func testGradeTarget(t *testing.T) string {
+	t.Helper()
+	target := gradingjob.Target{Version: 1, SubmissionID: "s1", AssignmentID: "a1", Repository: adapter.RepoRef{Host: adapter.HostGitHub, Namespace: "org", Name: "submission"}, Revision: strings.Repeat("a", 40), Policy: gradingjob.Policy{Repository: adapter.RepoRef{Host: adapter.HostGitHub, Namespace: "teacher", Name: "policy"}, Revision: strings.Repeat("b", 40), Path: "grading.json"}}
+	raw, err := target.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+func (g *fakeGrader) GradeJob(_ context.Context, job gradingjob.Context) error {
+	g.graded = append(g.graded, job.Target.SubmissionID+"@"+job.Target.Revision)
 	return nil
 }
 func TestWorkerPreservesQueuedRevision(t *testing.T) {
 	st := memory.New()
 	q := NewService(st)
 	ctx := context.Background()
-	target, _ := json.Marshal(GradeTarget{SubmissionID: "s1", Revision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+	target := testGradeTarget(t)
 	_ = q.Enqueue(ctx, JobGradeRevision, string(target), "push:s1")
 	g := &fakeGrader{}
 	w := &Worker{Store: st, Grader: g}

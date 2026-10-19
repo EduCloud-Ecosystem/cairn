@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/EduCloud-Ecosystem/cairn/internal/grading"
+	"github.com/EduCloud-Ecosystem/cairn/internal/gradingjob"
 	"github.com/EduCloud-Ecosystem/cairn/internal/provisioning"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store/memory"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/adapter"
@@ -331,13 +332,22 @@ func (g fixtureGrader) Grade(ctx context.Context, _ string) error {
 	_, err := g.f.r.RunWithPolicy(ctx, g.f.spec, g.f.input, g.f.policy)
 	return err
 }
+func (g fixtureGrader) GradeJob(ctx context.Context, _ gradingjob.Context) error {
+	// This fixture still deliberately bypasses grading.Service; service context
+	// coverage lives in the real API/SQLite/worker/service integration tests.
+	return g.Grade(ctx, "")
+}
 func TestGenericWorkerRetriesReuseIntent(t *testing.T) {
 	f := setup(t)
 	f.broker.runError = true
 	f.broker.statusError = true
 	s := memory.New()
 	q := provisioning.NewService(s)
-	if err := q.Enqueue(context.Background(), provisioning.JobGrade, "synthetic-submission", "synthetic-delivery"); err != nil {
+	target, err := (gradingjob.Target{Version: 1, SubmissionID: "synthetic-submission", AssignmentID: "synthetic-assignment", Repository: adapter.RepoRef{Host: adapter.HostGitHub, Namespace: "fixture", Name: "submission"}, Revision: f.r.config.SubmissionRevision, Policy: gradingjob.Policy{Repository: adapter.RepoRef{Host: adapter.HostGitHub, Namespace: "fixture", Name: "policy"}, Revision: f.r.config.Policy.Revision, Path: f.r.config.Policy.Path}}).Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := q.Enqueue(context.Background(), provisioning.JobGrade, target, "synthetic-delivery"); err != nil {
 		t.Fatal(err)
 	}
 	w := provisioning.Worker{Store: s, Grader: fixtureGrader{f}, MaxAttempts: 3, Backoff: func(int) time.Duration { return 0 }}
