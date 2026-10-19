@@ -21,3 +21,7 @@ func (s *Store) ClaimGradingDispatch(c context.Context, d store.GradingDispatch,
 func (s *Store) FinishGradingDispatch(c context.Context, d store.GradingDispatch, r *store.GradingRun, g *store.Grade) error {
 	return s.gradingDispatchSQL().FinishGradingDispatch(c, d, r, g)
 }
+
+func (s *Store) ReadGradingInspection(c context.Context, q store.GradingInspectionQuery) ([]store.GradingInspectionRecord, error) {
+	return s.gradingDispatchSQL().ReadGradingInspection(c, q)
+}

@@ -216,6 +216,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /me/work/{submissionID}", s.handleMyWorkDetail)
 
 	// Operator-only (the whole management surface).
+	s.mux.HandleFunc("GET /operator/grading-jobs", s.handleGradingInspection)
 	protect := s.requireOperator
 	s.mux.HandleFunc("GET /classrooms", protect(s.handleListClassrooms))
 	s.mux.HandleFunc("POST /classrooms", protect(s.handleCreateClassroom))

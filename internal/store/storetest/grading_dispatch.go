@@ -53,6 +53,7 @@ func testGradingDispatch(t *testing.T, s store.Store) {
 	if !ok {
 		t.Fatal("no claim")
 	}
+	assertGradingInspection(t, s, store.DispatchClaimed, true, false)
 	// Caller-owned buffers must not mutate persisted audit state.
 	original := append([]byte(nil), run.Result...)
 	run.Result[0] = '!'
@@ -103,6 +104,7 @@ func testGradingDispatch(t *testing.T, s store.Store) {
 		t.Fatal("foreign owner finalized", err)
 	}
 	must(s.FinishGradingDispatch(ctx, d, run, grade))
+	assertGradingInspection(t, s, store.DispatchPublished, true, true)
 	must(s.FinishGradingDispatch(ctx, d, run, grade))
 	grades, err := s.ListGradesBySubmission(ctx, "s")
 	must(err)
@@ -127,6 +129,7 @@ func testGradingDispatch(t *testing.T, s store.Store) {
 		t.Fatalf("purge %d %d", ng, nr)
 	}
 	must(s.DeleteRosterEntry(ctx, "r"))
+	assertGradingInspection(t, s, store.DispatchPublished, false, false)
 	got, err := s.GetGradingDispatch(ctx, "j")
 	must(err)
 	if *got != d {
