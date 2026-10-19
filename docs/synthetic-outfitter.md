@@ -111,13 +111,14 @@ records; the PR separately records final-head CI and merge status.
 ## Production handoff still required
 
 The Service now carries [pinned queue context](pinned-grading-jobs.md) through an
-optional job-aware policy-runner interface. It still creates a separate
-`GradingRun` delivery record on infrastructure retry. This synthetic adapter
+optional job-aware policy-runner interface, with a
+[durable dispatch/publication protocol](durable-grading-dispatch.md) for that path.
+Ordinary policy runners still create delivery records on infrastructure retry. This synthetic adapter
 does not implement that new interface and remains a separately configured
 single-job fixture. **Do not install it in the Service.** A separate reviewed
 integration must bind each job to its adapter intent, qualify authenticated
 pinned checkouts, define operator reconciliation and attempt authorization,
-and publish/replace grades atomically
-through Cairn's existing assessment path. Real course admission, live provider
+and qualify this adapter against Cairn's durable publication path. This change
+supplies no adapter installation or external status recovery. Real course admission, live provider
 accounting, host-loss recovery and independent human reproduction are separate
 acceptance gates.

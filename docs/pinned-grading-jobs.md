@@ -47,11 +47,12 @@ commit remains deduplicated and cannot silently refresh its policy.
 This fixes loss of queue identity and policy drift. It does not install the
 synthetic Outfitter runner or authorize course/cloud execution. The generic
 worker still retries infrastructure errors; ordinary runners can execute again.
-Durable pre-dispatch claims, status-only recovery, operator reconciliation,
-attempt authorization, and atomic grade/run publication require separate work
-before a broker-backed production runner is enabled. Current grading-run and
-grade writes are separate, and crashed in-progress grade jobs are not reclaimed.
-Pinned inputs do not close those gaps. Direct legacy `Grade`/`GradeRevision`
+The optional job-aware path now has a [durable dispatch/publication protocol](durable-grading-dispatch.md):
+its acknowledged claim precedes checkout, consumed jobs never enter generic
+retry, and grade/run/queue publication is atomic. Ordinary runner grade/run
+writes remain separate. Status-only external recovery, operator reconciliation,
+attempt authorization and actual broker integration remain open. Crashed
+in-progress grade jobs are not reclaimed. Pinned inputs do not grant compute. Direct legacy `Grade`/`GradeRevision`
 library calls remain available and do not claim durable queue context.
 
 ## Verification

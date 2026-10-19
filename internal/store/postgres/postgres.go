@@ -736,7 +736,7 @@ func (s *Store) ClaimNextJob(ctx context.Context) (*store.ProvisioningJob, error
 		`UPDATE provisioning_jobs SET status='in_progress',scheduled_at=CASE WHEN type='submission_handoff' THEN now() ELSE scheduled_at END
 		 WHERE id = (
 		     SELECT id FROM provisioning_jobs
-		     WHERE (status='pending' AND scheduled_at <= now()) OR (type='submission_handoff' AND status='in_progress' AND scheduled_at <= now()-interval '10 minutes')
+		     WHERE ((status='pending' AND scheduled_at <= now()) OR (type='submission_handoff' AND status='in_progress' AND scheduled_at <= now()-interval '10 minutes')) AND NOT EXISTS (SELECT 1 FROM grading_dispatches d WHERE d.job_id=provisioning_jobs.id)
 		     ORDER BY scheduled_at ASC
 		     FOR UPDATE SKIP LOCKED
 		     LIMIT 1
@@ -749,10 +749,7 @@ func (s *Store) ClaimNextJob(ctx context.Context) (*store.ProvisioningJob, error
 }
 
 func (s *Store) UpdateJob(ctx context.Context, j *store.ProvisioningJob) error {
-	res, err := s.db.ExecContext(ctx,
-		`UPDATE provisioning_jobs SET status=$2, attempts=$3, last_error=$4, scheduled_at=$5 WHERE id=$1`,
-		j.ID, string(j.Status), j.Attempts, j.LastError, j.ScheduledAt)
-	return affected(res, err)
+	return s.gradingDispatchSQL().UpdateUnmanagedJob(ctx, j)
 }
 
 // affected maps a missing row to ErrNotFound for update statements.

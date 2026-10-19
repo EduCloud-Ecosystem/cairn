@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-19",
+  "base_commit": "ab339c44248eca2f6c03c22ef951215e8969472a",
+  "scope": "Local unit/integration checks with synthetic temporary stores and fake checkout/runner boundaries; real Worker and Service. No engines/providers/private data or production database operations.",
+  "environment": {
+    "GOMAXPROCS": "2",
+    "package_parallelism": 1,
+    "all_inherited_CAIRN_flags_removed": true
+  },
+  "source_binding_scope": "Final full-race suite, vet and PostgreSQL compile/skip checked these final source bytes. Focused run predates only the shared conformance semantic-JSON assertion adjustment; the full run covers that adjustment.",
+  "counts_note": "Focused checks are included in the full suite. Top-level tests and test/subtest events overlap. The PostgreSQL parent pass contains a skipped database-dependent subtest and is not PostgreSQL runtime acceptance.",
+  "checks": [
+    {
+      "log": "mutex-cancellation-before.jsonl",
+      "sha256": "08e29cc3eb24b9eb940a23c7f9378d3700701cd23b0298eb5e355884f770a098",
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-count=1",
+        "-json",
+        "./internal/store/memory",
+        "-run",
+        "^TestDispatchCancellationWhileWaitingForMutex$"
+      ],
+      "exit_code": 1,
+      "passed_test_and_subtest_events": 0,
+      "passed_top_level_tests": 0,
+      "failed_test_and_subtest_events": 3,
+      "skipped_tests": []
+    },
+    {
+      "log": "focused-final-race.jsonl",
+      "sha256": "e2b3fa364f3f02413f4d819678b31c475f7e10ecb06139f7b169b5b53ed12a19",
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-count=1",
+        "-json",
+        "./internal/api",
+        "./internal/store/memory",
+        "./internal/store/sqlite",
+        "./internal/store/postgres",
+        "-run",
+        "TestManagedGrade|TestPinnedGrade|TestDispatchCancellation|Test.*Conformance/GradingDispatch|TestGradingDispatchUpgrade|TestMigrationFilesAreOrderedAndComplete"
+      ],
+      "exit_code": 0,
+      "passed_test_and_subtest_events": 87,
+      "passed_top_level_tests": 22,
+      "failed_test_and_subtest_events": 0,
+      "skipped_tests": [
+        "github.com/EduCloud-Ecosystem/cairn/internal/api:TestManagedGradeCrashHelper"
+      ]
+    },
+    {
+      "log": "full-race.jsonl",
+      "sha256": "4fdeea94cfcd9acc90029c3d964174ffe7f8e00833309a2254cdb9be7e1d4c1a",
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-count=1",
+        "-json",
+        "./..."
+      ],
+      "exit_code": 0,
+      "passed_test_and_subtest_events": 1037,
+      "passed_top_level_tests": 493,
+      "failed_test_and_subtest_events": 0,
+      "skipped_tests": [
+        "github.com/EduCloud-Ecosystem/cairn/internal/api:TestAssessmentBrowserFixture",
+        "github.com/EduCloud-Ecosystem/cairn/internal/api:TestLTIBrowserFixture",
+        "github.com/EduCloud-Ecosystem/cairn/internal/api:TestManagedGradeCrashHelper",
+        "github.com/EduCloud-Ecosystem/cairn/internal/assessment:TestOpenAILiveCitationControls",
+        "github.com/EduCloud-Ecosystem/cairn/internal/assessment:TestOpenAILiveImplementationControls",
+        "github.com/EduCloud-Ecosystem/cairn/internal/assessment:TestOpenAILiveSynthetic",
+        "github.com/EduCloud-Ecosystem/cairn/internal/assessment:TestOpenAILiveCompactSource",
+        "github.com/EduCloud-Ecosystem/cairn/internal/assessment:TestOpenAILiveStarterControl",
+        "github.com/EduCloud-Ecosystem/cairn/internal/grading:TestCheckoutDockerAcquisition",
+        "github.com/EduCloud-Ecosystem/cairn/internal/grading:TestCheckoutDockerAuthenticatedHTTP",
+        "github.com/EduCloud-Ecosystem/cairn/internal/grading:TestBoundedWorkspaceDockerIntegration",
+        "github.com/EduCloud-Ecosystem/cairn/internal/grading:TestContainerPolicyIntegration",
+        "github.com/EduCloud-Ecosystem/cairn/internal/grading:TestSubmissionWriterDockerObjectCAS",
+        "github.com/EduCloud-Ecosystem/cairn/internal/grading:TestSubmissionWriterDockerBounds",
+        "github.com/EduCloud-Ecosystem/cairn/internal/runtimeguard:TestRuntimeRecoveryDocker",
+        "github.com/EduCloud-Ecosystem/cairn/tools/recovery:TestPostgresRecovery"
+      ]
+    },
+    {
+      "log": "vet.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "argv": [
+        "go",
+        "vet",
+        "-p",
+        "1",
+        "./..."
+      ],
+      "exit_code": 0,
+      "passed_test_and_subtest_events": 0,
+      "passed_top_level_tests": 0,
+      "failed_test_and_subtest_events": 0,
+      "skipped_tests": []
+    },
+    {
+      "log": "postgres-compile.jsonl",
+      "sha256": "cce8842c800e8421efc80918ae1ab133514021fcec53f09847f885c015221c3b",
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-count=1",
+        "-tags",
+        "postgres",
+        "-json",
+        "./internal/store/postgres",
+        "-run",
+        "TestStaleJobUpdateCannotOverwriteDispatch|TestStoreConformance/GradingDispatch"
+      ],
+      "exit_code": 0,
+      "passed_test_and_subtest_events": 1,
+      "passed_top_level_tests": 1,
+      "failed_test_and_subtest_events": 0,
+      "skipped_tests": [
+        "github.com/EduCloud-Ecosystem/cairn/internal/store/postgres:TestStoreConformance/GradingDispatch",
+        "github.com/EduCloud-Ecosystem/cairn/internal/store/postgres:TestStaleJobUpdateCannotOverwriteDispatch"
+      ]
+    }
+  ],
+  "retained_review_findings": [
+    {
+      "finding": "Memory claim/finalization could mutate after cancellation while waiting on mutex.",
+      "status": "REPRODUCED before correction; corrected control PASS in focused and full suites.",
+      "before_log": "mutex-cancellation-before.jsonl",
+      "before_log_sha256": "08e29cc3eb24b9eb940a23c7f9378d3700701cd23b0298eb5e355884f770a098",
+      "counts": "2 failing subcases plus their failing parent; not 3 independent defects."
+    },
+    {
+      "finding": "A single PostgreSQL UPDATE with a cross-row NOT EXISTS guard can use a stale snapshot after waiting for the queue row.",
+      "status": "SOURCE-INFERRED before fix; pre-fix runtime NOT RUN. New queue-row lock followed by fresh barrier SELECT; gated PostgreSQL lock-wait regression added. Local PostgreSQL runtime NOT RUN.",
+      "primary_reference": "https://www.postgresql.org/docs/17/transaction-iso.html#XACT-READ-COMMITTED"
+    },
+    {
+      "finding": "An unsuccessful claim write cannot establish a permanent tombstone when no record was committed.",
+      "status": "Boundary documented and direct GradeJob initiation refused. Real Worker keeps the already-claimed row in_progress; rollback/reopen/repeated-direct-call control PASS with zero checkout/run."
+    }
+  ],
+  "open_boundaries": [
+    "Existing synthetic Outfitter adapter remains uninstalled; current runner interface has no external status API.",
+    "Queue JobID/claim/GradingRun and delivery counters provide no compute reservation, attempt budget or refund authority.",
+    "Claim never expires/reopens after persistence. Absent-record claim errors are held by in_progress queue state, not an invented tombstone.",
+    "Direct internal GradeManagedJob calls outside the trusted Worker protocol, manual queue resets, old binaries and out-of-band DB changes are unsupported recovery routes.",
+    "Backup rollback and a second restored admitting store can lose/duplicate authority; operational fencing remains OPEN.",
+    "PostgreSQL runtime validation is deferred to the existing bounded CI database job; no live deployment qualification."
+  ],
+  "source_sha256": {
+    "docs/durable-grading-dispatch.md": "a49e81c63e1d36f6c24dd16c970f471df0aa5e74fc779162f928d102653a2f1a",
+    "docs/pinned-grading-jobs.md": "3c1cd7e48a580a8b7881ba685dd694d15ea35efb58754e5afff1efc2d2c2b106",
+    "docs/synthetic-outfitter.md": "b06de1f47e6077abaa26a920afcea8addd22176b286368ad0d215fbca825c5eb",
+    "internal/api/managed_grading_test.go": "d230b7f97ed2b377d1449ac8df5b09f31cc024af1725a0c0b4ae9004b7d4997a",
+    "internal/api/pinned_grading_test.go": "1a283966c277a2f8d3f6afdb3b33aaba346ee75bd30ba34850b46e87aa119882",
+    "internal/grading/dispatch.go": "638f07744063ca069648eac6dc6f3e7777a15b62ffe1f6cf3a325db43fb61795",
+    "internal/grading/grading.go": "fde2c86118fa23363b460b6f28e6461ec174d258a938a969f06138b74a32fbea",
+    "internal/provisioning/worker.go": "4780451087ffeb49c9f7e5ea6fa0e771f8d3a078941fa2ce6f35fe572d3e0ef4",
+    "internal/store/grading_dispatch.go": "22ea708878beac49bf19c6a4a7457be2fb4590786b36059c6bd63316120c6dd0",
+    "internal/store/grading_dispatch_sql.go": "036f55ff44c90f9eb0cb8c45b220e128a70e7171d4c7ca6f6cad69c96d0d0ef8",
+    "internal/store/memory/grading_dispatch.go": "8e0aa3e80aa1d0386e03e8c53fe3f6e5aa8ec5254c0319f7a22261d9484ee9af",
+    "internal/store/memory/grading_dispatch_test.go": "06c09e32d4a7fa72c3184a7ec79cecc60090f58712ebc89120a40f868f7f0fa1",
+    "internal/store/memory/memory.go": "6ba2bb74ec6cfb9ce3be5445fd28658f01e2b51faac845eaa70645a63ee81f9f",
+    "internal/store/migrations/0013_grading_dispatches.down.sql": "c8d2ea01e6efa3fef4bd9f45c8b266f25e34e439374d3d6e6e6d9658c5d53116",
+    "internal/store/migrations/0013_grading_dispatches.up.sql": "54d2557a3724e5bd01104b8a3a5f6c404704ab1355a576154792d9ae5ab6c6c5",
+    "internal/store/postgres/grading_dispatch.go": "0bd8391087f75e5304823eb6960c8c698e42b47f5e549fcecd811873d87a910f",
+    "internal/store/postgres/postgres.go": "61272edf084b20aa3402f042cd2ae1dcacf996438992f95c7fdf8c9dd0356553",
+    "internal/store/postgres/postgres_integration_test.go": "d7bbc6d8ec41dfb79d2ec53e4abeddc23f44272c686775f3fb89271cddf16eab",
+    "internal/store/postgres/postgres_test.go": "2d7bb2bdb3371d6fb38368ec2903b1bf6c2b422f1102b2c59ef9878d82896f74",
+    "internal/store/sqlite/grading_dispatch.go": "3ab118f58488d33b8662364f06a3c111ea88c875ea984aac74d307fd3035a1dc",
+    "internal/store/sqlite/sqlite.go": "0a87d09919513b54606f82ee4cd026b70559cfe3e8551218e70cbe7067733cd4",
+    "internal/store/sqlite/sqlite_test.go": "feff7239024ef5d38c79cd54eb74f2b6b8989e441e961036bde205d225e865be",
+    "internal/store/store.go": "fe6a8ad6bc622cf792ad710e51e5a2a6bc7454694c425d811bf1fb71c95553b5",
+    "internal/store/storetest/grading_dispatch.go": "e1f2cd02133401c12d2a140baa0a9013ac2573a9ac5034a932d7046a86ae976b",
+    "internal/store/storetest/storetest.go": "7b115fbad5ecb9b8b0a851ac0a46bce1c1ec20cd23c43bf388391521e1a7b9a7"
+  }
+}

@@ -116,6 +116,9 @@ func (s *Service) GradeJob(ctx context.Context, job gradingjob.Context) error {
 	if err := job.Validate(); err != nil {
 		return err
 	}
+	if managed, err := s.gradeManagedJob(ctx, job, false); managed || err != nil {
+		return err
+	}
 	return s.grade(ctx, job.Target.SubmissionID, job.Target.Revision, &job)
 }
 

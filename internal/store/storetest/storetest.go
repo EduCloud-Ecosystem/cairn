@@ -21,6 +21,7 @@ import (
 // Run executes the full behavioral suite against the store returned by open.
 // open is called once per sub-test so each sub-test gets a clean store.
 func Run(t *testing.T, open func(t *testing.T) store.Store) {
+	t.Run("GradingDispatch", func(t *testing.T) { testGradingDispatch(t, open(t)) })
 	t.Helper()
 	t.Run("SubmissionHandoff", func(t *testing.T) { testHandoff(t, open(t)) })
 	t.Run("ReconciliationClaimRace", func(t *testing.T) { testReconciliationClaimRace(t, open(t)) })
