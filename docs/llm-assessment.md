@@ -264,6 +264,15 @@ entries; they are not automatically combined. The existing latest-grade view
 and CSV export use the most recently completed/published grade. Instructors must
 choose a grading policy before mixing these workflows in a real course.
 
+CSV files explicitly selected by the instructor rubric use `csv-source-v1`:
+bounded UTF-8 originals, SHA-256 and physical `line:N` citations. Quoted and
+multiline fields are syntax-checked without evaluating formulas, interpreting
+scientific values or changing serialization. Variable row width remains visible
+for academic feedback; malformed quoting, blank CSV and invalid UTF-8 block
+capture. The same path, symlink, byte, total and 4096-line limits apply. Other
+extractors and saved evidence retain their existing versions. This CSV extension
+is a CW1 source candidate; focused and full checks are not yet run.
+
 Capture permits at most 16 exact paths, 256 KiB per file and 1 MiB of source
 bytes total. Text supports at most 4096 lines; notebooks at most 512 cells.
 Supported extensions: `.txt`, `.md`, `.py`, `.r` (case-insensitive), `.ipynb`.

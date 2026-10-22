@@ -2,6 +2,7 @@
 package assessment
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,6 +25,9 @@ func Extract(dir string, paths []string) []Artifact {
 			a.MediaType = "text/plain"
 		case ".md", ".qmd", ".rmd":
 			a.MediaType = "text/markdown"
+		case ".csv":
+			a.MediaType = "text/csv"
+			a.Extractor = "csv-source-v1"
 		case ".ipynb":
 			a.MediaType = "application/x-ipynb+json"
 		default:
@@ -86,6 +90,26 @@ func extractFile(dir string, a Artifact, total *int) Artifact {
 	a.SHA256 = DigestBytes(b)
 	if !utf8.Valid(b) || strings.ContainsRune(string(b), 0) {
 		return fail("Artifact is not UTF-8 text")
+	}
+	if a.MediaType == "text/csv" {
+		if strings.TrimSpace(string(b)) == "" {
+			return fail("CSV contains no assessable source")
+		}
+		// Validate CSV quoting only. Variable row width and wrong scientific
+		// values remain citable academic errors, not an extraction verdict.
+		reader := csv.NewReader(strings.NewReader(string(b)))
+		reader.FieldsPerRecord = -1
+		for {
+			_, err := reader.Read()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return fail("Malformed CSV source; correct quoting before assessment")
+			}
+		}
+		// Fall through to physical source lines, preserving exact originals.
+		// No numeric conversion, formula evaluation or spreadsheet execution.
 	}
 	if a.MediaType == "application/x-ipynb+json" {
 		var nb struct {
