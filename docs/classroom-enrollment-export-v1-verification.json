@@ -1,0 +1,124 @@
+{
+  "date": "2026-11-08",
+  "base": "04a9fe0a80f66ae5fa9da224b4be10aa184f9956",
+  "branch": "codex/classroom-enrollment-export-v1",
+  "toolchain": "go version go1.26.10 darwin/arm64",
+  "locks": {
+    "go.mod": "8f0b4cc24a1db9070af26e4824554cdda979e553b70d3c045b5f50c9ab43ab13",
+    "go.sum": "56acf4b5239424768d383a2f892ccc50cbea2098a7811f27fedbf5b1e3fd9ba9",
+    "web/package-lock.json": "483f9e9006dc8ed09be39b7c7200545fd122019b49728ac7c4ef4c19a1bc5ea5"
+  },
+  "source_sha256": {
+    "internal/enrollment/export.go": "39a24e43cef31eba9b8eebbaf06e13c7f5c9000893c93aafde0e23a93f974651",
+    "internal/enrollment/export_test.go": "caca2307da41511b9b945eb12670566c528ebd163ad8c3188e3d4f71bba06bb9",
+    "cmd/enrollment-export/main.go": "cc4f25aed2ef597fd4f530f229f4b249e6c6c3c1e1b681f2bc2ce2ac12308cc0",
+    "cmd/enrollment-export/main_test.go": "43785f2dd7ecbdef1f739bb6149186786717c589c0ef35439d211ae835b5f543",
+    "internal/store/sqlite/readonly.go": "5968b4e14b026104196bd6e94ee673ab66834b0beec7ffca74d47d0c44c42171"
+  },
+  "go_final": [
+    {
+      "command": [
+        "go",
+        "test",
+        "./internal/enrollment",
+        "./cmd/enrollment-export",
+        "-race",
+        "-count=1"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "go",
+        "build",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "go",
+        "test",
+        "./...",
+        "-race",
+        "-count=1"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "dashboard": {
+    "node": "v22.23.2",
+    "tests_passed": 25,
+    "commands": [
+      {
+        "command": [
+          "npm",
+          "ci"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "npm",
+          "run",
+          "typecheck"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "npm",
+          "test"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "npm",
+          "run",
+          "build"
+        ],
+        "exit_code": 0
+      }
+    ]
+  },
+  "raw_evidence_sha256": {
+    "output/enrollment-v1/web-checks.json": "37d2d05e7b35e58a74b9a254bb828dbbaa11fcf17790de883c10d36934238b33",
+    "output/enrollment-v1/go-checks.json": "7a364d3d6afdcb142eb5a5bc341c1691e45a5b1bc5c6227cbf5c6e927f617c17",
+    "output/enrollment-v1/vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/enrollment-v1/go-checks-final.json": "608f5d12484898ed2569a2d70efc5a1c8e0bdee559bfb3d9de007553890936b3",
+    "output/enrollment-v1/web-types.log": "0c877a2d2c95dbaad9f60bc81eed9d6597d0ba96bc9a700e0f7b33001e62d7dc",
+    "output/enrollment-v1/focused-final.log": "421649b0e4feadde93485d33b73705d2fddc517f67ccd1230aa33116ad795868",
+    "output/enrollment-v1/web-install.log": "11aa68eaab3124b8f9b5dd90bcb1311feb368c66bbfde4b24f74b089ac90981e",
+    "output/enrollment-v1/build-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/enrollment-v1/web-test.log": "b4fcb7db297c61b0c3dbc9684f9611b6a463e3cec6bc9c2d09c75a49ab45e2c2",
+    "output/enrollment-v1/race-final.log": "51d7ba4cbeb174622d2a5c6342e70c2038ff490f2fb05553469950a9810828fe",
+    "output/enrollment-v1/race.log": "58e90c07db28b88c028204c237665e99cf939bb35396d5f8e11d0f0190edf8cc",
+    "output/enrollment-v1/web-build.log": "1da1c0767d29fd0a325f9cc8c7240fd23f6a46d26e4ac20ad02fd261db004e51",
+    "output/enrollment-v1/focused-2.log": "b7c5ca7d9c7980e9add80e0c9a8a321eb8e8d0cf93b69e79404e321811e0d622",
+    "output/enrollment-v1/vet-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/enrollment-v1/focused-1.log": "ac168f9400b7cbe417d886a04751930777d5518d3d94c8d8a7151ddaa30411a4",
+    "output/enrollment-v1/build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "retained_failures": [
+    "focused-1.log: two invalid fixture mutations refused by Cairn immutable identity guard; corrected fixture, no guard weakened",
+    "race.log: existing synthetic-outfitter FIFO CLI timeout; unchanged test passed on final full race run"
+  ],
+  "cross_component": "Native SQLite export + signed Belay HTTP/worker + actual SDK/Portage synthetic transport: 22 checks passed in consumer worktree; final exact pins tracked in EduCloud coordinator",
+  "limitations": [
+    "SQLite export only",
+    "Reviewed institutional mapping remains operator responsibility",
+    "No live IdP, real student records, model calls or deployment",
+    "Immediate revocation between exports and privileged coordinated state rollback not established",
+    "Local PostgreSQL integration not configured; hosted CI separate",
+    "Normal go test output does not enumerate individual skipped tests"
+  ]
+}
