@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/EduCloud-Ecosystem/cairn/internal/gradingjob"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store/memory"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store/sqlite"
@@ -70,13 +71,86 @@ func fixture(t *testing.T, st store.Store) (*Service, Actor, *fakeWriter) {
 	}
 	must(st.CreateUser(ctx, &store.User{ID: "op", Host: adapter.HostForgejo, HostUsername: "op", HostUserID: "1"}))
 	must(st.CreateClassroom(ctx, &store.Classroom{ID: "c", CreatedBy: "op", Host: adapter.HostForgejo, HostNamespace: "org"}))
-	must(st.CreateAssignment(ctx, &store.Assignment{ID: "a", ClassroomID: "c", Slug: "exercise", GradingSpec: "grading.yaml", Type: store.AssignmentIndividual}))
+	must(st.CreateAssignment(ctx, &store.Assignment{ID: "a", ClassroomID: "c", Slug: "exercise", GradingSpec: "grading.yaml", Type: store.AssignmentIndividual,
+		TemplateRef: adapter.TemplateRef{Host: adapter.HostForgejo, Namespace: "org", Name: "policy", Ref: strings.Repeat("c", 40)}}))
 	must(st.CreateRosterEntry(ctx, &store.RosterEntry{ID: "r", ClassroomID: "c", Host: adapter.HostForgejo, HostUsername: "student", HostUserID: "42", Status: store.RosterActive}))
 	must(st.CreateSubmission(ctx, &store.Submission{ID: "s", AssignmentID: "a", RosterEntryID: "r", Status: "active", Repo: adapter.RepoRef{Host: adapter.HostForgejo, Namespace: "org", Name: "exercise"}}))
 	w := &fakeWriter{}
 	return &Service{Store: st, Writer: w, GraderConfigured: true}, Actor{Host: adapter.HostForgejo, Username: "student", ID: "42"}, w
 }
 func testFiles() []File { return []File{{Path: "answer.py", Content: []byte("print(42)\n")}} }
+func TestHandoffQueuesPinnedGradingContext(t *testing.T) {
+	for _, backend := range []string{"memory", "sqlite"} {
+		for _, pinned := range []bool{true, false} {
+			t.Run(backend+map[bool]string{true: "/pinned", false: "/unpinned"}[pinned], func(t *testing.T) {
+				ctx := context.Background()
+				var st store.Store = memory.New()
+				if backend == "sqlite" {
+					db, err := sqlite.Open(filepath.Join(t.TempDir(), "cairn.db"))
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer db.Close()
+					st = db
+				}
+				s, actor, _ := fixture(t, st)
+				// This tests queue contents, not timestamp eligibility in the
+				// SQLite scheduler; make the produced jobs unambiguously due.
+				s.Now = func() time.Time { return time.Now().Add(-time.Second) }
+				if !pinned {
+					assignment, _ := st.GetAssignment(ctx, "a")
+					assignment.TemplateRef.Ref = "main"
+					if err := st.UpdateAssignment(ctx, assignment); err != nil {
+						t.Fatal(err)
+					}
+				}
+				r, err := s.Preview(ctx, actor, "s", "request-pinned", testFiles())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err = s.Confirm(ctx, actor, "s", r.ID); err != nil {
+					t.Fatal(err)
+				}
+				if err = s.Process(ctx, r.ID); err != nil {
+					t.Fatal(err)
+				}
+				receipt, err := s.Get(ctx, actor, "s", r.ID)
+				if err != nil || receipt.Status != "committed" {
+					t.Fatal(receipt, err)
+				}
+				count := 0
+				for {
+					job, err := st.ClaimNextJob(ctx)
+					if errors.Is(err, store.ErrNotFound) {
+						break
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+					if job.Type != "grade_revision" {
+						continue
+					}
+					count++
+					target, err := gradingjob.Decode(job.TargetRef)
+					if err != nil {
+						t.Fatalf("handoff produced an unconsumable grading job: %v", err)
+					}
+					if target.Version != 1 || target.SubmissionID != "s" || target.AssignmentID != "a" ||
+						target.Revision != strings.Repeat("b", 40) || target.Repository.Name != "exercise" ||
+						target.Policy.Repository.Name != "policy" || target.Policy.Revision != strings.Repeat("c", 40) || target.Policy.Path != "grading.yaml" {
+						t.Fatalf("grading context not bound to verified commit and instructor policy: %+v", target)
+					}
+				}
+				if pinned && count != 1 {
+					t.Fatal("missing pinned grading job", count)
+				}
+				if !pinned && (count != 0 || !strings.Contains(receipt.Message, "pinned instructor policy")) {
+					t.Fatal("unpinned policy admitted or missing actionable receipt", count, receipt)
+				}
+			})
+		}
+	}
+}
 func TestReceiptIdempotencyFrozenIntentAndGradeDedup(t *testing.T) {
 	ctx := context.Background()
 	s, a, w := fixture(t, memory.New())

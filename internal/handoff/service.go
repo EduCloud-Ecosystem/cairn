@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/EduCloud-Ecosystem/cairn/internal/gradingjob"
 	"github.com/EduCloud-Ecosystem/cairn/internal/id"
 	"github.com/EduCloud-Ecosystem/cairn/internal/store"
 	"github.com/EduCloud-Ecosystem/cairn/pkg/adapter"
@@ -377,8 +378,23 @@ func (s *Service) Process(ctx context.Context, rid string) error {
 	}
 	var job *store.ProvisioningJob
 	if s.GraderConfigured {
-		target, _ := json.Marshal(map[string]string{"submission_id": h.SubmissionID, "revision": d.Candidate})
-		job = &store.ProvisioningJob{ID: id.New(), Type: "grade_revision", TargetRef: string(target), Status: store.JobPending, IdempotencyKey: "grade:webhook:" + h.SubmissionID + ":" + d.Candidate, ScheduledAt: s.now()}
+		// Use the same immutable queue contract as authenticated push/manual
+		// grading. The commit is already verified; an unavailable policy must
+		// preserve that receipt without admitting an unpinned grading job.
+		sub, subErr := s.Store.GetSubmission(ctx, h.SubmissionID)
+		if subErr != nil {
+			return finish("committed", "Repository commit verified. Grading context unavailable; instructor review and explicit grading are required.", nil)
+		}
+		assignment, assignmentErr := s.Store.GetAssignment(ctx, sub.AssignmentID)
+		target, captureErr := gradingjob.Capture(sub, assignment, d.Candidate)
+		if assignmentErr != nil || captureErr != nil {
+			return finish("committed", "Repository commit verified. Grading requires a pinned instructor policy and explicit instructor action.", nil)
+		}
+		encoded, encodeErr := target.Encode()
+		if encodeErr != nil {
+			return finish("committed", "Repository commit verified. Grading context invalid; instructor review and explicit grading are required.", nil)
+		}
+		job = &store.ProvisioningJob{ID: id.New(), Type: "grade_revision", TargetRef: encoded, Status: store.JobPending, IdempotencyKey: "grade:webhook:" + h.SubmissionID + ":" + d.Candidate, ScheduledAt: s.now()}
 	}
 	return finish("committed", "Repository commit verified. Grading and instructor review are separate steps.", job)
 }
