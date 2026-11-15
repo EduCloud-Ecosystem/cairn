@@ -50,13 +50,11 @@ export function ClassroomDetail({ classroom, notify }: { classroom: Classroom; n
       <header className="page-head">
         <div>
           <h1 className="page-title">{classroom.name}</h1>
-          <div className="page-meta">
-            <span>{classroom.host}</span>
-            <span className="dot">/</span>
-            <span>{classroom.host_namespace}</span>
-            <span className="dot">·</span>
-            <span>id {classroom.id.slice(0, 8)}</span>
-          </div>
+          <details className="muted small">
+            <summary>Technical details</summary>
+            <p>{classroom.host}/{classroom.host_namespace}</p>
+            <p>Classroom reference <code>{classroom.id}</code></p>
+          </details>
         </div>
         <div className="form-row">
           <a className="btn" href={api.gradesCsvUrl(classroom.id)} download>

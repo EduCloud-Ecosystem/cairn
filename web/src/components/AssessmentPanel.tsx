@@ -395,6 +395,7 @@ export function AssessmentPanel({
         <ReviewCard
           key={r.id}
           record={r}
+          learner={submissions.find((submission) => submission.id === r.submission_id)?.username}
           canGenerate={
             !!provider?.model_provider &&
             !provider.paused &&
@@ -416,6 +417,7 @@ export function AssessmentPanel({
 function ReviewCard({
   canGenerate,
   record: r,
+  learner,
   busy,
   run,
   refresh,
@@ -423,6 +425,7 @@ function ReviewCard({
 }: {
   canGenerate: boolean;
   record: AssessmentRecord;
+  learner?: string;
   busy: boolean;
   run: (fn: () => Promise<unknown>) => Promise<void>;
   refresh: () => Promise<void>;
@@ -460,13 +463,17 @@ function ReviewCard({
       <h4 ref={resultHeading} tabIndex={-1}>Assessment: {r.status}</h4>
       <div role="status" aria-atomic="true">{reviewMessage}</div>
       <p>
-        {r.document.calibration
-          ? `Instructor calibration: ${r.document.calibration.id.slice(0, 8)} · revision ${r.document.calibration.revision}.`
-          : "No instructor calibration was selected for this capture."}
+        {learner || "Selected learner"}
+        {r.document.created_at && <> · Work captured <time dateTime={r.document.created_at}>{new Date(r.document.created_at).toLocaleString()}</time></>}
       </p>
-      <p>
-        Submission commit: <code>{r.revision}</code>
-      </p>
+      <p>{r.document.calibration ? "Instructor calibration applied." : "No instructor calibration used."}</p>
+      <details>
+        <summary>Technical details</summary>
+        <p>Submission commit <code>{r.revision}</code></p>
+        {r.document.calibration && (
+          <p>Calibration <code>{r.document.calibration.id}</code> · revision {r.document.calibration.revision}</p>
+        )}
+      </details>
       <p>
         {r.document.policy_version
           ? "Missing-work policy: work with no relevant answer remains unassessable until instructor review. Incorrect or partial attempts use the rubric."
@@ -676,6 +683,7 @@ function ReviewCard({
                 </ul>
                 <EvidencePicker
                   record={r}
+          learner={submissions.find((submission) => submission.id === r.submission_id)?.username}
                   add={(e) => change(i, { citations: [...c.citations, e] })}
                 />
               </fieldset>
@@ -733,6 +741,7 @@ function EvidencePicker({
   add,
 }: {
   record: AssessmentRecord;
+  learner?: string;
   add: (e: Judgment["citations"][number]) => void;
 }) {
   const [file, setFile] = useState("");
