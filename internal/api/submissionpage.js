@@ -175,7 +175,7 @@
     const context = document.createElement("p"), date = document.createElement("time");
     date.dateTime = receipt.created_at;
     date.textContent = new Date(receipt.created_at).toLocaleString();
-    context.append(assignment().assignment_title + " · ", date);
+    context.append(assignment().assignment_title + " · Started ", date);
     const files = document.createElement("ul");
     for (const file of receipt.changes || []) {
       const name = document.createElement("li");
@@ -192,6 +192,18 @@
     details.append(summary, record);
     article.append(heading, context, message, files, resume, details);
     return {article, heading, resume, message, record};
+  }
+  function showConfirmation(receipt, focusReceipt) {
+    confirmedReceipt = receipt.id;
+    status("");
+    $("preview-section").hidden = true;
+    if (focusReceipt) $("receipts-heading").focus();
+    preview = null;
+    selectedFiles = [];
+    $("files").value = "";
+    $("preview").disabled = true;
+    $("file-summary").textContent = "Check the receipt below for this submission.";
+    announceReceipt(receiptState(receipt.status)[0]);
   }
   async function loadReceipts() {
     clearTimeout(receiptTimer);
@@ -219,6 +231,9 @@
         receiptRows.set(receipt.id, row);
         $("receipts").insertBefore(row.article, $("receipts").children[index] || null);
       }
+      if (!busy && preview?.id === receipt.id && !["preview", "expired"].includes(receipt.status)) {
+        showConfirmation(receipt, $("preview-section").contains(document.activeElement));
+      }
       const expiredPreview = receipt.status === "preview" && Date.parse(receipt.expires_at) <= Date.now();
       const [description, nextStep] = receiptState(expiredPreview ? "expired" : receipt.status);
       if (row.heading.textContent !== description) {
@@ -238,7 +253,7 @@
         "Receipt reference: " + receipt.id,
         receipt.branch && "Branch: " + receipt.branch,
         receipt.base_revision && "Base revision: " + receipt.base_revision,
-        receipt.commit_revision && "Repository commit: " + receipt.commit_revision,
+        receipt.commit_revision && "Commit reference: " + receipt.commit_revision,
         ...(receipt.changes || []).map(file => file.path + " · SHA-256 " + file.sha256),
         receipt.message
       ].filter(Boolean).join("\n");
@@ -396,19 +411,15 @@
     status("Confirming your submission…");
     try {
       const receipt = await request(endpoint() + "/submission-previews/" + encodeURIComponent(preview.id) + "/confirm", {});
-      confirmedReceipt = receipt.id;
-      status("");
-      announceReceipt(receiptState(receipt.status)[0]);
-      $("preview-section").hidden = true;
-      $("receipts-heading").focus();
-      preview = null; selectedFiles = []; $("files").value = ""; $("preview").disabled = true;
-      $("file-summary").textContent = "Check the receipt below for this submission.";
+      showConfirmation(receipt, true);
       await loadReceipts().catch(receiptRefreshFailed);
     } catch (error) {
       if (error.status === 401) signIn();
       else if (error.status === 410) {
         resetPreview();
-        status("This preview expired before confirmation. Review your files again to create a new preview.", true);
+        status(selectedFiles.length
+          ? "This preview expired. Choose Review saved files again to create a new preview."
+          : "This preview expired. Select your saved files again to create a new preview.", true);
         const next = selectedFiles.length ? $("preview") : $("files");
         lock(false);
         next.focus();

@@ -447,6 +447,13 @@ function ReviewCard({
     );
   }, [r]);
   const terminal = r.status === "approved" || r.status === "rejected";
+  const stateTitle: Record<string, string> = {
+    collected: "Work captured",
+    blocked: "Captured work needs attention",
+    pending: "Ready for instructor review",
+    approved: "Reviewed grade published",
+    rejected: "Assessment rejected",
+  };
   function change(i: number, patch: Partial<Judgment>) {
     setCriteria(criteria.map((c, j) => (i === j ? { ...c, ...patch } : c)));
   }
@@ -460,7 +467,7 @@ function ReviewCard({
   }
   return (
     <article className="card">
-      <h4 ref={resultHeading} tabIndex={-1}>Assessment: {r.status}</h4>
+      <h4 ref={resultHeading} tabIndex={-1}>{stateTitle[r.status] || "Assessment status unavailable"}</h4>
       <div role="status" aria-atomic="true">{reviewMessage}</div>
       <p>
         {learner || "Selected learner"}
@@ -683,7 +690,6 @@ function ReviewCard({
                 </ul>
                 <EvidencePicker
                   record={r}
-          learner={submissions.find((submission) => submission.id === r.submission_id)?.username}
                   add={(e) => change(i, { citations: [...c.citations, e] })}
                 />
               </fieldset>
