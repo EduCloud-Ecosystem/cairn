@@ -5,6 +5,8 @@
   const MAX_FILES = 32, MAX_FILE = 1024 * 1024, MAX_TOTAL = 4 * MAX_FILE;
   let work = [], selectedFiles = [], preview = null, key = "", active = "", busy = false;
   let bridge = null, awaitingBridge = false, receiptTimer = null, generation = 0;
+  let receiptRequest = 0, confirmedReceipt = "";
+  const receiptRows = new Map();
   const parameters = new URLSearchParams(location.search);
   const requestedAssignment = parameters.get("submission");
 
@@ -124,7 +126,7 @@
     $("preview-base").textContent = "Branch: " + receipt.branch + ". Current commit: " + receipt.base_revision;
     renderManifest(receipt.changes, $("manifest"));
     $("preview-section").hidden = false;
-    $("confirm").focus();
+    $("preview-heading").focus();
   }
   const descriptions = {
     preview: "Preview only — not submitted",
@@ -139,53 +141,73 @@
     failed: "Submission could not be completed",
     expired: "Preview expired — select files and preview again"
   };
+  function createReceiptRow(receipt) {
+    const article = document.createElement("article");
+    const heading = document.createElement("h3");
+    heading.tabIndex = -1;
+    const content = document.createElement("p");
+    content.textContent = "Receipt " + receipt.id + " · " + new Date(receipt.created_at).toLocaleString();
+    const resume = document.createElement("button");
+    resume.type = "button";
+    resume.textContent = "Review this preview";
+    const commit = document.createElement("p"), message = document.createElement("p");
+    const details = document.createElement("details"), summary = document.createElement("summary"), record = document.createElement("pre");
+    summary.textContent = "Exact receipt and file checksums";
+    record.style.whiteSpace = "pre-wrap"; record.style.overflowWrap = "anywhere";
+    details.append(summary, record);
+    article.append(heading, content, resume, commit, message, details);
+    return {article, heading, resume, commit, message, record};
+  }
   async function loadReceipts() {
     clearTimeout(receiptTimer);
+    const current = ++receiptRequest;
     if (!active) return;
-    const selected = active;
     const result = await request(endpoint() + "/submission-receipts");
-    if (selected !== active) return;
-    $("receipts").replaceChildren();
-    for (const receipt of result.receipts || []) {
-      const article = document.createElement("article");
-      const heading = document.createElement("h3");
-      heading.textContent = descriptions[receipt.status] || receipt.status;
-      const content = document.createElement("p");
-      content.textContent = "Receipt " + receipt.id + " · " + new Date(receipt.created_at).toLocaleString();
-      article.append(heading, content);
-      if (submissionOpen() && receipt.status === "preview" && Date.parse(receipt.expires_at) > Date.now()) {
-        const resume = document.createElement("button");
-        resume.type = "button";
-        resume.textContent = "Review this preview";
-        resume.addEventListener("click", () => {
-          if (busy) return;
-          renderPreview(receipt);
-          status("Recovered the saved preview. Review its exact files before confirming.");
-        });
-        article.append(resume);
-      }
-      if (receipt.commit_revision) {
-        const commit = document.createElement("p");
-        commit.textContent = "Commit: " + receipt.commit_revision;
-        article.append(commit);
-      }
-      if (receipt.message) {
-        const message = document.createElement("p"); message.textContent = receipt.message; article.append(message);
-      }
-      const details = document.createElement("details"), summary = document.createElement("summary"), record = document.createElement("pre");
-      summary.textContent = "Exact receipt and file checksums";
-      record.style.whiteSpace = "pre-wrap"; record.style.overflowWrap = "anywhere";
-      record.textContent = JSON.stringify(receipt, null, 2);
-      details.append(summary, record); article.append(details);
-      $("receipts").append(article);
+    if (current !== receiptRequest) return;
+    const receipts = result.receipts || [];
+    const visible = new Set(receipts.map(receipt => receipt.id));
+    for (const [id, row] of receiptRows) {
+      if (visible.has(id)) continue;
+      if (row.article.contains(document.activeElement)) $("receipts-heading").focus();
+      row.article.remove();
+      receiptRows.delete(id);
     }
-    if (!(result.receipts || []).length) $("receipts").textContent = "No saved submission receipts for this assignment.";
-    if ((result.receipts || []).some(r => ["queued", "preparing", "publishing"].includes(r.status))) {
+    for (const [index, receipt] of receipts.entries()) {
+      let row = receiptRows.get(receipt.id);
+      if (!row) {
+        row = createReceiptRow(receipt);
+        receiptRows.set(receipt.id, row);
+        $("receipts").insertBefore(row.article, $("receipts").children[index] || null);
+      }
+      const description = descriptions[receipt.status] || receipt.status;
+      if (row.heading.textContent !== description) {
+        if (row.heading.textContent || receipt.id === confirmedReceipt) {
+          $("receipt-status").textContent = "Receipt " + receipt.id + ": " + description + ".";
+        }
+        row.heading.textContent = description;
+      }
+      const resumable = submissionOpen() && receipt.status === "preview" && Date.parse(receipt.expires_at) > Date.now();
+      if (!resumable && document.activeElement === row.resume) row.heading.focus();
+      row.resume.hidden = !resumable;
+      row.resume.onclick = () => {
+        if (busy) return;
+        renderPreview(receipt);
+        status("Recovered the saved preview. Review its exact files before confirming.");
+      };
+      row.commit.hidden = !receipt.commit_revision;
+      row.commit.textContent = receipt.commit_revision ? "Commit: " + receipt.commit_revision : "";
+      row.message.hidden = !receipt.message;
+      row.message.textContent = receipt.message || "";
+      row.record.textContent = JSON.stringify(receipt, null, 2);
+    }
+    $("empty-receipts").hidden = receipts.length > 0;
+    if (receipts.some(r => ["queued", "preparing", "publishing"].includes(r.status))) {
       receiptTimer = setTimeout(() => loadReceipts().catch(e => status("Receipt refresh failed. " + e.message, true)), 3000);
     }
   }
   async function chooseAssignment() {
     generation++;
+    confirmedReceipt = "";
     active = $("assignment").value;
     const locationQuery = new URLSearchParams();
     if (active) locationQuery.set("submission", active);
@@ -203,6 +225,9 @@
     $("receive").disabled = !item || !bridge || !allowedOrigin(bridge.origin, item.workspace_url);
     $("bridge-status").textContent = item && bridge && $("receive").disabled ? "This workspace is not configured for the selected course. Choose the matching assignment, or use files saved on this device." : "";
     $("receipts").replaceChildren();
+    receiptRows.clear();
+    $("receipt-status").textContent = "";
+    $("empty-receipts").hidden = true;
     await loadReceipts();
   }
   async function load() {
@@ -267,20 +292,29 @@
       if (receipt.status === "preview") { renderPreview(receipt); status("Review the assignment and exact files before confirming."); }
       else { status("This upload already has a receipt. Check its status below."); await loadReceipts(); }
     } catch (error) { status(error.message + " Retry with the same files to recover an interrupted preview.", true); }
-    finally { lock(false); }
+    finally {
+      lock(false);
+      if (document.activeElement === document.body) $("preview").focus();
+    }
   });
   $("confirm").addEventListener("click", async () => {
     if (busy || !preview) return;
     lock(true);
     try {
-      await request(endpoint() + "/submission-previews/" + encodeURIComponent(preview.id) + "/confirm", {});
-      status("Confirmation received. Check the receipt below for the current submission status.");
+      const receipt = await request(endpoint() + "/submission-previews/" + encodeURIComponent(preview.id) + "/confirm", {});
+      confirmedReceipt = receipt.id;
+      status("");
+      $("receipt-status").textContent = "Receipt " + receipt.id + ": " + (descriptions[receipt.status] || receipt.status) + ".";
       $("preview-section").hidden = true;
+      $("receipts-heading").focus();
       preview = null; selectedFiles = []; $("files").value = ""; $("preview").disabled = true;
       $("file-summary").textContent = "Submission confirmed. Check the receipt below before submitting again.";
       await loadReceipts();
     } catch (error) { status(error.message + " Refresh receipts or retry confirmation; the same preview cannot create a second submission.", true); }
-    finally { lock(false); }
+    finally {
+      lock(false);
+      if (preview && document.activeElement === document.body) $("confirm").focus();
+    }
   });
   $("assignment").addEventListener("change", () => chooseAssignment().catch(e => status(e.message, true)));
   $("reload").addEventListener("click", load);
