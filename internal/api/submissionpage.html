@@ -12,6 +12,10 @@ fieldset,section { min-width: 0; border: 1px solid #8d9baa; border-radius: .5rem
 label { display: block; margin: .75rem 0; } input,select,button { font: inherit; max-width: 100%; }
 select,button { padding: .5rem .75rem; } button { cursor: pointer; } button:disabled { cursor: default; }
 table { width: 100%; border-collapse: collapse; } th,td { text-align: left; padding: .5rem; border-bottom: 1px solid #a7b0bb; vertical-align: top; }
+th:not(:first-child),td:not(:first-child) { width: 1%; white-space: nowrap; }
+summary { cursor: pointer; }
+#preview-checksums { margin-block: .75rem; }
+#manifest-hashes dd { margin: 0 0 .75rem; }
 code { overflow-wrap: anywhere; } .scroll { overflow-x: auto; } .muted { color: #526171; }
 #status { min-height: 1.6em; } .error { color: #a41d17; } [hidden] { display: none !important; }
 a { color: #005bac; } :focus-visible { outline: 3px solid #147bc1; outline-offset: 3px; }
@@ -46,7 +50,8 @@ a { color: #005bac; } :focus-visible { outline: 3px solid #147bc1; outline-offse
 <section id="preview-section" hidden aria-labelledby="preview-heading">
 <h2 id="preview-heading" tabindex="-1">3. Review and confirm</h2>
 <p id="preview-context"></p><p id="preview-base"></p>
-<div class="scroll"><table><caption>Exact saved files to submit</caption><thead><tr><th scope="col">Path</th><th scope="col">Change</th><th scope="col">Bytes</th><th scope="col">SHA-256</th></tr></thead><tbody id="manifest"></tbody></table></div>
+<div class="scroll"><table><caption>Exact saved files to submit</caption><thead><tr><th scope="col">Path</th><th scope="col">Change</th><th scope="col">Bytes</th></tr></thead><tbody id="manifest"></tbody></table></div>
+<details id="preview-checksums"><summary>Exact file checksums (SHA-256)</summary><dl id="manifest-hashes"></dl></details>
 <p>Review replacements before confirming. If you edit your notebook after this preview, select and preview it again to include those changes.</p>
 <button type="button" id="confirm">Confirm submission</button>
 </section>

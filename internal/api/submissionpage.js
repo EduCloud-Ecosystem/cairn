@@ -106,17 +106,28 @@
     $("sources").disabled = value || !submissionOpen();
     $("confirm").disabled = value || !submissionOpen();
   }
-  function renderManifest(changes, tbody) {
+  function renderManifest(changes) {
+    const tbody = $("manifest");
+    const hashes = $("manifest-hashes");
     tbody.replaceChildren();
+    hashes.replaceChildren();
+    $("preview-checksums").open = false;
     for (const change of changes || []) {
       const row = document.createElement("tr");
-      for (const value of [change.path, change.action, change.bytes, change.sha256]) {
+      for (const value of [change.path, change.action, change.bytes]) {
         const cell = document.createElement("td");
         const text = document.createElement("code");
         text.textContent = String(value);
         cell.append(text); row.append(cell);
       }
       tbody.append(row);
+      const path = document.createElement("dt");
+      const hash = document.createElement("dd");
+      const value = document.createElement("code");
+      path.textContent = change.path;
+      value.textContent = change.sha256;
+      hash.append(value);
+      hashes.append(path, hash);
     }
   }
   function renderPreview(receipt) {
@@ -124,7 +135,7 @@
     const item = assignment();
     $("preview-context").textContent = item.classroom_name + " · " + item.assignment_title + ". Preview expires " + new Date(receipt.expires_at).toLocaleString() + ".";
     $("preview-base").textContent = "Branch: " + receipt.branch + ". Current commit: " + receipt.base_revision;
-    renderManifest(receipt.changes, $("manifest"));
+    renderManifest(receipt.changes);
     $("preview-section").hidden = false;
     $("preview-heading").focus();
   }
