@@ -95,7 +95,7 @@ a {
 
 .app {
   display: grid;
-  grid-template-columns: 264px 1fr;
+  grid-template-columns: 264px minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -257,6 +257,7 @@ a {
   padding: 34px 40px 64px;
   max-width: 1080px;
   width: 100%;
+  overflow-wrap: anywhere;
 }
 
 /* ---- headers ---- */
@@ -497,7 +498,8 @@ a {
 .btn:active {
   transform: translateY(1px);
 }
-.btn:disabled {
+.btn:disabled,
+.btn[aria-disabled="true"] {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -711,7 +713,7 @@ a {
 
 @media (max-width: 760px) {
   .app {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .sidebar {
     position: static;
@@ -726,6 +728,34 @@ a {
   }
   .main {
     padding: 24px 18px 48px;
+  }
+  .page-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .assignment-top {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .assignment-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+  .main :is(fieldset, input, select, textarea, button) {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .main legend {
+    max-width: 100%;
+  }
+  .main .table {
+    table-layout: fixed;
+  }
+  .main .table :is(th, td) {
+    padding-inline: .25rem;
+  }
+  .form-actions, .section-head {
+    flex-wrap: wrap;
   }
   .form-grid {
     grid-template-columns: 1fr;

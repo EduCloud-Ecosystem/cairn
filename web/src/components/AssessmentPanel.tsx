@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CalibrationPanel } from "./CalibrationPanel";
 import {
   api,
@@ -403,6 +403,10 @@ export function AssessmentPanel({
           busy={busy}
           run={run}
           refresh={refresh}
+          onReviewed={async (reviewed) => {
+            setRecords((previous) => previous.map((record) => record.id === reviewed.id ? reviewed : record));
+            await refreshSubmissions();
+          }}
         />
       ))}
     </section>
@@ -415,15 +419,22 @@ function ReviewCard({
   busy,
   run,
   refresh,
+  onReviewed,
 }: {
   canGenerate: boolean;
   record: AssessmentRecord;
   busy: boolean;
   run: (fn: () => Promise<unknown>) => Promise<void>;
   refresh: () => Promise<void>;
+  onReviewed: (record: AssessmentRecord) => Promise<void>;
 }) {
   const [criteria, setCriteria] = useState<Judgment[]>([]);
   const [note, setNote] = useState("");
+  const [reviewMessage, setReviewMessage] = useState("");
+  const resultHeading = useRef<HTMLHeadingElement>(null);
+  useLayoutEffect(() => {
+    if (reviewMessage) resultHeading.current?.focus();
+  }, [reviewMessage]);
   useEffect(() => {
     setCriteria(
       r.document.proposal?.criteria.map((c) => ({
@@ -436,9 +447,18 @@ function ReviewCard({
   function change(i: number, patch: Partial<Judgment>) {
     setCriteria(criteria.map((c, j) => (i === j ? { ...c, ...patch } : c)));
   }
+  function review(action: "approve" | "reject") {
+    if (busy || !note.trim()) return;
+    void run(async () => {
+      const reviewed = await api.reviewAssessment(r.id, action, note, action === "approve" ? criteria : []);
+      setReviewMessage(action === "approve" ? "Grade published. The learner can see the reviewed grade in My work." : "Assessment rejected.");
+      await onReviewed(reviewed);
+    });
+  }
   return (
     <article className="card">
-      <h4>Assessment: {r.status}</h4>
+      <h4 ref={resultHeading} tabIndex={-1}>Assessment: {r.status}</h4>
+      <div role="status" aria-atomic="true">{reviewMessage}</div>
       <p>
         {r.document.calibration
           ? `Instructor calibration: ${r.document.calibration.id.slice(0, 8)} · revision ${r.document.calibration.revision}.`
@@ -675,25 +695,19 @@ function ReviewCard({
           </label>
           {r.status === "pending" && (
             <Button
-              disabled={busy || !note.trim()}
-              onClick={() =>
-                void run(async () => {
-                  await api.reviewAssessment(r.id, "approve", note, criteria);
-                  await refresh();
-                })
-              }
+              variant="primary"
+              disabled={!note.trim()}
+              aria-disabled={busy || undefined}
+              onClick={() => review("approve")}
             >
               Approve and publish grade
             </Button>
           )}{" "}
           <Button
-            disabled={busy || !note.trim()}
-            onClick={() =>
-              void run(async () => {
-                await api.reviewAssessment(r.id, "reject", note, []);
-                await refresh();
-              })
-            }
+            variant="danger"
+            disabled={!note.trim()}
+            aria-disabled={busy || undefined}
+            onClick={() => review("reject")}
           >
             Reject assessment
           </Button>
