@@ -71,3 +71,7 @@ verified. Never omit the Report section.
 - `ROADMAP.md` — keep checkbox history honest: when marking something done
   that was actually already built but untracked, say so rather than
   presenting it as newly completed
+
+## Pilot implementation standard
+
+Follow `AGENTS.md` and `docs/development/PILOT_PROTOCOL_V1.md` in addition to this component guidance. The classroom pilot tutor is `belay-classroom`; original Belay is a separate line. Current integration and release evidence live in the educloud README and `pilot/` records.
