@@ -19,9 +19,11 @@ export function Sidebar({
   return (
     <aside className="sidebar">
       <div className="brand">
-        <span className="brand-mark">cairn</span>
-        <span className="brand-sub">instructor console</span>
+        <span className="brand-mark">EduCloud</span>
+        <span className="brand-sub">Cairn · instructor console</span>
       </div>
+
+      <label className="studio-appearance">Theme <select data-studio-theme-picker aria-label="Appearance" defaultValue={document.documentElement.dataset.studioPreference || "light"}><option value="light">Light</option><option value="dark">Dark</option><option value="system">System</option></select></label>
 
       <div className="nav-head">
         <span>Classrooms</span>
@@ -35,6 +37,7 @@ export function Sidebar({
         {classrooms.map((c) => (
           <button
             key={c.id}
+            aria-current={c.id === selectedId ? "page" : undefined}
             className={"nav-item" + (c.id === selectedId ? " is-active" : "")}
             onClick={() => onSelect(c.id)}
           >

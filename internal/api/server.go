@@ -194,6 +194,8 @@ func New(opts Options) *Server {
 func (s *Server) routes() {
 	// Public.
 	s.mux.HandleFunc("GET /healthz", s.handleHealth)
+	s.mux.HandleFunc("GET /studio/theme.js", s.handleStudioTheme)
+	s.mux.HandleFunc("GET /studio/theme.css", s.handleStudioTheme)
 	s.mux.HandleFunc("GET /auth/login", s.handleLogin)
 	s.mux.HandleFunc("GET /auth/callback", s.handleCallback)
 	s.mux.HandleFunc("GET /auth/me", s.handleAuthMe)
