@@ -789,3 +789,8 @@ a {
 
 /* Modal notifications remain in the top layer without covering form actions. */
 .modal > .toast { position: static; max-width: none; margin-top: 16px; }
+
+/* Studio Classic: same explicit appearance as the student notebook handoff. */
+:root{--paper:var(--studio-canvas);--paper-2:var(--studio-paper);--paper-3:var(--studio-soft);--ink:var(--studio-ink);--ink-2:var(--studio-muted);--muted:var(--studio-muted);--line:var(--studio-line);--line-2:var(--studio-control);--accent:#ab0520;--accent-ink:var(--studio-mark);--accent-wash:var(--studio-soft);--ok:var(--studio-good);--ok-wash:var(--studio-soft);--warn:var(--studio-warn);--warn-wash:var(--studio-soft);--info:var(--studio-link);--info-wash:var(--studio-soft);--slate:var(--studio-muted);--slate-wash:var(--studio-soft);--danger:var(--studio-mark);--danger-wash:var(--studio-soft);--sans:system-ui,-apple-system,sans-serif}
+body{background-image:none;border-top:3px solid #ab0520;font-size:14px}.sidebar{background:var(--studio-paper)}.brand-mark{letter-spacing:-.03em}.small,.btn-sm{font-size:13px}.nav-item[aria-current=page]{border-left:3px solid var(--studio-mark)}.btn-primary:hover{background:#850000}.btn-primary{border-color:var(--studio-mark)}:focus-visible{outline:3px solid var(--studio-focus);outline-offset:3px}.assessment-panel input,.assessment-panel textarea,.assessment-panel select{border-color:var(--studio-control)}.studio-appearance select{width:auto}.studio-appearance{justify-content:space-between}
+@media(forced-colors:active){.btn-primary,.btn-primary:hover{background:ButtonFace;color:ButtonText;border-color:ButtonText}.nav-item[aria-current=page]{border-left-color:Highlight}}

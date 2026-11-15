@@ -5,7 +5,7 @@
   const MAX_FILES = 32, MAX_FILE = 1024 * 1024, MAX_TOTAL = 4 * MAX_FILE;
   let work = [], selectedFiles = [], preview = null, key = "", active = "", busy = false;
   let bridge = null, awaitingBridge = false, receiptTimer = null, generation = 0;
-  let receiptRequest = 0, confirmedReceipt = "";
+  let receiptRequest = 0, confirmedReceipt = "", loadingAssignments = false;
   const receiptRows = new Map();
   const parameters = new URLSearchParams(location.search);
   const requestedAssignment = parameters.get("submission");
@@ -96,7 +96,7 @@
     if (data !== undefined) Object.assign(options, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(data)});
     const response = await fetch(path, options);
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.error || "Request failed (" + response.status + ").");
+    if (!response.ok) { const error = new Error(result.error || "Request failed (" + response.status + ")."); error.status = response.status; throw error; }
     return result;
   }
   function endpoint() { return "/me/work/" + encodeURIComponent(active); }
@@ -241,10 +241,15 @@
     $("empty-receipts").hidden = true;
     await loadReceipts();
   }
+  $("retry-load").onclick = () => load();
   async function load() {
+    if (loadingAssignments || busy) return;
+    loadingAssignments = true;
+    $("retry-load").disabled = true;
+    $("reload").disabled = true;
     try {
       const data = await request("/me/work");
-      $("signin").hidden = true;
+      $("signin").hidden = true; $("retry-load").hidden = true;
       $("account").textContent = "Signed in to Cairn as " + data.username + ". Check that this is your course account.";
       work = (data.work || []).filter(item => item.submissions_enabled);
       $("assignment").replaceChildren(new Option("Choose an assignment", ""));
@@ -253,7 +258,15 @@
       status(work.length ? "Choose the assignment you intend to submit to." : "No active assignments have saved-file submission enabled. You can still use the repository workflow.");
       if (work.some(item => item.submission_id === requestedAssignment)) $("assignment").value = requestedAssignment;
       await chooseAssignment();
-    } catch (error) { $("signin").hidden = false; status("Sign in to view your assignments. " + error.message, true); }
+    } catch (error) {
+      $("signin").hidden = error.status !== 401;
+      $("retry-load").hidden = error.status === 401;
+      status(error.status === 401 ? "Your session has ended. Sign in, then check sign-in again." : error.status === 403 ? "This account cannot access the course. Check your course account or contact your instructor." : "Assignments are temporarily unavailable. Retry without changing your saved files. " + error.message, true);
+    } finally {
+      loadingAssignments = false;
+      $("retry-load").disabled = false;
+      $("reload").disabled = false;
+    }
   }
   $("files").addEventListener("change", async () => {
     const current = ++generation;

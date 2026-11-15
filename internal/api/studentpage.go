@@ -49,9 +49,12 @@ const studentPageHTML = `<!doctype html>
   }
   :focus-visible { outline: 3px solid #347ec4; outline-offset: 3px; }
 </style>
-</head>
+<link rel="stylesheet" href="/studio/theme.css"><script src="/studio/theme.js"></script>
+<style>
+body{background:var(--studio-paper);color:var(--studio-ink);border-top:3px solid #ab0520;padding-top:16px}a{color:var(--studio-link)}.muted{color:var(--studio-muted)}.error,.fail{color:var(--studio-mark)}.pass{color:var(--studio-good)}.running{color:var(--studio-warn)}fieldset,section.card,details{border-color:var(--studio-line)}input,select,button{background:var(--studio-paper);color:var(--studio-ink);border:1px solid var(--studio-control);border-radius:4px;padding:8px}button{min-height:36px}button#confirm,button#preview{background:#ab0520;color:#fff;border-color:var(--studio-mark)}button:disabled{background:var(--studio-soft);color:var(--studio-muted);border-color:var(--studio-line)}.scroll{max-width:100%}th,td{border-color:var(--studio-line)}:focus-visible{outline:3px solid var(--studio-focus);outline-offset:3px}.studio-appearance{justify-content:flex-end}main{min-width:0}body{overflow-wrap:anywhere}@media(pointer:coarse){button,select,summary{min-height:44px}}@media(forced-colors:active){button#confirm,button#preview{background:ButtonFace;color:ButtonText}}
+</style></head>
 <body>
-<main>
+<main><label class="studio-appearance">Theme <select data-studio-theme-picker aria-label="Appearance"><option value="light">Light</option><option value="dark">Dark</option><option value="system">System</option></select></label>
 <h1>My work</h1>
 <p id="status" class="muted" aria-live="polite">Loading…</p>
 <div id="list"></div>
@@ -69,6 +72,7 @@ function fmtScore(g) {
   if (!g) return "not graded yet";
   return g.score + " / " + g.max_score;
 }
+function gradeLabel(g) { return g?.source === "instructor-reviewed" ? "Instructor-reviewed grade" : "Automated checks"; }
 function gradingBadge(item) {
   if (item.grading_status === "running") return '<span class="pill running">grading…</span>';
   if (item.grading_status === "failed") return '<span class="pill fail">grading failed</span>';
@@ -105,28 +109,63 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
 }
 
-async function loadDetail(id, container) {
+async function loadDetail(id, container, isCurrent, retryLoad) {
+  const restoreFocus = container.contains(document.activeElement);
   container.textContent = "Loading details…";
   try {
     const res = await fetch("/me/work/" + encodeURIComponent(id), { credentials: "same-origin" });
-    if (!res.ok) { container.textContent = "Could not load details."; return; }
+    if (!res.ok) throw Error("Could not load details.");
     const d = await res.json();
-    container.innerHTML = renderAssessments(d.assessments) + renderTests(d.tests) + renderHistory(d.history);
-  } catch (e) { container.textContent = "Could not load details."; }
+    if (!isCurrent()) return false;
+    container.innerHTML = '<h3 tabindex="-1">Results and history</h3>' + renderAssessments(d.assessments) + renderTests(d.tests) + '<div class="scroll">' + renderHistory(d.history) + '</div>';
+    if (restoreFocus) container.querySelector("h3").focus();
+    return true;
+  } catch (e) {
+    if (!isCurrent()) return false;
+    container.textContent = "Could not load details. Your submitted work is unchanged. ";
+    const retry = document.createElement("button"); retry.type = "button"; retry.textContent = "Retry details";
+    retry.onclick = retryLoad;
+    container.append(retry);
+    if (restoreFocus) retry.focus();
+    return false;
+  }
 }
 
 function card(item) {
   const el = document.createElement("section");
   el.className = "card";
-  const repo = item.repo_web_url
-    ? '<a href="' + encodeURI(item.repo_web_url) + '" target="_blank" rel="noopener">repo ↗</a>'
-    : '<span class="muted">repo not ready</span>';
+  const metadataLine = next => {
+    const repo = next.repo_web_url
+      ? '<a href="' + escapeHtml(encodeURI(next.repo_web_url)) + '" target="_blank" rel="noopener">repo ↗</a>'
+      : '<span class="muted">repo not ready</span>';
+    return escapeHtml(next.classroom_name || "") + " · " + repo + " · " +
+      escapeHtml(fmtDeadline(next.deadline)) + " · status: " + escapeHtml(next.status || "");
+  };
+  const revision = next => JSON.stringify([next.latest_grade || null, next.grading_status || ""]);
+  let detailRevision = revision(item), loadedRevision = null, loading = false;
   el.innerHTML =
     '<div class="row"><span class="title">' + escapeHtml(item.assignment_title || item.assignment_slug || "Assignment") + "</span> " +
-    gradingBadge(item) + "</div>" +
-    '<div class="row muted">' + escapeHtml(item.classroom_name || "") + " · " + repo + " · " +
-    escapeHtml(fmtDeadline(item.deadline)) + " · status: " + escapeHtml(item.status || "") + "</div>" +
-    '<div class="row">Score: <span class="score">' + escapeHtml(fmtScore(item.latest_grade)) + "</span></div>";
+    '<span class="work-badge">' + gradingBadge(item) + "</span></div>" +
+    '<div class="row muted work-meta" tabindex="-1">' + metadataLine(item) + "</div>" +
+    '<div class="row"><span class="score-label">' + gradeLabel(item.latest_grade) + ': </span><span class="score">' + escapeHtml(fmtScore(item.latest_grade)) + '</span></div><p class="review-state muted"></p>';
+  el.updateItem = next => {
+    const meta = el.querySelector('.work-meta'), updated = metadataLine(next);
+    if (meta.innerHTML !== updated) {
+      const focused = meta.contains(document.activeElement);
+      meta.innerHTML = updated;
+      if (focused) (meta.querySelector('a') || meta).focus();
+    }
+    const nextRevision = revision(next);
+    if (detailRevision !== nextRevision) {
+      detailRevision = nextRevision;
+      loadedRevision = null;
+      if (det.open) refreshDetails();
+    }
+    el.querySelector('.score-label').textContent = gradeLabel(next.latest_grade) + ': ';
+    el.querySelector('.score').textContent = fmtScore(next.latest_grade);
+    el.querySelector('.work-badge').innerHTML = gradingBadge(next);
+    el.querySelector('.review-state').textContent = next.latest_grade?.source === 'instructor-reviewed' ? 'Instructor review has been published.' : 'Automated results are not an instructor-reviewed grade. Open history for earlier reviews.';
+  };
 
   if (item.workspace_url) {
     const row = document.createElement("p");
@@ -154,13 +193,25 @@ function card(item) {
   sum.textContent = "Per-test results & history";
   const body = document.createElement("div");
   det.appendChild(sum); det.appendChild(body);
-  let loaded = false;
-  det.addEventListener("toggle", () => { if (det.open && !loaded) { loaded = true; loadDetail(item.submission_id, body); } });
+  async function refreshDetails() {
+    if (!det.open || loading || loadedRevision === detailRevision) return;
+    loading = true;
+    const requestedRevision = detailRevision;
+    try {
+      const ok = await loadDetail(item.submission_id, body,
+        () => detailRevision === requestedRevision, refreshDetails);
+      if (detailRevision === requestedRevision) loadedRevision = ok ? requestedRevision : null;
+    } finally { loading = false; }
+    if (det.open && requestedRevision !== detailRevision) await refreshDetails();
+  }
+  det.addEventListener("toggle", refreshDetails);
   el.appendChild(det);
+  el.updateItem(item);
   return el;
 }
 
 let pollTimer = null;
+const workRows = new Map();
 async function load() {
   let res;
   try { res = await fetch("/me/work", { credentials: "same-origin" }); }
@@ -168,7 +219,7 @@ async function load() {
 
   if (res.status === 401) {
     $("#status").innerHTML = 'Please <a href="/student/login">sign in</a> to see your work.';
-    $("#list").innerHTML = "";
+    $("#list").innerHTML = ""; workRows.clear();
     return;
   }
   if (!res.ok) { $("#status").textContent = "Could not load your work."; return; }
@@ -176,13 +227,17 @@ async function load() {
   const data = await res.json();
   const work = (data && data.work) || [];
   const list = $("#list");
-  list.innerHTML = "";
+  for (const [id, row] of workRows) if (!work.some(item => item.submission_id === id)) { row.remove(); workRows.delete(id); }
   if (!work.length) {
     $("#status").textContent = "No submissions yet. Accept an assignment to get started.";
     return;
   }
   $("#status").textContent = work.length + (work.length === 1 ? " submission" : " submissions");
-  for (const item of work) list.appendChild(card(item));
+  for (const item of work) {
+    let row = workRows.get(item.submission_id);
+    if (!row) { row = card(item); workRows.set(item.submission_id, row); list.appendChild(row); }
+    else row.updateItem(item);
+  }
 
   // If anything is grading, poll until it settles, then stop.
   const anyRunning = work.some(i => i.grading_status === "running");
