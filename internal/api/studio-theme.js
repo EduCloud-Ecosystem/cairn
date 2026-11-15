@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /* EduCloud Studio appearance v1. Stores only an enum, never course content. */
 (() => {
   'use strict';

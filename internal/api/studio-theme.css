@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
 /* Same versioned palette is shipped in Cairn; no external styles or fonts. */
 :root{color-scheme:light;--studio-paper:#fff;--studio-canvas:#f7f9fc;--studio-ink:#172b48;--studio-muted:#506075;--studio-line:#d9e0e8;--studio-control:#6f7e91;--studio-soft:#e5eff7;--studio-focus:#106ab1;--studio-mark:#ab0520;--studio-link:#0c234b;--studio-good:#245943;--studio-warn:#785000}
 :root[data-studio-theme=dark]{color-scheme:dark;--studio-paper:#20252d;--studio-canvas:#181d24;--studio-ink:#f1f3f5;--studio-muted:#bdc5d1;--studio-line:#4c5868;--studio-control:#909caa;--studio-soft:#303d4e;--studio-focus:#91caff;--studio-mark:#ff9dad;--studio-link:#b4d4f0;--studio-good:#9ed2b9;--studio-warn:#ffd18b}
