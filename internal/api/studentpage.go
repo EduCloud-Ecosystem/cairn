@@ -109,20 +109,22 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
 }
 
-async function loadDetail(id, container) {
+async function loadDetail(id, container, isCurrent, retryLoad) {
   const restoreFocus = container.contains(document.activeElement);
   container.textContent = "Loading details…";
   try {
     const res = await fetch("/me/work/" + encodeURIComponent(id), { credentials: "same-origin" });
     if (!res.ok) throw Error("Could not load details.");
     const d = await res.json();
+    if (!isCurrent()) return false;
     container.innerHTML = '<h3 tabindex="-1">Results and history</h3>' + renderAssessments(d.assessments) + renderTests(d.tests) + '<div class="scroll">' + renderHistory(d.history) + '</div>';
     if (restoreFocus) container.querySelector("h3").focus();
     return true;
   } catch (e) {
+    if (!isCurrent()) return false;
     container.textContent = "Could not load details. Your submitted work is unchanged. ";
     const retry = document.createElement("button"); retry.type = "button"; retry.textContent = "Retry details";
-    retry.onclick = () => loadDetail(id, container);
+    retry.onclick = retryLoad;
     container.append(retry);
     if (restoreFocus) retry.focus();
     return false;
@@ -132,22 +134,38 @@ async function loadDetail(id, container) {
 function card(item) {
   const el = document.createElement("section");
   el.className = "card";
-  const repo = item.repo_web_url
-    ? '<a href="' + encodeURI(item.repo_web_url) + '" target="_blank" rel="noopener">repo ↗</a>'
-    : '<span class="muted">repo not ready</span>';
+  const metadataLine = next => {
+    const repo = next.repo_web_url
+      ? '<a href="' + escapeHtml(encodeURI(next.repo_web_url)) + '" target="_blank" rel="noopener">repo ↗</a>'
+      : '<span class="muted">repo not ready</span>';
+    return escapeHtml(next.classroom_name || "") + " · " + repo + " · " +
+      escapeHtml(fmtDeadline(next.deadline)) + " · status: " + escapeHtml(next.status || "");
+  };
+  const revision = next => JSON.stringify([next.latest_grade || null, next.grading_status || ""]);
+  let detailRevision = revision(item), loadedRevision = null, loading = false;
   el.innerHTML =
     '<div class="row"><span class="title">' + escapeHtml(item.assignment_title || item.assignment_slug || "Assignment") + "</span> " +
     '<span class="work-badge">' + gradingBadge(item) + "</span></div>" +
-    '<div class="row muted">' + escapeHtml(item.classroom_name || "") + " · " + repo + " · " +
-    escapeHtml(fmtDeadline(item.deadline)) + " · status: " + escapeHtml(item.status || "") + "</div>" +
+    '<div class="row muted work-meta" tabindex="-1">' + metadataLine(item) + "</div>" +
     '<div class="row"><span class="score-label">' + gradeLabel(item.latest_grade) + ': </span><span class="score">' + escapeHtml(fmtScore(item.latest_grade)) + '</span></div><p class="review-state muted"></p>';
   el.updateItem = next => {
+    const meta = el.querySelector('.work-meta'), updated = metadataLine(next);
+    if (meta.innerHTML !== updated) {
+      const focused = meta.contains(document.activeElement);
+      meta.innerHTML = updated;
+      if (focused) (meta.querySelector('a') || meta).focus();
+    }
+    const nextRevision = revision(next);
+    if (detailRevision !== nextRevision) {
+      detailRevision = nextRevision;
+      loadedRevision = null;
+      if (det.open) refreshDetails();
+    }
     el.querySelector('.score-label').textContent = gradeLabel(next.latest_grade) + ': ';
     el.querySelector('.score').textContent = fmtScore(next.latest_grade);
     el.querySelector('.work-badge').innerHTML = gradingBadge(next);
     el.querySelector('.review-state').textContent = next.latest_grade?.source === 'instructor-reviewed' ? 'Instructor review has been published.' : 'Automated results are not an instructor-reviewed grade. Open history for earlier reviews.';
   };
-  el.updateItem(item);
 
   if (item.workspace_url) {
     const row = document.createElement("p");
@@ -175,10 +193,20 @@ function card(item) {
   sum.textContent = "Per-test results & history";
   const body = document.createElement("div");
   det.appendChild(sum); det.appendChild(body);
-  let loaded = false;
-  let loading = false;
-  det.addEventListener("toggle", async () => { if (det.open && !loaded && !loading) { loading = true; loaded = await loadDetail(item.submission_id, body); loading = false; } });
+  async function refreshDetails() {
+    if (!det.open || loading || loadedRevision === detailRevision) return;
+    loading = true;
+    const requestedRevision = detailRevision;
+    try {
+      const ok = await loadDetail(item.submission_id, body,
+        () => detailRevision === requestedRevision, refreshDetails);
+      if (detailRevision === requestedRevision) loadedRevision = ok ? requestedRevision : null;
+    } finally { loading = false; }
+    if (det.open && requestedRevision !== detailRevision) await refreshDetails();
+  }
+  det.addEventListener("toggle", refreshDetails);
   el.appendChild(det);
+  el.updateItem(item);
   return el;
 }
 
