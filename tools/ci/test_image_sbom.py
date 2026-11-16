@@ -79,8 +79,9 @@ class ImageSbomTests(unittest.TestCase):
         image_id = 'sha256:' + 'b' * 64
         report = {'Metadata': {'ImageID': image_id}, 'Results': [
             {'Type': kind, 'Packages': [{'Name': n, 'Version': v} for n, v in records]}
-            for kind, records in (('alpine', alpine), ('gobinary', go | {(sbom.MODULE, '')}))
+            for kind, records in (('alpine', alpine), ('gobinary', go))
         ]}
+        report['Results'][1]['Packages'].append({'Name': sbom.MODULE})
         sbom.check_scan(report, image_id, alpine, go)
         with self.assertRaisesRegex(ValueError, 'config digest'):
             sbom.check_scan(report, 'sha256:' + 'c' * 64, alpine, go)

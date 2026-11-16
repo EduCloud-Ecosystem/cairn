@@ -171,13 +171,16 @@ def check_scan(report, image_id, alpine, go):
     if report['Metadata']['ImageID'] != image_id:
         raise ValueError('Trivy report is for a different image config digest')
 
-    def packages(kind):
+    def packages(kind, *, exclude=None):
         return {(item['Name'], item['Version']) for result in report['Results']
-                if result['Type'] == kind for item in result['Packages']}
+                if result['Type'] == kind for item in result['Packages']
+                if item['Name'] != exclude}
 
     if not alpine or packages('alpine') != alpine:
         raise ValueError('Trivy and the image APK database disagree')
-    if {item for item in packages('gobinary') if item[0] != MODULE} != go:
+    # Trivy's root application record can lack a Version when .git is absent
+    # from the Docker build context. OCI source provenance covers that record.
+    if packages('gobinary', exclude=MODULE) != go:
         raise ValueError('Trivy and the shipped Go binary disagree')
 
 
