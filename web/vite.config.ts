@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { bundleInventory } from "./bundle-inventory";
 
 // The Go control plane serves its API at the root (/classrooms, /assignments, …).
 // In development we proxy those prefixes to it so the browser stays same-origin
@@ -8,7 +9,7 @@ const API_PREFIXES = ["/classrooms", "/assignments", "/auth", "/healthz", "/asse
 const target = process.env.CAIRN_API_URL || "http://localhost:8080";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), ...(process.env.CAIRN_BUNDLE_INVENTORY === "1" ? [bundleInventory()] : [])],
   server: {
     port: 5173,
     proxy: Object.fromEntries(
