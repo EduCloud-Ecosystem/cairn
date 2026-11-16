@@ -1,5 +1,17 @@
 # Cairn
 
+
+<!-- educloud-status-badges:start -->
+[![License](https://img.shields.io/github/license/EduCloud-Ecosystem/cairn)](https://github.com/EduCloud-Ecosystem/cairn/blob/main/LICENSE)
+[![CI and tests](https://github.com/EduCloud-Ecosystem/cairn/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/EduCloud-Ecosystem/cairn/actions/workflows/ci.yml)
+[![Open issues](https://img.shields.io/github/issues/EduCloud-Ecosystem/cairn)](https://github.com/EduCloud-Ecosystem/cairn/issues)
+[![Sonar quality gate (advisory)](https://sonarcloud.io/api/project_badges/measure?project=EduCloud-Ecosystem_cairn&metric=alert_status)](https://sonarcloud.io/dashboard?id=EduCloud-Ecosystem_cairn)
+[![CodeRabbit advisory review](https://img.shields.io/badge/CodeRabbit-advisory-orange)](https://github.com/EduCloud-Ecosystem/cairn/blob/main/.coderabbit.yaml)
+[![Contributing](https://img.shields.io/badge/contributions-guide-blue)](https://github.com/EduCloud-Ecosystem/cairn/blob/main/CONTRIBUTING.md)
+<!-- educloud-status-badges:end -->
+
+Review checks are advisory; badges do not certify deployment or classroom readiness.
+
 > Cairn was developed under the working name Quad. Commits and issues before
 > 2026-08 use the old name.
 

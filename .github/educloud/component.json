@@ -1,0 +1,14 @@
+{
+  "protocol_version": "educloud-pilot-v1",
+  "protocol_sha256": "099b676f0763440c7979657971260ed417750c73dd2954960ff8cb81bf9c6ce6",
+  "repository": "cairn",
+  "authority": "Roster, submission, publication, grading and instructor review",
+  "pilot_role": "Required for submission and grading",
+  "required_workflows": [
+    "ci.yml",
+    "recovery.yml",
+    "synthetic-outfitter.yml"
+  ],
+  "local_verification": "go build ./...; go vet ./...; go test ./...; use web/package-lock.json and web scripts for dashboard checks.",
+  "integration_verification": "Exercise actual saved-file preview/confirmation, immutable receipt, grading, refresh and restoration."
+}
