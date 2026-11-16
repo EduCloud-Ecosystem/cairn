@@ -62,7 +62,7 @@ export function bundleInventory(): Plugin {
             dependencies.add(entry.path);
           }
           files[output.fileName] = sha256(output.code);
-          chunks[output.fileName] = [...dependencies].sort();
+          chunks[output.fileName] = [...dependencies].sort((a, b) => a.localeCompare(b, "en"));
         }
         for (const output of Object.values(bundle)) {
           if (output.type === "chunk" &&

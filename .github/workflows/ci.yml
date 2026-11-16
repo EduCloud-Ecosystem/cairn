@@ -251,9 +251,7 @@ jobs:
             --exit-code 1 --format json > checkout-image-vulnerabilities.json
       - name: Verify image inventories and validate SPDX 2.3
         run: |
-          python3 tools/ci/image_sbom.py --image-archive cairn-image.tar \
-            --trivy-report image-vulnerabilities.json --lockfile web/package-lock.json \
-            --revision "$(git rev-parse HEAD)" --out cairn-linux-amd64.spdx.json
+          python3 tools/ci/image_sbom.py --revision "$(git rev-parse HEAD)"
           python3 -m venv "$RUNNER_TEMP/spdx-validator"
           "$RUNNER_TEMP/spdx-validator/bin/python" -m pip install --only-binary=:all: spdx-tools==0.8.5
           "$RUNNER_TEMP/spdx-validator/bin/pyspdxtools" -i cairn-linux-amd64.spdx.json

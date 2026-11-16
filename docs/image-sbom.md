@@ -4,12 +4,13 @@ The container CI job builds the main control-plane Dockerfile, including the
 dashboard, for Linux/amd64 and saves the image once. It scans that archive with
 the existing Trivy check. The SPDX verifier reads the archive's OCI index,
 selects the runnable Linux/amd64 image manifest, and checks the manifest,
-config, and layer descriptor sizes and SHA-256 digests. It checks the source
+config, and layer descriptor sizes and SHA-256 digests. It matches each
+uncompressed layer hash to the config's root filesystem list and checks the source
 revision label against the build checkout. The SPDX image package embeds the
 platform manifest digest and a link to that Git revision.
 
-The verifier copies evidence from a stopped container created by the verified
-config digest. It checks the Alpine installed-package database and the Go
+The verifier creates a stopped container from the local CI image and confirms
+its selected platform manifest digest before copying any bytes. It checks the Alpine installed-package database and the Go
 binary's embedded module list against the Trivy report for that same config
 digest. The Go toolchain version identifies the embedded standard library.
 The dashboard build records npm packages that contributed rendered Rollup

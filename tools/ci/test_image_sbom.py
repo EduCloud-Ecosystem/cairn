@@ -1,3 +1,4 @@
+import gzip
 import io
 import json
 from pathlib import Path
@@ -16,7 +17,7 @@ class ImageSbomTests(unittest.TestCase):
         self.addCleanup(work.cleanup)
         self.root = Path(work.name)
 
-    def archive(self, *, tamper=False, architecture='amd64'):
+    def archive(self, *, tamper=False, architecture='amd64', wrong_diff_id=False):
         members = {}
 
         def blob(payload, media_type):
@@ -24,12 +25,14 @@ class ImageSbomTests(unittest.TestCase):
             members['blobs/sha256/' + digest] = payload
             return {'digest': 'sha256:' + digest, 'size': len(payload), 'mediaType': media_type}
 
+        raw_layer = b'layer'
+        layer = blob(gzip.compress(raw_layer), 'application/vnd.oci.image.layer.v1.tar+gzip')
+        diff_id = 'b' * 64 if wrong_diff_id else sbom.sha256(raw_layer)
         config = blob(json.dumps({
             'os': 'linux', 'architecture': architecture,
             'config': {'Labels': {'org.opencontainers.image.revision': REVISION}},
-            'rootfs': {'diff_ids': ['sha256:' + 'b' * 64]},
+            'rootfs': {'diff_ids': ['sha256:' + diff_id]},
         }).encode(), 'application/vnd.oci.image.config.v1+json')
-        layer = blob(b'layer', 'application/vnd.oci.image.layer.v1.tar+gzip')
         manifest = blob(json.dumps({
             'schemaVersion': 2, 'config': config, 'layers': [layer],
         }).encode(), 'application/vnd.oci.image.manifest.v1+json')
@@ -37,7 +40,7 @@ class ImageSbomTests(unittest.TestCase):
         index = blob(json.dumps({'schemaVersion': 2, 'manifests': [manifest]}).encode(), sbom.OCI_INDEX)
         members['index.json'] = json.dumps({'schemaVersion': 2, 'manifests': [index]}).encode()
         if tamper:
-            members['blobs/sha256/' + layer['digest'][7:]] = b'other'
+            members['blobs/sha256/' + layer['digest'][7:]] = bytes(layer['size'])
         path = self.root / 'image.tar'
         with tarfile.open(path, 'w') as archive:
             for name, payload in members.items():
@@ -58,6 +61,9 @@ class ImageSbomTests(unittest.TestCase):
             sbom.image_identity(path, REVISION)
         path, _, _ = self.archive(architecture='arm64')
         with self.assertRaisesRegex(ValueError, 'Linux/amd64'):
+            sbom.image_identity(path, REVISION)
+        path, _, _ = self.archive(wrong_diff_id=True)
+        with self.assertRaisesRegex(ValueError, 'config root filesystem'):
             sbom.image_identity(path, REVISION)
 
     def test_apk_and_go_match_the_scanned_image(self):

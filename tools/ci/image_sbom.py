@@ -3,6 +3,7 @@
 
 import argparse
 from datetime import UTC, datetime
+import gzip
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
@@ -40,7 +41,7 @@ def image_identity(path, revision):
                 raise ValueError('missing regular OCI archive member: ' + name)
             return archive.extractfile(member)
 
-        def blob(descriptor, *, decode=False):
+        def blob(descriptor, *, decode=False, diff_id=None):
             digest = descriptor['digest']
             if not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
                 raise ValueError('invalid OCI descriptor digest')
@@ -53,6 +54,18 @@ def image_identity(path, revision):
                 if decode:
                     handle.seek(0)
                     return json.load(handle)
+                if diff_id is not None:
+                    handle.seek(0)
+                    media_type = descriptor['mediaType']
+                    if media_type.endswith(('+gzip', '.gzip')):
+                        with gzip.GzipFile(fileobj=handle) as unpacked:
+                            uncompressed = hashlib.file_digest(unpacked, 'sha256').hexdigest()
+                    elif media_type == 'application/vnd.oci.image.layer.v1.tar':
+                        uncompressed = hashlib.file_digest(handle, 'sha256').hexdigest()
+                    else:
+                        raise ValueError('unsupported saved-image layer encoding')
+                    if 'sha256:' + uncompressed != diff_id:
+                        raise ValueError('OCI layer does not match the config root filesystem')
 
         with open_file('index.json') as handle:
             index = json.load(handle)
@@ -82,8 +95,8 @@ def image_identity(path, revision):
         if (manifest['schemaVersion'] != 2 or not manifest['layers']
                 or len(config['rootfs']['diff_ids']) != len(manifest['layers'])):
             raise ValueError('invalid image manifest layers')
-        for layer in manifest['layers']:
-            blob(layer)
+        for layer, diff_id in zip(manifest['layers'], config['rootfs']['diff_ids'], strict=True):
+            blob(layer, diff_id=diff_id)
         return descriptor['digest'], manifest['config']['digest']
 
 
@@ -210,14 +223,17 @@ def document(digest, revision, inventories, created):
     return doc
 
 
-def inspect_image(image_id, lock_bytes):
-    """Read from the exact Docker image config ID without running the image."""
+def inspect_image(digest, lock_bytes):
+    """Read a stopped container only after matching its platform manifest."""
     container = subprocess.check_output(
-        ['docker', 'create', '--platform', 'linux/amd64', image_id], text=True,
+        ['docker', 'create', '--pull', 'never', '--platform', 'linux/amd64', 'cairn:ci'], text=True,
     ).strip()
     if not re.fullmatch(r'[0-9a-f]{64}', container):
         raise ValueError('Docker did not return a container ID')
     try:
+        [instance] = json.loads(subprocess.check_output(['docker', 'container', 'inspect', container]))
+        if (instance.get('ImageManifestDescriptor') or {}).get('digest') != digest:
+            raise ValueError('Docker selected a platform manifest different from the verified archive')
         with tempfile.TemporaryDirectory() as directory:
             data = Path(directory)
             (data / 'web').mkdir()
@@ -241,22 +257,19 @@ def inspect_image(image_id, lock_bytes):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--image-archive', type=Path, required=True)
-    parser.add_argument('--trivy-report', type=Path, required=True)
-    parser.add_argument('--lockfile', type=Path, required=True)
     parser.add_argument('--revision', required=True)
-    parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
     if not re.fullmatch(r'[0-9a-f]{40}', args.revision):
         parser.error('expected a full Git revision')
 
     try:
-        digest, image_id = image_identity(args.image_archive, args.revision)
-        inventories = inspect_image(image_id, args.lockfile.read_bytes())
-        check_scan(json.loads(args.trivy_report.read_text()), image_id, inventories['Alpine'], inventories['Go'])
+        digest, image_id = image_identity(Path('cairn-image.tar'), args.revision)
+        inventories = inspect_image(digest, Path('web/package-lock.json').read_bytes())
+        report = json.loads(Path('image-vulnerabilities.json').read_text())
+        check_scan(report, image_id, inventories['Alpine'], inventories['Go'])
         created = datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
         sbom = document(digest, args.revision, inventories, created)
-        with args.out.open('x') as output:
+        with Path('cairn-linux-amd64.spdx.json').open('x') as output:
             output.write(json.dumps(sbom, indent=2, sort_keys=True) + '\n')
     except (OSError, ValueError, KeyError, tarfile.TarError, subprocess.CalledProcessError) as exc:
         parser.exit(1, f'SBOM verification failed: {exc}\n')
