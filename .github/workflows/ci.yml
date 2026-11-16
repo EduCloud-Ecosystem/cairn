@@ -222,9 +222,16 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Test image inventory verification
+        run: python3 -m unittest discover -s tools/ci -p test_image_sbom.py -v
       - name: Build the release image
         run: |
-          docker build --pull -t cairn:ci .
+          docker build --platform linux/amd64 --pull \
+            --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" -t cairn:ci .
           docker save -o cairn-image.tar cairn:ci
           docker build --pull -f Dockerfile.checkout -t cairn-checkout:ci .
           docker save -o cairn-checkout-image.tar cairn-checkout:ci
@@ -242,6 +249,26 @@ jobs:
             ghcr.io/aquasecurity/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969 \
             image --input /scan/image.tar --scanners vuln --severity HIGH,CRITICAL \
             --exit-code 1 --format json > checkout-image-vulnerabilities.json
+      - name: Verify image inventories and validate SPDX 2.3
+        run: |
+          python3 tools/ci/image_sbom.py --revision "$(git rev-parse HEAD)"
+          python3 -m venv "$RUNNER_TEMP/spdx-validator"
+          "$RUNNER_TEMP/spdx-validator/bin/python" -m pip install --only-binary=:all: spdx-tools==0.8.5
+          "$RUNNER_TEMP/spdx-validator/bin/pyspdxtools" -i cairn-linux-amd64.spdx.json
+          digest=$(jq -er '.packages[] | select(.SPDXID=="SPDXRef-Cairn-Image") | .checksums[0].checksumValue' cairn-linux-amd64.spdx.json)
+          [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
+          tar -xOf cairn-image.tar "blobs/sha256/$digest" > cairn-linux-amd64.manifest.json
+          printf '%s  %s\n' "$digest" cairn-linux-amd64.manifest.json | sha256sum --check
+          sha256sum cairn-linux-amd64.{spdx,manifest}.json > cairn-linux-amd64.SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cairn-linux-amd64-sbom
+          path: |
+            cairn-linux-amd64.spdx.json
+            cairn-linux-amd64.manifest.json
+            cairn-linux-amd64.SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         if: always()
         with:

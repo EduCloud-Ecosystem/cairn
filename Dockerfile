@@ -15,7 +15,8 @@ WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
-RUN npm run build
+RUN CAIRN_BUNDLE_INVENTORY=1 npm run build \
+    && mv dist/.cairn-bundle-inventory.json /src/web/dashboard-inventory.json
 
 # --- stage 2: the control plane --------------------------------------------
 FROM golang:1.26.11-alpine AS build
@@ -42,6 +43,7 @@ RUN adduser -D -u 1000 cairn
 
 COPY --from=build /out/cairn /usr/local/bin/cairn
 COPY --from=web /src/web/dist /srv/cairn/web
+COPY --from=web /src/web/dashboard-inventory.json /usr/local/share/cairn/dashboard-inventory.json
 
 ENV CAIRN_WEB_DIR=/srv/cairn/web \
     CAIRN_LISTEN_ADDR=:8080
