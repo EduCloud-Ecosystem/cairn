@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   cut:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       SOURCE_REVISION: 39a010eb73f822aa15c6c30407438f311f6b8fa4
