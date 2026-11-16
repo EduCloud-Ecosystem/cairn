@@ -1,0 +1,156 @@
+name: Cut Cairn control-plane v0.1.0-rc.1
+
+on:
+  push:
+    branches: [codex/cairn-control-plane-v0-1-0-rc-1]
+    paths: [.github/workflows/cairn-rc1-cut.yml]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: cairn-control-plane-v0-1-0-rc-1
+  cancel-in-progress: false
+
+jobs:
+  cut:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SOURCE_REVISION: 39a010eb73f822aa15c6c30407438f311f6b8fa4
+      VERSION: v0.1.0-rc.1
+      IMAGE: ghcr.io/educloud-ecosystem/cairn
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: 39a010eb73f822aa15c6c30407438f311f6b8fa4
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build once from the verified main revision
+        run: |
+          printf 'ASSET_DIR=%s/cairn-release\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          test -z "$(git status --porcelain)"
+          python3 .github/educloud/verify.py
+          python3 -m unittest discover -s tools/ci -p test_image_sbom.py -v
+          docker build --pull --platform linux/amd64 \
+            --label "org.opencontainers.image.revision=$SOURCE_REVISION" \
+            --label "org.opencontainers.image.version=$VERSION" \
+            --label org.opencontainers.image.source=https://github.com/EduCloud-Ecosystem/cairn \
+            -t cairn:ci .
+          docker save -o cairn-image.tar cairn:ci
+      - name: Scan the saved image and validate its SPDX inventory
+        run: |
+          docker run --rm \
+            -v "$PWD/cairn-image.tar:/scan/image.tar:ro" \
+            ghcr.io/aquasecurity/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969 \
+            image --input /scan/image.tar --scanners vuln --severity HIGH,CRITICAL \
+            --exit-code 1 --format json > image-vulnerabilities.json
+          python3 tools/ci/image_sbom.py --revision "$SOURCE_REVISION"
+          python3 -m venv "$RUNNER_TEMP/spdx-validator"
+          "$RUNNER_TEMP/spdx-validator/bin/python" -m pip install --only-binary=:all: spdx-tools==0.8.5
+          "$RUNNER_TEMP/spdx-validator/bin/pyspdxtools" -i cairn-linux-amd64.spdx.json
+      - name: Package and re-verify the exact manifest and layers
+        run: |
+          mkdir "$ASSET_DIR"
+          PYTHONPATH=tools/ci python3 - <<'PY'
+          import io
+          import json
+          import os
+          from pathlib import Path
+          import tarfile
+          from image_sbom import image_identity
+
+          source = Path("cairn-image.tar")
+          revision = os.environ["SOURCE_REVISION"]
+          out = Path(os.environ["ASSET_DIR"])
+          version = os.environ["VERSION"]
+          sbom = json.loads(Path("cairn-linux-amd64.spdx.json").read_bytes())
+          digest, config_digest = image_identity(source, revision)
+          subject, = (p for p in sbom["packages"] if p["SPDXID"] == "SPDXRef-Cairn-Image")
+          if subject["versionInfo"] != digest or subject["checksums"] != [
+              {"algorithm": "SHA256", "checksumValue": digest.split(":")[1]}
+          ]:
+              raise ValueError("SBOM is bound to a different manifest")
+
+          def blob_path(content_digest):
+              return "blobs/" + content_digest.replace(":", "/", 1)
+
+          archive = out / f"cairn-{version}-linux-amd64.oci.tar"
+          with tarfile.open(source) as original, tarfile.open(archive, "x") as release:
+              manifest_bytes = original.extractfile(blob_path(digest)).read()
+              manifest = json.loads(manifest_bytes)
+              if manifest["config"]["digest"] != config_digest:
+                  raise ValueError("manifest config changed")
+              index = {
+                  "schemaVersion": 2,
+                  "mediaType": "application/vnd.oci.image.index.v1+json",
+                  "manifests": [{
+                      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                      "digest": digest, "size": len(manifest_bytes),
+                      "platform": {"os": "linux", "architecture": "amd64"},
+                      "annotations": {"org.opencontainers.image.ref.name": version},
+                  }],
+              }
+              for name, data in (
+                  ("oci-layout", b'{"imageLayoutVersion":"1.0.0"}\n'),
+                  ("index.json", json.dumps(index, separators=(",", ":")).encode()),
+              ):
+                  info = tarfile.TarInfo(name)
+                  info.size = len(data)
+                  release.addfile(info, io.BytesIO(data))
+              contents = dict.fromkeys([digest, config_digest, *(layer["digest"] for layer in manifest["layers"])])
+              for content_digest in contents:
+                  info = original.getmember(blob_path(content_digest))
+                  release.addfile(info, original.extractfile(info))
+          if image_identity(archive, revision) != (digest, config_digest):
+              raise ValueError("release archive identity changed")
+          (out / "cairn-linux-amd64.manifest.json").write_bytes(manifest_bytes)
+          (out / "OCI-DIGEST").write_text(digest + "\n")
+          PY
+          cp cairn-linux-amd64.spdx.json "$ASSET_DIR/"
+          cd "$ASSET_DIR"
+          printf '%s  %s\n' "$(cut -d: -f2 OCI-DIGEST)" cairn-linux-amd64.manifest.json | sha256sum --check
+          sha256sum "cairn-$VERSION-linux-amd64.oci.tar" cairn-linux-amd64.manifest.json \
+            cairn-linux-amd64.spdx.json OCI-DIGEST > SHA256SUMS
+          sha256sum --check SHA256SUMS
+      - name: Retain verified release bytes
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cairn-v0.1.0-rc.1-linux-amd64
+          path: ${{ env.ASSET_DIR }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Publish the verified OCI manifest to GHCR
+        if: github.run_attempt == 1
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq skopeo
+          auth_dir=$(mktemp -d)
+          trap 'rm -rf "$auth_dir"' EXIT
+          printf '%s' "$GHCR_TOKEN" | skopeo login --authfile "$auth_dir/auth.json" --username "$ACTOR" --password-stdin ghcr.io
+          if skopeo inspect --authfile "$auth_dir/auth.json" "docker://$IMAGE:$VERSION" >"$auth_dir/existing.json" 2>"$auth_dir/existing.err"; then
+            echo "The versioned image tag already exists." >&2
+            exit 1
+          fi
+          grep -Eiq 'manifest unknown|name unknown|not found|denied' "$auth_dir/existing.err" || { cat "$auth_dir/existing.err"; exit 1; }
+          cd "$ASSET_DIR"
+          sha256sum --check SHA256SUMS
+          skopeo inspect --raw "oci-archive:cairn-$VERSION-linux-amd64.oci.tar:$VERSION" > "$auth_dir/oci.json"
+          cmp "$auth_dir/oci.json" cairn-linux-amd64.manifest.json
+          skopeo copy --preserve-digests --dest-authfile "$auth_dir/auth.json" --digestfile "$auth_dir/pushed" \
+            "oci-archive:cairn-$VERSION-linux-amd64.oci.tar:$VERSION" "docker://$IMAGE:$VERSION"
+          test "$(cat "$auth_dir/pushed")" = "$(cat OCI-DIGEST)"
+          for ref in "$IMAGE:$VERSION" "$IMAGE@$(cat OCI-DIGEST)"; do
+            skopeo inspect --raw --authfile "$auth_dir/auth.json" "docker://$ref" > "$auth_dir/registry.json"
+            cmp "$auth_dir/registry.json" cairn-linux-amd64.manifest.json
+            printf 'Verified registry manifest for %s\n' "$ref"
+          done
