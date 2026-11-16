@@ -747,7 +747,6 @@ function EvidencePicker({
   add,
 }: {
   record: AssessmentRecord;
-  learner?: string;
   add: (e: Judgment["citations"][number]) => void;
 }) {
   const [file, setFile] = useState("");
