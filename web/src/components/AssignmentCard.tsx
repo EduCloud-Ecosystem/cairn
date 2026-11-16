@@ -32,6 +32,7 @@ export function AssignmentCard({
   const [savedRevision, setSavedRevision] = useState(assignment.template.ref ?? "");
   const policyPinned = /^(?:[a-fA-F0-9]{40}|[a-fA-F0-9]{64})$/.test(savedRevision);
   const [open, setOpen] = useState(false);
+  const [inviteCopyFailed, setInviteCopyFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [deadline, setDeadline] = useState(toLocalInput(assignment.deadline));
   const [savedDeadline, setSavedDeadline] = useState(assignment.deadline);
@@ -64,16 +65,17 @@ export function AssignmentCard({
     }
   }
 
-  // Copy the student join URL. navigator.clipboard is unavailable outside a
-  // secure context (plain http on a non-localhost host), so surface the URL in
-  // the toast on failure rather than leaving the instructor with nothing.
   async function copyInvite() {
     const url = api.inviteUrl(assignment.id);
     try {
       await navigator.clipboard.writeText(url);
-      notify("Invite link copied");
+      setInviteCopyFailed(false);
+      notify("Invitation copied");
     } catch {
-      notify(`Copy failed — the link is ${url}`, "err");
+      setInviteCopyFailed(true);
+      setOpen(true);
+      if (subs === null) void loadSubs();
+      notify("Copy failed. Open Invitation link below to copy it manually.", "err");
     }
   }
 
@@ -110,22 +112,13 @@ export function AssignmentCard({
   return (
     <div className="card assignment">
       <div className="assignment-top">
-        <button className="btn btn-sm" onClick={toggle} aria-expanded={open} title="Show submissions">
+        <button className="btn btn-sm" onClick={toggle} aria-expanded={open} aria-label={open ? "Hide assignment details" : "Show assignment details"}>
           {open ? "▾" : "▸"}
         </button>
 
         <div className="assignment-main">
           <h3 className="assignment-title">{assignment.title || assignment.slug}</h3>
           <div className="assignment-sub">
-            <span>
-              <b>slug</b> {assignment.slug}
-            </span>
-            <span>
-              <b>template</b> {assignment.template.namespace}/{assignment.template.name}
-            </span>
-            <span>
-              <b>type</b> {assignment.type}
-            </span>
             <span>
               <b>due</b> {fmtDeadline(savedDeadline)}
             </span>
@@ -142,10 +135,10 @@ export function AssignmentCard({
                 : "Open to anyone with the link"
             }
           >
-            Copy invite link
+            Copy invitation
           </Button>
-          <Button small disabled={busy || !policyPinned} title={policyPinned ? "Grade using the saved instructor version" : "Expand this assignment and save an instructor grading version first"} onClick={() => void run("Grade", () => api.grade(assignment.id))}>
-            Grade
+          <Button small disabled={busy || !policyPinned} title={policyPinned ? "Grade using the saved instructor version" : "Expand this assignment and save an instructor grading version first"} onClick={() => void run("Automated checks", () => api.grade(assignment.id))}>
+            Run automated checks
           </Button>
           <Button small disabled={busy} onClick={() => void run("Lock", () => api.lock(assignment.id))}>
             Lock
@@ -156,33 +149,42 @@ export function AssignmentCard({
         </div>
       </div>
 
-      {!policyPinned && <p className="muted small">Expand this assignment to select an instructor grading version before grading.</p>}
+      {!policyPinned && <p className="muted small">Open assignment details and save an instructor grading version before running checks.</p>}
       {open && (
         <div className="assignment-drawer">
-          <p className="muted small">
-            Invite link: <code>{api.inviteUrl(assignment.id)}</code>{" "}
-            {joinPolicy === "roster"
-              ? "— students must be on the roster first."
-              : joinPolicy === "open"
-                ? "— open to anyone with the link."
-                : null}
-          </p>
+          {joinPolicy === "roster" && <p className="muted small">Only learners on the roster can accept this invitation.</p>}
+          {joinPolicy === "open" && <p className="muted small">Anyone with the invitation can accept it.</p>}
+          {inviteCopyFailed && (
+            <details className="muted small">
+              <summary>Invitation link</summary>
+              <p><code>{api.inviteUrl(assignment.id)}</code></p>
+            </details>
+          )}
+          <details className="muted small">
+            <summary>Technical details</summary>
+            <p>Assignment reference <code>{assignment.slug}</code></p>
+            <p>Template <code>{assignment.template.namespace}/{assignment.template.name}</code></p>
+            <p>Assignment type {assignment.type}</p>
+          </details>
 
-          <fieldset disabled={busy}>
-            <legend>Instructor grading version</legend>
-            <p id={`policy-help-${assignment.id}`} className="muted small">
-              Paste the full commit ID from the instructor template. Grading uses that version's rules and tests.
-              Learners' edits to grading.json do not change their scores. This also sets the template version for future submissions.
-            </p>
-            <label htmlFor={`policy-ref-${assignment.id}`}>Template commit</label>
-            <input id={`policy-ref-${assignment.id}`} className="input" value={revision}
-              aria-describedby={`policy-help-${assignment.id}`} onChange={(e) => setRevision(e.target.value)} />
-            <label htmlFor={`policy-path-${assignment.id}`}>Grading file</label>
-            <input id={`policy-path-${assignment.id}`} className="input" value={policyPath}
-              onChange={(e) => setPolicyPath(e.target.value)} />
-            <Button small disabled={busy} onClick={() => void savePolicy()}>Save grading version</Button>
-            {policyPinned && <p className="muted small">Saved commit: <code>{savedRevision}</code></p>}
-          </fieldset>
+          <details>
+            <summary>Instructor grading version{policyPinned ? " (saved)" : ""}</summary>
+            <fieldset disabled={busy}>
+              <legend>Template and grading file</legend>
+              <p id={`policy-help-${assignment.id}`} className="muted small">
+                Paste the full commit ID from the instructor template. Grading uses that version's rules and tests.
+                Learners' edits to grading.json do not change their scores. This also sets the template version for future submissions.
+              </p>
+              <label htmlFor={`policy-ref-${assignment.id}`}>Template commit</label>
+              <input id={`policy-ref-${assignment.id}`} className="input" value={revision}
+                aria-describedby={`policy-help-${assignment.id}`} onChange={(e) => setRevision(e.target.value)} />
+              <label htmlFor={`policy-path-${assignment.id}`}>Grading file</label>
+              <input id={`policy-path-${assignment.id}`} className="input" value={policyPath}
+                onChange={(e) => setPolicyPath(e.target.value)} />
+              <Button small disabled={busy} onClick={() => void savePolicy()}>Save grading version</Button>
+              {policyPinned && <p className="muted small">Saved commit: <code>{savedRevision}</code></p>}
+            </fieldset>
+          </details>
 
           <AssessmentPanel classroomID={assignment.classroom_id} assignmentID={assignment.id} submissions={subs || []} notify={notify} refreshSubmissions={loadSubs} />
 

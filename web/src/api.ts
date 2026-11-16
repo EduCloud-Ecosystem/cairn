@@ -175,6 +175,7 @@ export interface AssessmentRecord {
       guidance: string;
     };
     policy_version?: string;
+    created_at?: string;
     rubric: AssessmentRubric;
     input_digest: string;
     artifacts: {

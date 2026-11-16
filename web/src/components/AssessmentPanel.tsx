@@ -395,6 +395,7 @@ export function AssessmentPanel({
         <ReviewCard
           key={r.id}
           record={r}
+          learner={submissions.find((submission) => submission.id === r.submission_id)?.username}
           canGenerate={
             !!provider?.model_provider &&
             !provider.paused &&
@@ -416,6 +417,7 @@ export function AssessmentPanel({
 function ReviewCard({
   canGenerate,
   record: r,
+  learner,
   busy,
   run,
   refresh,
@@ -423,6 +425,7 @@ function ReviewCard({
 }: {
   canGenerate: boolean;
   record: AssessmentRecord;
+  learner?: string;
   busy: boolean;
   run: (fn: () => Promise<unknown>) => Promise<void>;
   refresh: () => Promise<void>;
@@ -444,6 +447,13 @@ function ReviewCard({
     );
   }, [r]);
   const terminal = r.status === "approved" || r.status === "rejected";
+  const stateTitle: Record<string, string> = {
+    collected: "Work captured",
+    blocked: "Captured work needs attention",
+    pending: "Ready for instructor review",
+    approved: "Reviewed grade published",
+    rejected: "Assessment rejected",
+  };
   function change(i: number, patch: Partial<Judgment>) {
     setCriteria(criteria.map((c, j) => (i === j ? { ...c, ...patch } : c)));
   }
@@ -457,16 +467,20 @@ function ReviewCard({
   }
   return (
     <article className="card">
-      <h4 ref={resultHeading} tabIndex={-1}>Assessment: {r.status}</h4>
+      <h4 ref={resultHeading} tabIndex={-1}>{stateTitle[r.status] || "Assessment status unavailable"}</h4>
       <div role="status" aria-atomic="true">{reviewMessage}</div>
       <p>
-        {r.document.calibration
-          ? `Instructor calibration: ${r.document.calibration.id.slice(0, 8)} · revision ${r.document.calibration.revision}.`
-          : "No instructor calibration was selected for this capture."}
+        {learner || "Selected learner"}
+        {r.document.created_at && <> · Work captured <time dateTime={r.document.created_at}>{new Date(r.document.created_at).toLocaleString()}</time></>}
       </p>
-      <p>
-        Submission commit: <code>{r.revision}</code>
-      </p>
+      <p>{r.document.calibration ? "Instructor calibration applied." : "No instructor calibration used."}</p>
+      <details>
+        <summary>Technical details</summary>
+        <p>Submission commit <code>{r.revision}</code></p>
+        {r.document.calibration && (
+          <p>Calibration <code>{r.document.calibration.id}</code> · revision {r.document.calibration.revision}</p>
+        )}
+      </details>
       <p>
         {r.document.policy_version
           ? "Missing-work policy: work with no relevant answer remains unassessable until instructor review. Incorrect or partial attempts use the rubric."
