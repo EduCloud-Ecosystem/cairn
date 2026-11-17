@@ -2,6 +2,7 @@
 """Inventory the exact Cairn Linux/amd64 image saved and scanned by CI."""
 
 import argparse
+from contextlib import contextmanager
 from datetime import UTC, datetime
 import gzip
 import hashlib
@@ -167,7 +168,7 @@ def dashboard_packages(evidence, web, lock_bytes):
     return packages
 
 
-def check_scan(report, image_id, alpine, go):
+def check_scan(report, image_id, alpine, go=None):
     if report['Metadata']['ImageID'] != image_id:
         raise ValueError('Trivy report is for a different image config digest')
 
@@ -180,13 +181,15 @@ def check_scan(report, image_id, alpine, go):
         raise ValueError('Trivy and the image APK database disagree')
     # Trivy's root application record can lack a Version when .git is absent
     # from the Docker build context. OCI source provenance covers that record.
-    if packages('gobinary', exclude=MODULE) != go:
+    if go is not None and packages('gobinary', exclude=MODULE) != go:
         raise ValueError('Trivy and the shipped Go binary disagree')
 
 
-def document(digest, revision, inventories, created):
+def document(digest, revision, inventories, created, *, checkout=False):
     doc_id = 'SPDXRef-DOCUMENT'
-    image_id = 'SPDXRef-Cairn-Image'
+    image_id = 'SPDXRef-Cairn-Checkout-Image' if checkout else 'SPDXRef-Cairn-Image'
+    image_name = 'cairn-checkout-linux-amd64' if checkout else 'cairn-control-plane-linux-amd64'
+    document_name = 'Cairn checkout Linux/amd64' if checkout else 'Cairn Linux/amd64'
 
     def package(identifier, name, version, purpose):
         return {'SPDXID': identifier, 'name': name, 'versionInfo': version,
@@ -197,7 +200,7 @@ def document(digest, revision, inventories, created):
     def relationship(source, kind, target):
         return {'spdxElementId': source, 'relationshipType': kind, 'relatedSpdxElement': target}
 
-    image = package(image_id, 'cairn-control-plane-linux-amd64', digest, 'CONTAINER')
+    image = package(image_id, image_name, digest, 'CONTAINER')
     image['checksums'] = [{'algorithm': 'SHA256', 'checksumValue': digest.removeprefix('sha256:')}]
     image['sourceInfo'] = f'https://{MODULE}/commit/{revision}'
     image['comment'] = 'The SHA-256 identifies the exact Linux/amd64 OCI image manifest bytes.'
@@ -218,7 +221,7 @@ def document(digest, revision, inventories, created):
             relationships.append(relationship(image_id, 'CONTAINS', identifier))
     doc = {
         'SPDXID': doc_id, 'spdxVersion': 'SPDX-2.3', 'dataLicense': 'CC0-1.0',
-        'name': 'Cairn Linux/amd64 ' + digest,
+        'name': document_name + ' ' + digest,
         'creationInfo': {'created': created, 'creators': ['Tool: cairn-image-sbom-1']},
         'packages': packages, 'relationships': relationships,
     }
@@ -226,10 +229,11 @@ def document(digest, revision, inventories, created):
     return doc
 
 
-def inspect_image(digest, lock_bytes):
-    """Read a stopped container only after matching its platform manifest."""
+@contextmanager
+def verified_container(tag, digest):
+    """Create a stopped container and require its selected manifest to match the archive."""
     container = subprocess.check_output(
-        ['docker', 'create', '--pull', 'never', '--platform', 'linux/amd64', 'cairn:ci'], text=True,
+        ['docker', 'create', '--pull', 'never', '--platform', 'linux/amd64', tag], text=True,
     ).strip()
     if not re.fullmatch(r'[0-9a-f]{64}', container):
         raise ValueError('Docker did not return a container ID')
@@ -237,42 +241,59 @@ def inspect_image(digest, lock_bytes):
         [instance] = json.loads(subprocess.check_output(['docker', 'container', 'inspect', container]))
         if (instance.get('ImageManifestDescriptor') or {}).get('digest') != digest:
             raise ValueError('Docker selected a platform manifest different from the verified archive')
-        with tempfile.TemporaryDirectory() as directory:
-            data = Path(directory)
-            (data / 'web').mkdir()
-            for source, destination in (
-                ('/lib/apk/db/installed', 'apk'),
-                ('/usr/local/bin/cairn', 'cairn'),
-                ('/usr/local/share/cairn/dashboard-inventory.json', 'dashboard.json'),
-                ('/srv/cairn/web/.', 'web'),
-            ):
-                subprocess.run(['docker', 'cp', f'{container}:{source}', str(data / destination)], check=True)
-            build_info = subprocess.check_output(['go', 'version', '-m', str(data / 'cairn')], text=True)
-            evidence = json.loads((data / 'dashboard.json').read_text())
-            return {
-                'Alpine': alpine_packages(data / 'apk'),
-                'Go': go_packages(build_info),
-                'Npm': dashboard_packages(evidence, data / 'web', lock_bytes),
-            }
+        yield container
     finally:
         subprocess.run(['docker', 'rm', container], check=True, stdout=subprocess.DEVNULL)
+
+
+def inspect_image(digest, lock_bytes):
+    with verified_container('cairn:ci', digest) as container, tempfile.TemporaryDirectory() as directory:
+        data = Path(directory)
+        (data / 'web').mkdir()
+        for source, destination in (
+            ('/lib/apk/db/installed', 'apk'),
+            ('/usr/local/bin/cairn', 'cairn'),
+            ('/usr/local/share/cairn/dashboard-inventory.json', 'dashboard.json'),
+            ('/srv/cairn/web/.', 'web'),
+        ):
+            subprocess.run(['docker', 'cp', f'{container}:{source}', str(data / destination)], check=True)
+        build_info = subprocess.check_output(['go', 'version', '-m', str(data / 'cairn')], text=True)
+        evidence = json.loads((data / 'dashboard.json').read_text())
+        return {
+            'Alpine': alpine_packages(data / 'apk'),
+            'Go': go_packages(build_info),
+            'Npm': dashboard_packages(evidence, data / 'web', lock_bytes),
+        }
+
+
+def inspect_checkout(digest):
+    with verified_container('cairn-checkout:ci', digest) as container, tempfile.TemporaryDirectory() as directory:
+        installed = Path(directory) / 'apk'
+        subprocess.run(['docker', 'cp', f'{container}:/lib/apk/db/installed', str(installed)], check=True)
+        return {'Alpine': alpine_packages(installed)}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--revision', required=True)
+    parser.add_argument('--checkout', action='store_true', help='verify the checkout image instead of the control plane')
     args = parser.parse_args()
     if not re.fullmatch(r'[0-9a-f]{40}', args.revision):
         parser.error('expected a full Git revision')
 
     try:
-        digest, image_id = image_identity(Path('cairn-image.tar'), args.revision)
-        inventories = inspect_image(digest, Path('web/package-lock.json').read_bytes())
-        report = json.loads(Path('image-vulnerabilities.json').read_text())
-        check_scan(report, image_id, inventories['Alpine'], inventories['Go'])
+        image_name = 'cairn-checkout' if args.checkout else 'cairn'
+        scan_name = 'checkout-image-vulnerabilities.json' if args.checkout else 'image-vulnerabilities.json'
+        digest, image_id = image_identity(Path(f'{image_name}-image.tar'), args.revision)
+        if args.checkout:
+            inventories = inspect_checkout(digest)
+        else:
+            inventories = inspect_image(digest, Path('web/package-lock.json').read_bytes())
+        report = json.loads(Path(scan_name).read_text())
+        check_scan(report, image_id, inventories['Alpine'], inventories.get('Go'))
         created = datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
-        sbom = document(digest, args.revision, inventories, created)
-        with Path('cairn-linux-amd64.spdx.json').open('x') as output:
+        sbom = document(digest, args.revision, inventories, created, checkout=args.checkout)
+        with Path(f'{image_name}-linux-amd64.spdx.json').open('x') as output:
             output.write(json.dumps(sbom, indent=2, sort_keys=True) + '\n')
     except (OSError, ValueError, KeyError, tarfile.TarError, subprocess.CalledProcessError) as exc:
         parser.exit(1, f'SBOM verification failed: {exc}\n')
