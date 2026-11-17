@@ -25,15 +25,32 @@ the exact platform manifest bytes, and their SHA-256 checksums. Run
 `sha256sum --check cairn-linux-amd64.SHA256SUMS` in the artifact directory. The
 manifest checksum should also match the SHA-256 on `SPDXRef-Cairn-Image`.
 CI uses `pyspdxtools` from SPDX tools-python 0.8.5 for format and relationship
-validation. Existing Trivy vulnerability checks still run for both images.
+validation. Existing Trivy vulnerability checks run for both images.
 
 The inventory covers installed Alpine packages, the compiled Go executable,
 and npm packages contributing rendered JavaScript to the built dashboard.
-It does not inventory build-only tools, separately built checkout or grading
-images, mounted services, or another architecture. Package licenses are
+This control-plane inventory excludes build-only tools, the separate checkout
+and grading images, mounted services, and other architectures. Package licenses are
 unasserted. The image uses floating base tags and Alpine repositories, so a
 second build at the same Git commit can produce a different image digest.
 The CI artifact is a verification output, with no registry publication step.
+
+## Checkout image
+
+The container job also builds and saves `Dockerfile.checkout` for Linux/amd64
+with the source revision label. The verifier runs in `--checkout` mode against
+that archive and its Trivy report. It verifies the manifest, config, and layers,
+matches the manifest Docker selected for a stopped container, and reconciles
+every installed Alpine package name and version against the report for that
+config digest. The checkout image SBOM covers the APK inventory of this
+repository acquisition helper. Student grading images have separate inventories.
+
+The CI artifact `cairn-checkout-linux-amd64-sbom` includes the validated SPDX 2.3
+JSON, raw OCI manifest, and their checksums. Run
+`sha256sum --check cairn-checkout-linux-amd64.SHA256SUMS` in the artifact directory.
+The manifest SHA-256 must match the checksum on `SPDXRef-Cairn-Checkout-Image`.
+The checkout recipe also uses a floating Alpine tag and package repositories,
+so this evidence applies to the specific saved image. The artifact stays in CI.
 
 ## Change record
 

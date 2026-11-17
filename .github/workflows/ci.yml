@@ -233,7 +233,9 @@ jobs:
           docker build --platform linux/amd64 --pull \
             --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" -t cairn:ci .
           docker save -o cairn-image.tar cairn:ci
-          docker build --pull -f Dockerfile.checkout -t cairn-checkout:ci .
+          docker build --platform linux/amd64 --pull \
+            --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" \
+            -f Dockerfile.checkout -t cairn-checkout:ci .
           docker save -o cairn-checkout-image.tar cairn-checkout:ci
       - name: Scan image packages and embedded binary
         # Trivy 0.74.0, immutable image digest verified in the local rehearsal.
@@ -251,15 +253,24 @@ jobs:
             --exit-code 1 --format json > checkout-image-vulnerabilities.json
       - name: Verify image inventories and validate SPDX 2.3
         run: |
-          python3 tools/ci/image_sbom.py --revision "$(git rev-parse HEAD)"
+          revision=$(git rev-parse HEAD)
+          python3 tools/ci/image_sbom.py --revision "$revision"
+          python3 tools/ci/image_sbom.py --revision "$revision" --checkout
           python3 -m venv "$RUNNER_TEMP/spdx-validator"
           "$RUNNER_TEMP/spdx-validator/bin/python" -m pip install --only-binary=:all: spdx-tools==0.8.5
-          "$RUNNER_TEMP/spdx-validator/bin/pyspdxtools" -i cairn-linux-amd64.spdx.json
-          digest=$(jq -er '.packages[] | select(.SPDXID=="SPDXRef-Cairn-Image") | .checksums[0].checksumValue' cairn-linux-amd64.spdx.json)
-          [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
-          tar -xOf cairn-image.tar "blobs/sha256/$digest" > cairn-linux-amd64.manifest.json
-          printf '%s  %s\n' "$digest" cairn-linux-amd64.manifest.json | sha256sum --check
-          sha256sum cairn-linux-amd64.{spdx,manifest}.json > cairn-linux-amd64.SHA256SUMS
+
+          verify_sbom() {
+            local image="$1" image_id="$2" digest
+            local output="$image-linux-amd64"
+            "$RUNNER_TEMP/spdx-validator/bin/pyspdxtools" -i "$output.spdx.json"
+            digest=$(jq -er --arg id "$image_id" '.packages[] | select(.SPDXID==$id) | .checksums[0].checksumValue' "$output.spdx.json")
+            [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
+            tar -xOf "$image-image.tar" "blobs/sha256/$digest" > "$output.manifest.json"
+            printf '%s  %s\n' "$digest" "$output.manifest.json" | sha256sum --check
+            sha256sum "$output.spdx.json" "$output.manifest.json" > "$output.SHA256SUMS"
+          }
+          verify_sbom cairn SPDXRef-Cairn-Image
+          verify_sbom cairn-checkout SPDXRef-Cairn-Checkout-Image
       - uses: actions/upload-artifact@v4
         with:
           name: cairn-linux-amd64-sbom
@@ -267,6 +278,15 @@ jobs:
             cairn-linux-amd64.spdx.json
             cairn-linux-amd64.manifest.json
             cairn-linux-amd64.SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cairn-checkout-linux-amd64-sbom
+          path: |
+            cairn-checkout-linux-amd64.spdx.json
+            cairn-checkout-linux-amd64.manifest.json
+            cairn-checkout-linux-amd64.SHA256SUMS
           if-no-files-found: error
           retention-days: 7
       - uses: actions/upload-artifact@v4

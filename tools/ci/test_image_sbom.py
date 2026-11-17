@@ -1,3 +1,4 @@
+from contextlib import chdir, redirect_stderr, redirect_stdout
 import gzip
 import io
 import json
@@ -5,6 +6,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import image_sbom as sbom
 
@@ -91,6 +93,59 @@ class ImageSbomTests(unittest.TestCase):
             sbom.check_scan(report, image_id, alpine, {('stdlib', 'v1.26.11')})
         with self.assertRaisesRegex(ValueError, 'unversioned or replaced'):
             sbom.go_packages(build + '\t=>\t./local\t(devel)\n')
+
+    def test_checkout_cli_binds_the_archive_and_reconciles_the_scan(self):
+        archive, digest, config = self.archive()
+        archive.rename(self.root / 'cairn-checkout-image.tar')
+        report = {'Metadata': {'ImageID': config}, 'Results': [
+            {'Type': 'alpine', 'Packages': [{'Name': 'git', 'Version': '2.0-r1'}]},
+        ]}
+        report_path = self.root / 'checkout-image-vulnerabilities.json'
+        output = self.root / 'cairn-checkout-linux-amd64.spdx.json'
+        argv = ['image_sbom.py', '--revision', REVISION, '--checkout']
+        installed = {'Alpine': {('git', '2.0-r1')}}
+        for scanned_id, scanned_version, error in (
+            (config, '2.0-r1', None),
+            ('sha256:' + 'b' * 64, '2.0-r1', 'config digest'),
+            (config, '2.0-r2', 'APK database'),
+        ):
+            with self.subTest(error=error):
+                report['Metadata']['ImageID'] = scanned_id
+                report['Results'][0]['Packages'][0]['Version'] = scanned_version
+                report_path.write_text(json.dumps(report))
+                with (chdir(self.root), patch('sys.argv', argv),
+                      patch.object(sbom, 'inspect_checkout', return_value=installed) as inspect,
+                      redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()) as stderr):
+                    if error:
+                        with self.assertRaises(SystemExit) as exit_status:
+                            sbom.main()
+                        self.assertEqual(exit_status.exception.code, 1)
+                        self.assertIn(error, stderr.getvalue())
+                    else:
+                        sbom.main()
+                inspect.assert_called_once_with(digest)
+                if error:
+                    self.assertFalse(output.exists())
+                    continue
+                doc = json.loads(output.read_text())
+                self.assertEqual(doc['spdxVersion'], 'SPDX-2.3')
+                image, git = doc['packages']
+                self.assertEqual(image['SPDXID'], 'SPDXRef-Cairn-Checkout-Image')
+                self.assertEqual(image['versionInfo'], digest)
+                self.assertEqual(image['checksums'], [{'algorithm': 'SHA256', 'checksumValue': digest[7:]}])
+                self.assertTrue(image['sourceInfo'].endswith(REVISION))
+                self.assertEqual((git['name'], git['versionInfo']), ('git', '2.0-r1'))
+                output.unlink()
+
+    def test_checkout_refuses_to_copy_from_a_different_manifest(self):
+        container = 'a' * 64
+        inspection = [{'ImageManifestDescriptor': {'digest': 'sha256:' + 'b' * 64}}]
+        with (patch.object(sbom.subprocess, 'check_output', side_effect=[container, json.dumps(inspection)]) as check,
+              patch.object(sbom.subprocess, 'run') as run):
+            with self.assertRaisesRegex(ValueError, 'different from the verified archive'):
+                sbom.inspect_checkout('sha256:' + 'c' * 64)
+            self.assertEqual(check.call_args_list[0].args[0][-1], 'cairn-checkout:ci')
+            run.assert_called_once_with(['docker', 'rm', container], check=True, stdout=sbom.subprocess.DEVNULL)
 
     def test_only_rendered_locked_packages_and_exact_dashboard_files(self):
         lock = json.dumps({'packages': {
