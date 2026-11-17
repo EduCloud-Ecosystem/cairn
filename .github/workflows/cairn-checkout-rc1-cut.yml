@@ -1,0 +1,129 @@
+name: Stage Cairn checkout v0.1.0-rc.1
+
+on:
+  push:
+    branches: [codex/cairn-checkout-v0-1-0-rc-1]
+    paths: [.github/workflows/cairn-checkout-rc1-cut.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cairn-checkout-v0-1-0-rc-1
+  cancel-in-progress: false
+
+jobs:
+  cut:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SOURCE_REVISION: a3b624b8e0b81efce0fbe2e4e54a48df2ea96569
+      VERSION: v0.1.0-rc.1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: a3b624b8e0b81efce0fbe2e4e54a48df2ea96569
+          persist-credentials: false
+      - name: Build once from the verified main revision
+        run: |
+          printf 'ASSET_DIR=%s/cairn-release\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          test -z "$(git status --porcelain)"
+          python3 .github/educloud/verify.py
+          python3 -m unittest discover -s tools/ci -p test_image_sbom.py -v
+          docker build --pull --platform linux/amd64 \
+            --label "org.opencontainers.image.revision=$SOURCE_REVISION" \
+            --label "org.opencontainers.image.version=$VERSION" \
+            --label org.opencontainers.image.source=https://github.com/EduCloud-Ecosystem/cairn \
+            -f Dockerfile.checkout -t cairn-checkout:ci .
+          docker save -o cairn-checkout-image.tar cairn-checkout:ci
+      - name: Scan the saved image and validate its SPDX inventory
+        run: |
+          docker run --rm \
+            -v "$PWD/cairn-checkout-image.tar:/scan/image.tar:ro" \
+            ghcr.io/aquasecurity/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969 \
+            image --input /scan/image.tar --scanners vuln --severity HIGH,CRITICAL \
+            --exit-code 1 --format json > checkout-image-vulnerabilities.json
+          python3 tools/ci/image_sbom.py --revision "$SOURCE_REVISION" --checkout
+          python3 -m venv "$RUNNER_TEMP/spdx-validator"
+          "$RUNNER_TEMP/spdx-validator/bin/python" -m pip install --only-binary=:all: spdx-tools==0.8.5
+          "$RUNNER_TEMP/spdx-validator/bin/pyspdxtools" -i cairn-checkout-linux-amd64.spdx.json
+      - name: Package and re-verify the exact manifest and layers
+        run: |
+          mkdir "$ASSET_DIR"
+          PYTHONPATH=tools/ci python3 - <<'PY'
+          import io
+          import json
+          import os
+          from pathlib import Path
+          import tarfile
+          from image_sbom import image_identity
+
+          source = Path("cairn-checkout-image.tar")
+          revision = os.environ["SOURCE_REVISION"]
+          out = Path(os.environ["ASSET_DIR"])
+          version = os.environ["VERSION"]
+          sbom = json.loads(Path("cairn-checkout-linux-amd64.spdx.json").read_bytes())
+          digest, config_digest = image_identity(source, revision)
+          subject, = (p for p in sbom["packages"] if p["SPDXID"] == "SPDXRef-Cairn-Checkout-Image")
+          if subject["versionInfo"] != digest or subject["checksums"] != [
+              {"algorithm": "SHA256", "checksumValue": digest.split(":")[1]}
+          ]:
+              raise ValueError("SBOM is bound to a different manifest")
+
+          def blob_path(content_digest):
+              return "blobs/" + content_digest.replace(":", "/", 1)
+
+          archive = out / f"cairn-checkout-{version}-linux-amd64.oci.tar"
+          with tarfile.open(source) as original, tarfile.open(archive, "x") as release:
+              manifest_bytes = original.extractfile(blob_path(digest)).read()
+              manifest = json.loads(manifest_bytes)
+              if manifest["config"]["digest"] != config_digest:
+                  raise ValueError("manifest config changed")
+              index = {
+                  "schemaVersion": 2,
+                  "mediaType": "application/vnd.oci.image.index.v1+json",
+                  "manifests": [{
+                      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                      "digest": digest, "size": len(manifest_bytes),
+                      "platform": {"os": "linux", "architecture": "amd64"},
+                      "annotations": {"org.opencontainers.image.ref.name": version},
+                  }],
+              }
+              for name, data in (
+                  ("oci-layout", b'{"imageLayoutVersion":"1.0.0"}\n'),
+                  ("index.json", json.dumps(index, separators=(",", ":")).encode()),
+              ):
+                  info = tarfile.TarInfo(name)
+                  info.size = len(data)
+                  release.addfile(info, io.BytesIO(data))
+              contents = dict.fromkeys([digest, config_digest, *(layer["digest"] for layer in manifest["layers"])])
+              for content_digest in contents:
+                  info = original.getmember(blob_path(content_digest))
+                  release.addfile(info, original.extractfile(info))
+          if image_identity(archive, revision) != (digest, config_digest):
+              raise ValueError("release archive identity changed")
+          (out / "cairn-checkout-linux-amd64.manifest.json").write_bytes(manifest_bytes)
+          (out / "OCI-DIGEST").write_text(digest + "\n")
+          PY
+          cp cairn-checkout-linux-amd64.spdx.json "$ASSET_DIR/"
+          cd "$ASSET_DIR"
+          printf '%s  %s\n' "$(cut -d: -f2 OCI-DIGEST)" cairn-checkout-linux-amd64.manifest.json | sha256sum --check
+          sha256sum "cairn-checkout-$VERSION-linux-amd64.oci.tar" cairn-checkout-linux-amd64.manifest.json \
+            cairn-checkout-linux-amd64.spdx.json OCI-DIGEST > SHA256SUMS
+          sha256sum --check SHA256SUMS
+      - name: Retain verified release bytes
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cairn-checkout-v0.1.0-rc.1-linux-amd64
+          path: ${{ env.ASSET_DIR }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Retain Alpine scan evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cairn-checkout-release-alpine-scan
+          path: checkout-image-vulnerabilities.json
+          if-no-files-found: error
+          retention-days: 14
